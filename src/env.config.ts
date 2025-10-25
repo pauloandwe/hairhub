@@ -15,14 +15,9 @@ function getEnvVar(key: string): string {
 export const env = {
   OPENAI_API_KEY: getEnvVar('OPENAI_API_KEY'),
   META_VERIFY_TOKEN: getEnvVar('META_VERIFY_TOKEN'),
-  BEARER_TOKEN: getEnvVar('BEARER_TOKEN'),
   META_ACCESS_TOKEN: getEnvVar('META_ACCESS_TOKEN'),
   PHONE_NUMBER_ID: getEnvVar('PHONE_NUMBER_ID'),
-  FEED_CONTROL_URL: getEnvVar('FEED_CONTROL_URL'),
-  FARMS_URL: getEnvVar('FARMS_URL'),
-  FINANCES_URL: getEnvVar('FINANCES_URL'),
-  USERS_URL: getEnvVar('USERS_URL'),
-  AREAS_URL: getEnvVar('AREAS_URL'),
+
   PORT: process.env.PORT || 3000,
   WHISPER_MODEL: process.env.WHISPER_MODEL || 'base',
   WHISPER_COMMAND: process.env.WHISPER_COMMAND || 'whisper',
@@ -101,12 +96,7 @@ export function getUserNameForPhone(phone: string): string {
   return userContexts[phone]?.userName || ''
 }
 
-export async function setBusinessInfoForPhone(
-  phone: string,
-  businessId: string,
-  businessName: string,
-  businessType: string
-) {
+export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string) {
   if (phone && businessId) {
     await setUserContext(phone, { businessId, businessName, businessType })
   }

@@ -3,15 +3,7 @@ import { allFunctions } from '../functions'
 import { FlowType } from '../enums/generic.enum'
 import { AIResponseResult } from '../types/openai-types'
 
-export const SILENT_FUNCTIONS = new Set<string>([
-  'startAppointmentCreation',
-  'setAppointmentService',
-  'setAppointmentBarber',
-  'setAppointmentDate',
-  'setAppointmentTime',
-  'confirmAppointmentCreation',
-  'cancelAppointmentCreation',
-])
+export const SILENT_FUNCTIONS = new Set<string>(['startAppointmentCreation', 'continueAppointmentCreation', 'confirmAppointmentCreation', 'cancelAppointmentCreation', 'changeAppointmentField'])
 
 export const CONTEXT_FUNCTIONS = new Set<string>([])
 
@@ -22,15 +14,7 @@ export function resolveFlowConfig(type?: string): FlowConfig | undefined {
 
   const known: Record<FlowType, FlowConfig> = {
     [FlowType.AppointmentCreate]: {
-      allowedFunctions: [
-        'startAppointmentCreation',
-        'setAppointmentService',
-        'setAppointmentBarber',
-        'setAppointmentDate',
-        'setAppointmentTime',
-        'confirmAppointmentCreation',
-        'cancelAppointmentCreation',
-      ],
+      allowedFunctions: ['startAppointmentCreation', 'setAppointmentService', 'setAppointmentBarber', 'setAppointmentDate', 'setAppointmentTime', 'confirmAppointmentCreation', 'cancelAppointmentCreation'],
       startFunction: 'startAppointmentCreation',
       cancelFunction: 'cancelAppointmentCreation',
     },

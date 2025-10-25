@@ -117,7 +117,7 @@ export async function setAppointmentDate(args: { phone: string; date: string }):
   await appointmentService.updateField(phone, 'date', date)
 
   // Get available slots
-  const slots = await getAvailableSlots(businessConfig.id, date, draft.serviceId!, draft.barberId)
+  const slots = await getAvailableSlots(businessConfig.id, date, draft.serviceId!, draft.barberId ?? undefined)
 
   if (slots.length === 0) {
     await sendWhatsAppMessage(phone, `Não temos horários disponíveis para ${date}. Tente outro dia?`)

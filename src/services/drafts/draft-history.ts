@@ -13,3 +13,10 @@ export async function saveDraftHistory<T>(
 ): Promise<void> {
   // Simplified - no longer needed for new implementation
 }
+
+export const draftHistoryService = {
+  async appendActiveDraftHistory(userId: string, messages: any[]): Promise<void> {
+    // Simplified - no longer needed for new implementation
+    // In a full implementation, this would append messages to the draft history
+  }
+}

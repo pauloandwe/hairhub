@@ -7,7 +7,7 @@ import { seedMockData } from './seeds'
 const app = express()
 app.use(express.json())
 const webhookService = WebhookService.getInstance()
-setApiBearerToken(env.BEARER_TOKEN)
+// setApiBearerToken(env.BEARER_TOKEN)
 
 app.get('/webhook', webhookService.handleVerification)
 app.post('/webhook', webhookService.webhookInitiator)

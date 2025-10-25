@@ -1,18 +1,7 @@
-import {
-  getAppointmentsByPhone,
-  getNextAppointment,
-  getUpcomingAppointments,
-  getAvailableSlots,
-} from '../../api/appointments.api'
+import { getAppointmentsByPhone, getNextAppointment, getUpcomingAppointments, getAvailableSlots } from '../../api/appointments.api'
 import { getOrCreateBusinessConfig } from '../../api/business.api'
 import { sendWhatsAppMessage } from '../../api/meta.api'
-import {
-  formatAppointmentList,
-  formatAppointmentSummary,
-  formatAvailableSlots,
-  formatServiceList,
-  formatBarberList,
-} from '../../utils/appointment-formatters'
+import { formatAppointmentList, formatAppointmentSummary, formatAvailableSlots, formatServiceList, formatBarberList } from '../../utils/appointment-formatters'
 
 /**
  * Get all appointments for a customer
@@ -89,12 +78,7 @@ export async function getUpcomingAppointmentsInfo(args: { phone: string; limit?:
 /**
  * Get available slots for a specific date
  */
-export async function getAvailableSlotsInfo(args: {
-  phone: string
-  date: string
-  serviceId?: string
-  barberId?: string
-}): Promise<string> {
+export async function getAvailableSlotsInfo(args: { phone: string; date: string; serviceId?: string; barberId?: string }): Promise<string> {
   const { phone, date, serviceId, barberId } = args
 
   try {

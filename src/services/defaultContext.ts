@@ -13,23 +13,17 @@ import { SILENT_FUNCTIONS } from './openai.config'
 import { dateFunctions } from '../functions/utils/date.functions'
 import { unsupportedRegistrationFunctions } from '../functions/utils/unsupportedRegistration.functions'
 import { unsupportedQueryFunctions } from '../functions/utils/unsupportedQuery.functions'
-import { appointmentTools } from '../tools/appointments/appointment.tools'
+import { appointmentFlowTools } from '../tools/appointments/create/appointmentFlow.tools'
 import { appointmentQueriesTools } from '../tools/appointments/appointment-queries.tools'
-import { appointmentFunctions } from '../functions/appointments/appointment.functions'
+import { appointmentFlowFunctions } from '../functions/appointments/create/appointmentFlow.functions'
 import { appointmentQueriesFunctions } from '../functions/appointments/appointment-queries.functions'
 import { aiLogger, logOpenAIPrompt, logOpenAIResponse, logToolExecution } from '../utils/pino'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [
-    ...this.pickStartTools([...appointmentTools] as OpenAITool[]),
-    ...appointmentQueriesTools,
-    ...dateTools,
-    ...unsupportedRegistrationTools,
-    ...unsupportedQueryTools,
-  ]
+  private contextTools = [...this.pickStartTools([...appointmentFlowTools] as OpenAITool[]), ...appointmentQueriesTools, ...dateTools, ...unsupportedRegistrationTools, ...unsupportedQueryTools]
   private serviceFunctions = {
-    ...appointmentFunctions,
+    ...appointmentFlowFunctions,
     ...appointmentQueriesFunctions,
     ...dateFunctions,
     ...unsupportedRegistrationFunctions,
