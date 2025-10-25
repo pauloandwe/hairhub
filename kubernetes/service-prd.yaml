@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: saas-ia
+  namespace: ia
+spec:
+  selector:
+    app: saas-ia
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: ClusterIP

@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: saas-ia
+  namespace: ia
+  labels:
+    app: saas-ia
+spec:
+  selector:
+    matchLabels:
+      app: saas-ia
+  revisionHistoryLimit: 10
+  strategy:
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 50%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: saas-ia
+    spec:
+      containers:
+        - name: saas-ia
+          image: 941403952902.dkr.ecr.us-east-1.amazonaws.com/saas-registry-prd/saas-ia
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: 250M
+            requests:
+              cpu: 100m
+              memory: 250M
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: saas-ia
+      priorityClassName: non-vital
+      imagePullSecrets:
+        - name: saas-registry

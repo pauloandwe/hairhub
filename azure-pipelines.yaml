@@ -1,0 +1,88 @@
+trigger:
+  - master
+  - homolog
+  - dev
+
+variables:
+  ${{ if and(ne(variables['Build.SourceBranch'], 'refs/heads/homolog'), ne(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
+    targetEnvironment: 'dev'
+  ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/homolog') }}:
+    targetEnvironment: 'hml'
+  ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/master') }}:
+    targetEnvironment: 'prd'
+  namespace: ia
+  yarnCacheFolder: node_modules
+  appName: saas-ia
+  containerRegistry: 'saas-registry-$(targetEnvironment)'
+  repository: $(containerRegistry)/$(appName)
+  imageUrl: '941403952902.dkr.ecr.us-east-1.amazonaws.com/$(repository)'
+  tag: '$(Build.BuildId)'
+
+pool:
+  name: $(AZURE_PIPELINES_AGENT_POOL)
+  vmImage: $(AZURE_PIPELINES_VM_IMAGE)
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '18.x'
+    displayName: 'Installing Node.js'
+
+  - task: Cache@2
+    inputs:
+      key: '"yarn" | "$(Agent.OS)" | yarn.lock'
+      restoreKeys: |
+        yarn | "$(Agent.OS)"
+        yarn
+      path: $(yarnCacheFolder)
+    displayName: 'Caching yarn packages'
+
+  - task: Yarn@3
+    inputs:
+      projectDirectory: '.'
+      productionMode: true
+      customRegistry: 'useFeed'
+      customFeed: 'saas'
+      arguments: '--cache-folder $(yarnCacheFolder)'
+    displayName: 'Installing dependencies'
+
+  - script: |
+      yarn build
+    displayName: 'Building with Yarn'
+
+  - task: Docker@2
+    inputs:
+      repository: '$(repository)'
+      command: 'build'
+      Dockerfile: '**/Dockerfile'
+      tags: $(tag)
+      arguments: '--no-cache'
+    displayName: 'Building image to $(repository):$(tag)'
+
+  - task: ECRPushImage@1
+    condition: succeeded()
+    inputs:
+      awsCredentials: 'saas-ecr'
+      regionName: 'us-east-1'
+      imageSource: 'imagename'
+      sourceImageName: '$(repository)'
+      sourceImageTag: '$(tag)'
+      repositoryName: '$(repository)'
+      pushTag: '$(tag)'
+      autoCreateRepository: true
+    displayName: 'Pushing image to $(repository):$(tag)'
+
+  - task: KubernetesManifest@0
+    condition: succeeded()
+    inputs:
+      action: 'deploy'
+      kubernetesServiceConnection: saas-kubernetes-$(targetEnvironment)
+      namespace: $(namespace)
+      manifests: |
+        kubernetes/deployment-$(targetEnvironment).yaml
+        kubernetes/hpa-$(targetEnvironment).yaml
+        kubernetes/service-$(targetEnvironment).yaml
+      containers: |
+        $(imageUrl):$(tag)
+      rolloutStatusTimeout: '150'
+    displayName: 'Deploying into kubernetes-$(targetEnvironment)'
