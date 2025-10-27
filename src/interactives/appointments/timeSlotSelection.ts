@@ -19,11 +19,7 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
     const draft = await appointmentService.loadDraft(phone)
 
     // Get available slots based on selected date and service
-    const slots = await barberService.getAvailableSlots(
-      phone,
-      draft.appointmentDate || undefined,
-      draft.service?.id ? Number(draft.service.id) : undefined,
-    )
+    const slots = await barberService.getAvailableSlots(phone, draft.appointmentDate || undefined, draft.service?.id ? Number(draft.service.id) : undefined)
 
     // Convert time strings to SelectionItem format
     return slots.map((slot) => ({
