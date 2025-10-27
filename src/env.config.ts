@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { InstitutionType } from './enums/institutions.enum'
 import { FlowStep } from './enums/generic.enum'
 import { createUserContextStore } from './services/user-context-store'
 import { EnvKeys } from './helpers/Enums'
@@ -17,7 +18,7 @@ export const env = {
   META_VERIFY_TOKEN: getEnvVar('META_VERIFY_TOKEN'),
   META_ACCESS_TOKEN: getEnvVar('META_ACCESS_TOKEN'),
   PHONE_NUMBER_ID: getEnvVar('PHONE_NUMBER_ID'),
-
+  API_URL: getEnvVar('API_URL'),
   PORT: process.env.PORT || 3000,
   WHISPER_MODEL: process.env.WHISPER_MODEL || 'base',
   WHISPER_COMMAND: process.env.WHISPER_COMMAND || 'whisper',
@@ -30,20 +31,58 @@ export const env = {
   REDIS_INTENT_HISTORY_TTL_SEC: process.env.REDIS_INTENT_HISTORY_TTL_SEC || String(3600),
 }
 
+export interface BusinessWorkingHour {
+  dayOfWeek: number
+  openTime: string
+  closeTime: string
+  breakStart?: string
+  breakEnd?: string
+  closed: boolean
+}
+
+export interface BusinessService {
+  id: string
+  name: string
+  description: string
+  duration: number
+  price: number
+  active: boolean
+}
+
+export interface BusinessBarber {
+  id: string
+  name: string
+  specialties: string[]
+  active: boolean
+}
+
+export interface BusinessSettings {
+  reminderHours: number[]
+  enableReminders: boolean
+  allowCancellation: boolean
+  cancellationDeadlineHours: number
+  allowReschedule: boolean
+  rescheduleDeadlineHours: number
+  autoConfirmAppointments: boolean
+}
+
 export interface UserRuntimeContext {
-  token?: string
+  phone: string
+  workingHours: BusinessWorkingHour[]
+  services: BusinessService[]
+  barbers: BusinessBarber[]
+  settings: BusinessSettings
   businessId?: string
   businessName?: string
   businessType?: string
   userName?: string
-  activeFlow: {
+  activeRegistration: {
     type?: string
     step?: string
     editingField?: string
     awaitingInputForField?: string
     lastCreatedRecordId?: string
     editMode?: boolean
-    status?: 'active' | 'completed'
     [key: string]: any
   }
   [key: string]: any
@@ -104,22 +143,12 @@ export async function setBusinessInfoForPhone(phone: string, businessId: string,
 
 export async function resetActiveRegistration(phone: string) {
   await setUserContext(phone, {
-    activeFlow: {
+    activeRegistration: {
       type: undefined,
       step: FlowStep.Initial,
       editingField: undefined,
       awaitingInputForField: undefined,
       lastCreatedRecordId: undefined,
-      status: undefined,
     },
   })
-}
-
-// Legacy compatibility (keep for now)
-export function getFarmIdForPhone(phone: string): string {
-  return getBusinessIdForPhone(phone)
-}
-
-export function getFarmNameForPhone(phone: string): string {
-  return getBusinessNameForPhone(phone)
 }

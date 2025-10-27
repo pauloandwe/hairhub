@@ -3,9 +3,39 @@ import { allFunctions } from '../functions'
 import { FlowType } from '../enums/generic.enum'
 import { AIResponseResult } from '../types/openai-types'
 
-export const SILENT_FUNCTIONS = new Set<string>(['startAppointmentCreation', 'continueAppointmentCreation', 'confirmAppointmentCreation', 'cancelAppointmentCreation', 'changeAppointmentField'])
+export const SILENT_FUNCTIONS = new Set<string>([
+  'changeAnimalDeathRegistrationField',
+  'startAnimalDeathRegistration',
+  'startAnimalBirthRegistration',
+  'cancelAnimalDeathRegistration',
+  'confirmAnimalDeathRegistration',
+  'changeAnimalBirthRegistrationField',
+  'cancelAnimalBirthRegistration',
+  'confirmAnimalBirthRegistration',
+  'listInstitutions',
+  'listFarms',
+  'startExpenseRegistration',
+  'changeSimplifiedExpenseRegistration',
+  'confirmSimpleExpenseRegistration',
+  'cancelSimplifiedExpenseRegistration',
+  'editDeathRecordField',
+  'editBirthRecordField',
+  'editExpenseRecordField',
+  'startSaleRegistration',
+  'changeSaleRegistrationField',
+  'confirmSaleRegistration',
+  'cancelSaleRegistration',
+  'editSaleRecordField',
+  'deleteSaleRegistration',
+  'changeAppointmentRegistrationField',
+  'startAppointmentRegistration',
+  'cancelAppointmentRegistration',
+  'confirmAppointmentRegistration',
+  'editAppointmentRecordField',
+  'deleteAppointmentRegistration',
+])
 
-export const CONTEXT_FUNCTIONS = new Set<string>([])
+export const CONTEXT_FUNCTIONS = new Set<string>(['listInstitutions', 'listFarms'])
 
 export type FlowConfig = { allowedFunctions: string[]; startFunction?: string; changeFunction?: string; editFunction?: string; cancelFunction?: string }
 
@@ -13,18 +43,40 @@ export function resolveFlowConfig(type?: string): FlowConfig | undefined {
   if (!type) return undefined
 
   const known: Record<FlowType, FlowConfig> = {
-    [FlowType.AppointmentCreate]: {
-      allowedFunctions: ['startAppointmentCreation', 'setAppointmentService', 'setAppointmentBarber', 'setAppointmentDate', 'setAppointmentTime', 'confirmAppointmentCreation', 'cancelAppointmentCreation'],
-      startFunction: 'startAppointmentCreation',
-      cancelFunction: 'cancelAppointmentCreation',
+    [FlowType.Death]: {
+      allowedFunctions: ['startAnimalDeathRegistration', 'changeAnimalDeathRegistrationField', 'confirmAnimalDeathRegistration', 'cancelAnimalDeathRegistration', 'editDeathRecordField'],
+      startFunction: 'startAnimalDeathRegistration',
+      changeFunction: 'changeAnimalDeathRegistrationField',
+      editFunction: 'editDeathRecordField',
+      cancelFunction: 'cancelAnimalDeathRegistration',
     },
-    [FlowType.AppointmentReschedule]: {
-      allowedFunctions: [],
-      startFunction: undefined,
+    [FlowType.Birth]: {
+      allowedFunctions: ['startAnimalBirthRegistration', 'changeAnimalBirthRegistrationField', 'confirmAnimalBirthRegistration', 'cancelAnimalBirthRegistration', 'editBirthRecordField'],
+      startFunction: 'startAnimalBirthRegistration',
+      changeFunction: 'changeAnimalBirthRegistrationField',
+      editFunction: 'editBirthRecordField',
+      cancelFunction: 'cancelAnimalBirthRegistration',
     },
-    [FlowType.AppointmentCancel]: {
-      allowedFunctions: [],
-      startFunction: undefined,
+    [FlowType.SimplifiedExpense]: {
+      allowedFunctions: ['startExpenseRegistration', 'changeSimplifiedExpenseRegistration', 'confirmSimpleExpenseRegistration', 'cancelSimplifiedExpenseRegistration', 'editExpenseRecordField'],
+      startFunction: 'startExpenseRegistration',
+      changeFunction: 'changeSimplifiedExpenseRegistration',
+      editFunction: 'editExpenseRecordField',
+      cancelFunction: 'cancelSimplifiedExpenseRegistration',
+    },
+    [FlowType.Selling]: {
+      allowedFunctions: ['startSaleRegistration', 'changeSaleRegistrationField', 'confirmSaleRegistration', 'cancelSaleRegistration', 'editSaleRecordField', 'deleteSaleRegistration'],
+      startFunction: 'startSaleRegistration',
+      changeFunction: 'changeSaleRegistrationField',
+      editFunction: 'editSaleRecordField',
+      cancelFunction: 'cancelSaleRegistration',
+    },
+    [FlowType.Appointment]: {
+      allowedFunctions: ['startAppointmentRegistration', 'changeAppointmentRegistrationField', 'confirmAppointmentRegistration', 'cancelAppointmentRegistration', 'editAppointmentRecordField', 'deleteAppointmentRegistration'],
+      startFunction: 'startAppointmentRegistration',
+      changeFunction: 'changeAppointmentRegistrationField',
+      editFunction: 'editAppointmentRecordField',
+      cancelFunction: 'cancelAppointmentRegistration',
     },
   }
 
@@ -32,7 +84,7 @@ export function resolveFlowConfig(type?: string): FlowConfig | undefined {
 
   const fnNames = Object.keys(allFunctions || {})
   const lowerType = String(type).toLowerCase()
-  const allowed = fnNames.filter((n) => n.toLowerCase().includes(lowerType))
+  const allowed = fnNames.filter((n) => n.toLowerCase().includes(lowerType) && n.toLowerCase().includes('registration'))
   const start = allowed.find((n) => n.toLowerCase().startsWith('start')) || allowed[0]
   return { allowedFunctions: allowed, startFunction: start }
 }

@@ -2,32 +2,49 @@ import OpenAI from 'openai'
 import { env } from 'process'
 import { ChatMessage } from './drafts/types'
 import { appendIntentHistory, clearIntentHistory, getIntentHistory } from './intent-history.service'
-import { getFarmIdForPhone, getFarmNameForPhone, resetActiveRegistration, getUserContextSync } from '../env.config'
+import { getBusinessIdForPhone, getBusinessNameForPhone, resetActiveRegistration, getUserContextSync } from '../env.config'
 import { formatAssistantReply } from '../utils/message'
 import { sendWhatsAppMessage } from '../api/meta.api'
+import { animalLotTools } from '../tools/feed-control/aniamalLot.tools'
+import { weatherTools } from '../tools/farms/weather.tools'
+import { dashboardTools } from '../tools/finances/dashboard.tools'
+import { areasTools } from '../tools/areas/areas.tools'
 import { dateTools } from '../tools/utils/date.tools'
+import { farmsTools } from '../tools/farms/farms.tools'
+import { institutionTools } from '../tools/users/institution.tools'
+import { productCategoriesTools } from '../tools/finances/productCategories.tools'
 import { unsupportedRegistrationTools } from '../tools/utils/unsupportedRegistration.tools'
 import { unsupportedQueryTools } from '../tools/utils/unsupportedQuery.tools'
 import { AIResponseResult, OpenAITool } from '../types/openai-types'
 import { SILENT_FUNCTIONS } from './openai.config'
+import { animalLotFunctions } from '../functions/feed-control/aniamalLot.functions'
+import { weatherFunctions } from '../functions/farms/weather.functions'
+import { dashboardFunctions } from '../functions/finances/dashboard.functions'
+import { productCategoriesFunctions } from '../functions/finances/productCategories.functions'
+import { institutionFunctions } from '../functions/users/institution.functions'
+import { farmsFunctions } from '../functions/farms/farms.functions'
+import { areasFunctions } from '../functions/areas/areas.functions'
 import { dateFunctions } from '../functions/utils/date.functions'
 import { unsupportedRegistrationFunctions } from '../functions/utils/unsupportedRegistration.functions'
 import { unsupportedQueryFunctions } from '../functions/utils/unsupportedQuery.functions'
-import { appointmentFlowTools } from '../tools/appointments/create/appointmentFlow.tools'
-import { appointmentQueriesTools } from '../tools/appointments/appointment-queries.tools'
-import { appointmentFlowFunctions } from '../functions/appointments/create/appointmentFlow.functions'
-import { appointmentQueriesFunctions } from '../functions/appointments/appointment-queries.functions'
+import { simplifiedExpenseFunctions } from '../functions/finances/simplifiedExpense/simplifiedExpense.functions'
+import { birthFunctions } from '../functions/livestocks/birth/birth.functions'
+import { deathFunctions } from '../functions/livestocks/death/death.functions'
+import { saleFunctions } from '../functions/livestocks/selling/selling.functions'
+import { expenseTools } from '../tools/finances/simplifiedExpense.tools'
+import { birthTools } from '../tools/livestocks/birth/birth.tools'
+import { deathTools } from '../tools/livestocks/death.tools'
+import { sellingTools } from '../tools/livestocks/selling/selling.tools'
 import { aiLogger, logOpenAIPrompt, logOpenAIResponse, logToolExecution } from '../utils/pino'
+import { appointmentFunctions } from '../functions/appointments/appointment.functions'
+import { appointmentTools } from '../tools/appointments/appointment.tools'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [...this.pickStartTools([...appointmentFlowTools] as OpenAITool[]), ...appointmentQueriesTools, ...dateTools, ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
   private serviceFunctions = {
-    ...appointmentFlowFunctions,
-    ...appointmentQueriesFunctions,
-    ...dateFunctions,
     ...unsupportedRegistrationFunctions,
-    ...unsupportedQueryFunctions,
+    startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
   }
 
   isFunctionTool(tool: OpenAITool): tool is OpenAI.ChatCompletionFunctionTool {
@@ -57,101 +74,40 @@ export class DefaultContextService {
       {
         role: 'system',
         content: `
-Você é o BarberBot, assistente virtual amigável e eficiente para barbearias.
+          Você é um assistente virtual amigável da plataforma de agendamento de barbearia.
 
-## SOBRE VOCÊ:
-- Você ajuda clientes a agendar, remarcar e cancelar horários em barbearias
-- Fornece informações sobre serviços, barbeiros e disponibilidade
-- É cordial, profissional e objetivo nas respostas
+          **Contexto inicial (sem fluxo ativo):**
+          O usuário está interagindo pela primeira vez ou não está em nenhum fluxo específico. Sua tarefa é identificar a intenção principal e iniciar a ferramenta apropriada.
 
-## CONTEXTO ATUAL:
-- Data/hora atual: ${new Date().toLocaleString('pt-BR')}
+          **Regras principais**
+          - Nunca mostre IDs, códigos ou detalhes técnicos. Use apenas termos como *sua barbearia*, *seus agendamentos*, *seus cortes*.
+          - Não invente dados ou funcionalidades; responda apenas com base nas ferramentas disponíveis.
+          - Não repita o nome da barbearia; o sistema já prefixa a resposta.
+          - Nunca peça telefone/WhatsApp; o sistema já fornece.
+          - Jamais envie JSON, código ou detalhes técnicos. Em caso de erro, use só uma resposta curta e amigável (ex.: *"Tive um problema agora, pode tentar de novo?"*).
 
-## SUAS CAPACIDADES:
+          **Diretrizes de intenção**
+          - Se o usuário disser "olá", "bom dia" ou cumprimentos semelhantes → apenas cumprimente de forma curta e amigável (ex.: *"Olá, como posso ajudar com seus agendamentos?"* ou *"Oi! Quer agendar um corte, verificar horários ou reagendar?"* responda amigavelmente e use um ou outro emoji para deixar a conversa mais natural e humana).
+          - Se o usuário mencionar uma ação (ex.: *agendar*, *remarcar*, *cancelar*, *verificar horários*, *ver histórico*) → identifique a intenção e inicie o fluxo correspondente com a ferramenta apropriada.
 
-### 1. AGENDAMENTOS
-Quando o cliente quer "marcar", "agendar", "fazer agendamento":
-- Use startAppointmentCreation para iniciar o fluxo
-- O fluxo irá perguntar: serviço → barbeiro → data → horário
-- Use setAppointmentService quando o cliente escolher o serviço
-- Use setAppointmentBarber quando escolher o barbeiro
-- Use setAppointmentDate quando informar a data
-- Use setAppointmentTime quando escolher o horário
-- Use confirmAppointmentCreation quando cliente confirmar (dizer "sim", "confirmar", "ok")
-- SEMPRE valide disponibilidade antes de confirmar
-- Após criar, informe que receberá lembretes automáticos
+          **IMPORTANTE - Registros/Agendamentos disponíveis no sistema:**
+            * Agendamento de corte/serviço → use startAppointmentRegistration
+            * Para QUALQUER outro tipo de cadastro ou solicitação → use reportUnsupportedRegistration
 
-### 2. CONSULTAS
-- "Meus agendamentos", "meus horários" → getMyAppointments
-- "Quando é meu horário", "próximo agendamento" → getNextAppointmentInfo
-- "Próximos agendamentos" → getUpcomingAppointmentsInfo
-- "Tem horário disponível dia X" → getAvailableSlotsInfo (converta a data para YYYY-MM-DD)
-- "Quais serviços", "o que vocês fazem" → getServices
-- "Quem são os barbeiros" → getBarbers
+          **IMPORTANTE - Consultas/Buscas disponíveis no sistema:**
+            * Horários disponíveis → use getAvailableTimeSlots
+            * Histórico de cortes/agendamentos → use getAppointmentHistory
+            * Serviços disponíveis → use getServices
+            * Para QUALQUER outra consulta → use reportUnsupportedQuery
 
-### 3. CONVERSÃO DE DATAS
-Quando o usuário falar datas em linguagem natural, use a ferramenta convertDateToISO:
-- "amanhã" → convertDateToISO
-- "quinta feira" → convertDateToISO
-- "dia 15" → convertDateToISO
-- "próxima sexta" → convertDateToISO
+          - Se houver ambiguidade, faça **uma única pergunta de esclarecimento**, curta e objetiva, para confirmar a intenção antes de acionar um fluxo.
+          - Caso o usuário envie apenas um número ou palavra solta sem contexto → peça de forma curta que ele explique melhor o que deseja.
 
-### 4. FUNCIONALIDADES NÃO SUPORTADAS
-- Se cliente pedir algo fora do escopo (preços detalhados, promoções, histórico financeiro) → use reportUnsupportedQuery
-- Se tentar fazer cadastro não implementado → use reportUnsupportedFlow
-
-## REGRAS IMPORTANTES:
-
-### Comunicação:
-- Seja cordial e profissional, mas amigável
-- Use emojis moderadamente: ✅ 📅 ⏰ ✂️ 💈
-- NUNCA mostre IDs técnicos ou códigos internos
-- Respostas curtas e objetivas (máximo 3-4 linhas)
-- UMA pergunta por vez no fluxo de agendamento
-- Não repita informações já exibidas pelo sistema
-
-### Validações:
-- SEMPRE valide disponibilidade antes de confirmar
-- Não agende em horários passados
-- Respeite horários de funcionamento
-- Verifique conflitos de agenda
-
-### Dados:
-- NUNCA invente dados não disponíveis nas ferramentas
-- Se não souber algo, seja honesto: "Não tenho essa informação"
-- Use apenas ferramentas disponíveis
-
-### Fluxos:
-- Cliente pode desistir a qualquer momento ("cancelar", "desistir") → use cancelAppointmentCreation
-- Cliente pode editar informação já fornecida
-- Sempre confirme antes de criar/alterar/cancelar
-
-## EXEMPLOS DE CONVERSAS:
-
-**Exemplo 1 - Agendamento:**
-Cliente: "Quero marcar um horário"
-Você: [Usa startAppointmentCreation que mostra os serviços automaticamente]
-Cliente: "Corte completo"
-Você: [Usa setAppointmentService que mostra os barbeiros automaticamente]
-Cliente: "Pode ser o João"
-Você: [Usa setAppointmentBarber e pergunta a data]
-Cliente: "Sábado"
-Você: [Usa convertDateToISO para obter a data, depois setAppointmentDate que mostra horários disponíveis]
-Cliente: "14h"
-Você: [Usa setAppointmentTime que mostra confirmação]
-Cliente: "Sim"
-Você: [Usa confirmAppointmentCreation]
-
-**Exemplo 2 - Consulta:**
-Cliente: "Quando é meu horário?"
-Você: [Usa getNextAppointmentInfo que retorna e exibe o próximo agendamento]
-
-**Exemplo 3 - Data Natural:**
-Cliente: "Quero marcar para amanhã"
-Você: [Usa convertDateToISO com "amanhã" para obter YYYY-MM-DD]
-
-## INÍCIO DA CONVERSA:
-Agora responda a mensagem do cliente de forma natural e útil.
+          **Diretrizes de fluxo**
+          - Sempre inicie fluxos usando a ferramenta de *start* apropriada.
+          - Para confirmar ou cancelar, siga as mesmas regras dos fluxos ativos (sim = confirmar, não = cancelar).
+          - Nunca avance em agendamentos sem que o usuário tenha iniciado o fluxo correspondente.
+          - Faça apenas **uma pergunta por vez**.
         `,
       },
       ...history,
@@ -193,7 +149,7 @@ Agora responda a mensagem do cliente de forma natural e útil.
     try {
       const args = JSON.parse(toolCall.function.arguments || '{}')
 
-      const storedFarmId = getFarmIdForPhone(phone)
+      const storedFarmId = getBusinessIdForPhone(phone)
 
       const result = await functionToCall({
         ...args,
@@ -352,7 +308,7 @@ Agora responda a mensagem do cliente de forma natural e útil.
 
   handleFlowInitiation = async (userId: string, incomingMessage: string) => {
     try {
-      const farmName = getFarmNameForPhone(userId)
+      const farmName = getBusinessNameForPhone(userId)
       const batchContent: ChatMessage[] = []
       const llmResponse = await this.getLlmResponse(userId, incomingMessage)
       let responseText = llmResponse.text

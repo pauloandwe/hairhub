@@ -1,89 +1,54 @@
 import { OpenAITool } from '../../types/openai-types'
 
-export const appointmentQueriesTools: OpenAITool[] = [
+export const appointmentQueryTools: OpenAITool[] = [
   {
     type: 'function',
     function: {
-      name: 'getMyAppointments',
-      description: 'Busca todos os agendamentos do cliente. Use quando o cliente perguntar sobre seus agendamentos.',
+      name: 'getAvailableTimeSlots',
+      description: `Retorna os horários disponíveis para agendamento em um determinado dia.
+
+QUANDO USAR:
+- Quando o usuário pergunta "Quais horários tem disponível?"
+- Quando o usuário quer saber "Qual melhor horário para agendar?"
+- Durante o fluxo de agendamento para mostrar opções de horários
+
+EXEMPLOS:
+- "Quais horários estão livres amanhã?" → getAvailableTimeSlots({ date: "<YYYY-MM-DD de amanhã>" })
+- "Tem horário com o João disponível?" → getAvailableTimeSlots({ barberId: 1 })
+- "Me mostra os horários para 20/11/2024" → getAvailableTimeSlots({ date: "2024-11-20" })`,
       parameters: {
         type: 'object',
         properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
+          date: { type: 'string', format: 'date', description: 'Data para consultar horários (YYYY-MM-DD)' },
+          barberId: { type: 'integer', description: 'ID do barbeiro (opcional)' },
         },
-        required: ['phone'],
+        required: [],
+        additionalProperties: false,
       },
     },
   },
   {
     type: 'function',
     function: {
-      name: 'getNextAppointmentInfo',
-      description:
-        'Busca o próximo agendamento futuro do cliente. Use quando o cliente perguntar "quando é meu horário", "qual meu próximo agendamento".',
+      name: 'getAppointmentHistory',
+      description: `Retorna o histórico de agendamentos do cliente.
+
+QUANDO USAR:
+- Quando o usuário pergunta "Quais agendamentos eu tenho?"
+- Quando o usuário quer consultar seus cortes anteriores
+- Para mostrar histórico de visitas
+
+EXEMPLOS:
+- "Qual foi meu último corte?" → getAppointmentHistory({})
+- "Me mostra meu histórico de agendamentos" → getAppointmentHistory({ limit: 10 })`,
       parameters: {
         type: 'object',
         properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
+          clientPhone: { type: 'string', description: 'Telefone do cliente (opcional)' },
+          limit: { type: 'integer', description: 'Número máximo de registros a retornar (padrão: 10)' },
         },
-        required: ['phone'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getUpcomingAppointmentsInfo',
-      description: 'Busca os próximos agendamentos futuros do cliente.',
-      parameters: {
-        type: 'object',
-        properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
-          limit: {
-            type: 'number',
-            description: 'Número máximo de agendamentos a retornar (padrão: 5)',
-          },
-        },
-        required: ['phone'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getAvailableSlotsInfo',
-      description:
-        'Busca horários disponíveis para uma data específica. Use quando o cliente perguntar sobre disponibilidade de horários.',
-      parameters: {
-        type: 'object',
-        properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
-          date: {
-            type: 'string',
-            description: 'Data para verificar disponibilidade (formato YYYY-MM-DD)',
-          },
-          serviceId: {
-            type: 'string',
-            description: 'ID do serviço (opcional)',
-          },
-          barberId: {
-            type: 'string',
-            description: 'ID do barbeiro específico (opcional)',
-          },
-        },
-        required: ['phone', 'date'],
+        required: [],
+        additionalProperties: false,
       },
     },
   },
@@ -91,16 +56,22 @@ export const appointmentQueriesTools: OpenAITool[] = [
     type: 'function',
     function: {
       name: 'getServices',
-      description: 'Lista todos os serviços disponíveis. Use quando o cliente perguntar quais serviços são oferecidos.',
+      description: `Retorna os serviços disponíveis na barbearia.
+
+QUANDO USAR:
+- Quando o usuário pergunta "Quais serviços vocês oferecem?"
+- Quando o usuário quer ver as opções de corte
+- Para listar preços e duração dos serviços
+
+EXEMPLOS:
+- "Que tipos de corte vocês têm?" → getServices({})
+- "Quanto custa um corte?" → getServices({})
+- "Qual a diferença entre os serviços?" → getServices({})`,
       parameters: {
         type: 'object',
-        properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
-        },
-        required: ['phone'],
+        properties: {},
+        required: [],
+        additionalProperties: false,
       },
     },
   },
@@ -108,16 +79,22 @@ export const appointmentQueriesTools: OpenAITool[] = [
     type: 'function',
     function: {
       name: 'getBarbers',
-      description: 'Lista todos os barbeiros disponíveis. Use quando o cliente perguntar quem são os barbeiros.',
+      description: `Retorna os barbeiros disponíveis na barbearia.
+
+QUANDO USAR:
+- Quando o usuário pergunta "Quem são os barbeiros?"
+- Quando o usuário quer escolher um barbeiro específico
+- Para mostrar especialidades de cada barbeiro
+
+EXEMPLOS:
+- "Quem atende?" → getBarbers({})
+- "Qual barbeiro é melhor para corte moderno?" → getBarbers({})
+- "O João trabalha hoje?" → getBarbers({})`,
       parameters: {
         type: 'object',
-        properties: {
-          phone: {
-            type: 'string',
-            description: 'Número de telefone do cliente',
-          },
-        },
-        required: ['phone'],
+        properties: {},
+        required: [],
+        additionalProperties: false,
       },
     },
   },

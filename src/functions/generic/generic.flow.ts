@@ -907,7 +907,7 @@ export abstract class GenericCrudFlow<TDraft, TCreationPayload, TRecord extends 
     const { allowedPlanIds, notAllowedSubPlansIds, deniedMessage, resetRegistrationOnDeny } = control
 
     const planAllowed = !allowedPlanIds || allowedPlanIds.length === 0 || (planId !== undefined && planId !== null && allowedPlanIds.includes(planId))
-    const subPlanNotAllowed = notAllowedSubPlansIds?.length ? subPlanIds.some((subPlanId: number) => notAllowedSubPlansIds.includes(subPlanId)) : false
+    const subPlanNotAllowed = notAllowedSubPlansIds?.length ? subPlanIds.some((subPlanId: any) => notAllowedSubPlansIds.includes(subPlanId)) : false
 
     if (planAllowed && !subPlanNotAllowed) {
       return null

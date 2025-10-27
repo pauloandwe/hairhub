@@ -1,29 +1,68 @@
-import { sendWhatsAppMessage } from '../api/meta.api'
-import { setUserContext } from '../env.config'
+import { createClient } from 'redis'
+import { usersService } from './users/users.service'
+import { env, setUserContext } from '../env.config'
+import { setApiBearerToken } from '../config/api.config'
+import { systemLogger } from '../utils/pino'
 
-// Redis connection (optional, fallback to memory)
-let redisClient: any = null
+let redisClient: ReturnType<typeof createClient> | null = null
 
-export async function getRedis(): Promise<any> {
+export async function getRedis(): Promise<ReturnType<typeof createClient> | null> {
   if (redisClient) return redisClient
 
-  try {
-    const redis = await import('redis')
-    const redisUrl = process.env.REDIS_URL
-    if (redisUrl) {
-      redisClient = redis.createClient({ url: redisUrl })
-      await redisClient.connect()
-      console.log('✅ Redis connected')
-    }
-  } catch (error) {
-    console.log('⚠️  Redis not available, using memory storage')
+  if (env.REDIS_HOST) {
+    const port = env.REDIS_PORT ? parseInt(env.REDIS_PORT, 10) : 6379
+    const password = env.REDIS_PASSWORD || ''
+    redisClient = createClient({
+      socket: { host: env.REDIS_HOST, port },
+      password,
+    })
+  } else {
+    return null
   }
-
+  redisClient.on('error', (err: unknown) => console.error('[Redis] error', err))
+  await redisClient.connect()
   return redisClient
 }
 
-export async function ensureUserApiToken(phone: string): Promise<{ proceed: boolean }> {
-  // Simplified - no longer using external user service
-  // For BarberHub, we don't need user authentication via external API
-  return { proceed: true }
+interface CachedUserTokenData {
+  token: string
+  farmId?: string
+  farmName?: string
+  userName?: string
+  [key: string]: any
+}
+
+export async function ensureUserApiToken(businessId: string, phone: string): Promise<CachedUserTokenData | null> {
+  try {
+    const responseBusiness = await usersService.getBusiness(businessId, phone)
+    const data = responseBusiness?.data?.data
+    const token = data?.token as string | undefined
+    if (token) setApiBearerToken(token)
+
+    await setUserContext(phone, {
+      token,
+      ...data,
+      businessId: data.id,
+      businessName: data.name,
+      businessType: data.type,
+    })
+
+    systemLogger.info(
+      {
+        context: 'System',
+        phone,
+        businessId,
+        token: data?.token,
+        payload: data,
+      },
+      'User authenticated successfully with token.',
+    )
+
+    if (data) return data as CachedUserTokenData
+
+    return null
+  } catch (remoteErr) {
+    console.error('[AuthToken] Erro ao buscar token remoto:', remoteErr)
+    throw remoteErr
+  }
 }

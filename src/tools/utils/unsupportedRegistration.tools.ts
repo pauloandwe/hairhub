@@ -8,24 +8,24 @@ export const unsupportedRegistrationTools: OpenAITool[] = [
       description: `FUNÇÃO PARA CADASTROS NÃO DISPONÍVEIS:
 - Use SEMPRE que o usuário mencionar cadastrar/lançar/registrar algo que NÃO está na lista de cadastros disponíveis.
 - Cadastros DISPONÍVEIS (NÃO use esta função para estes):
-  * Morte/óbito/baixa de animais → usar startAnimalDeathRegistration
-  * Despesas/custos/gastos → usar startExpenseRegistration
-  * Nascimentos/partos/parições de animais → usar startAnimalBirthRegistration
+  * Agendamento de corte/serviço → usar startAppointmentRegistration
+  * Despesas/custos/gastos da barbearia → usar startExpenseRegistration
 
 - Cadastros NÃO DISPONÍVEIS (USE esta função):
-  * Venda de animais
-  * Compra de animais
-  * Produção de leite
-  * Pesagem
-  * Vacinação
-  * Movimentação de lote
-  * Safra/plantio
-  * Receitas/vendas
+  * Cadastro de novos barbeiros
+  * Cadastro de novos serviços
+  * Cadastro de clientes
+  * Registro de pagamentos
+  * Cadastro de fornecedores
+  * Registro de faturamento
+  * Cadastro de produtos/estoque
+  * Mudança de preços
   * Qualquer outro tipo de cadastro não listado acima como disponível
 
 EXEMPLOS DE USO:
-- "Quero cadastrar uma venda" → reportUnsupportedRegistration({ registrationType: "venda de animais" })
-- "Lançar produção de leite" → reportUnsupportedRegistration({ registrationType: "produção de leite" })
+- "Quero adicionar um novo barbeiro" → reportUnsupportedRegistration({ registrationType: "cadastro de novo barbeiro" })
+- "Registrar um novo serviço" → reportUnsupportedRegistration({ registrationType: "cadastro de novo serviço" })
+- "Cadastrar um novo cliente" → reportUnsupportedRegistration({ registrationType: "cadastro de cliente" })
 
 IMPORTANTE: Esta função informa ao usuário que o cadastro solicitado não está disponível no sistema.`,
       parameters: {

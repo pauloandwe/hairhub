@@ -1,0 +1,41 @@
+import api from '../../config/api.config'
+
+export interface InstitutionSummary {
+  id: string
+  name: string
+}
+
+export class InstitutionService {
+  private servicePrefix = process.env.USERS_URL
+
+  async listInstitutions(phone: string): Promise<InstitutionSummary[]> {
+    // const institutionConsultantId = getInstitutionConsultantIdForPhone(phone)
+    const institutionConsultantId = 0
+    if (!institutionConsultantId) {
+      console.warn('[InstitutionService] listInstitutions chamado sem institutionConsultantId no contexto do usuário', phone)
+    }
+
+    const params: any = {
+      filters: 'isActive:true',
+      pageSize: 100,
+    }
+
+    const response = await api.get(`${this.servicePrefix}/consultants/wallets/${institutionConsultantId}`, { params })
+
+    const rawItems: any[] = response?.data?.data?.data ?? []
+
+    const mapped = rawItems
+      .map((it) => ({
+        id: String(it?.institutionId ?? it?.id ?? ''),
+        name: String(it?.institutionName ?? it?.name ?? 'Instituição'),
+      }))
+      .filter((x) => !!x.id)
+
+    const uniqueById = new Map<string, InstitutionSummary>()
+    for (const m of mapped) uniqueById.set(String(m.id), m)
+
+    return Array.from(uniqueById.values())
+  }
+}
+
+export const institutionService = new InstitutionService()

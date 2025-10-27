@@ -1,5 +1,5 @@
 import api from '../../config/api.config'
-import { getFarmIdForPhone, getUserContext, getUserContextSync } from '../../env.config'
+import { getBusinessIdForPhone, getUserContext, getUserContextSync } from '../../env.config'
 import { CacheKeys, EnvKeys } from '../../helpers/Enums'
 import { APIResponseCreate } from '../../types/api.types'
 import { createDraftStore } from '../drafts/draft-store'
@@ -18,6 +18,7 @@ interface EndpointContext {
   phone: string
   recordId?: string
   farmId?: string
+  businessId?: string
 }
 
 interface GenericServiceEndpointConfig {
@@ -36,7 +37,8 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
   protected store: ReturnType<typeof createDraftStore<ChatDraftEnvelope<TDraft>>>
   protected memoryDb: TRecord[] = []
   protected readonly options: GenericServiceOptions
-  constructor(protected type: string, protected emptyDraft: () => TDraft, protected servicePrefix: string, protected autoCompleteEndpoint: string, protected validEditableFields: (keyof TUpsertArgs)[], options: GenericServiceOptions = {}) {
+  protected readonly disableAutoComplete: boolean
+  constructor(protected type: string, protected emptyDraft: () => TDraft, protected servicePrefix: string, protected autoCompleteEndpoint: string, protected validEditableFields: (keyof TUpsertArgs)[], options: GenericServiceOptions = {}, disableAutoComplete: boolean = false) {
     this.store = createDraftStore<ChatDraftEnvelope<TDraft>>({
       keyPrefix: CacheKeys.CHAT_DRAFT,
       empty: () => ({
@@ -49,6 +51,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
       defaultTtlSec: 86400,
     })
     this.options = options
+    this.disableAutoComplete = disableAutoComplete
   }
 
   protected abstract transformToApiPayload: (draft: TDraft, context: { farmId: number }) => TCreationPayload
@@ -122,7 +125,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
 
   autoComplete = async (phone: string, data: TDraft): Promise<APIResponseCreate<TDraft>> => {
     const url = this.resolveEndpointUrl('autoComplete', { phone })
-    const farmId = getFarmIdForPhone(phone) || undefined
+    const farmId = getBusinessIdForPhone(phone) || undefined
     const payload = this.buildAutoCompletePayload(data, { phone, farmId })
     return api.post(url, payload)
   }
@@ -147,7 +150,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     if (!template) {
       throw new Error(`[BaseService:${this.type}] Endpoint '${action}' is not configured.`)
     }
-    const resolvedFarmId = getFarmIdForPhone(context.phone)
+    const resolvedFarmId = getBusinessIdForPhone(context.phone)
     const farmId = context.farmId ?? (resolvedFarmId || undefined)
     const runtimeContext: EndpointContext = {
       ...context,
@@ -196,7 +199,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
   }
 
   protected _createRecord = async (phone: string, draft: TDraft, endpoint: string): Promise<{ id: string }> => {
-    const farmId = getFarmIdForPhone(phone)
+    const farmId = getBusinessIdForPhone(phone)
     if (!farmId) {
       throw new Error(`Could not determine farmId for phone: ${phone}`)
     }
@@ -276,9 +279,14 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
   updateDraft = async (userId: string, updates: Partial<TUpsertArgs>): Promise<TDraft> => {
     const currentDraft = await this.loadDraft(userId)
     this.validateDraftArgsTypes(updates, currentDraft)
-    const autoCompleteResponse = await this.autoComplete(userId, currentDraft)
-    const autoCompletePayload = this.extractDataFromResult('autoComplete', autoCompleteResponse)
-    const updatedDraft = { ...currentDraft, ...autoCompletePayload }
+
+    let updatedDraft = currentDraft
+
+    if (!this.disableAutoComplete) {
+      const autoCompleteResponse = await this.autoComplete(userId, currentDraft)
+      const autoCompletePayload = this.extractDataFromResult('autoComplete', autoCompleteResponse)
+      updatedDraft = { ...currentDraft, ...autoCompletePayload }
+    }
 
     const envelope = await this.loadEnvelope(userId)
     const context = getUserContextSync(userId)
@@ -405,7 +413,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
 
   buildCreationPayload = async (args: { draft: TDraft; phone: string }): Promise<TCreationPayload | null> => {
     const { draft, phone } = args
-    const farmId = Number(getFarmIdForPhone(phone))
+    const farmId = Number(getBusinessIdForPhone(phone))
     const itsMissingRequiredFields = await this.hasMissingFields(draft)
     if (itsMissingRequiredFields.length > 0) {
       return null
@@ -426,7 +434,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
   }
 
   protected _updateRecord = async (phone: string, recordId: string, draft: TDraft, endpoint: string): Promise<{ id: string }> => {
-    const farmId = getFarmIdForPhone(phone)
+    const farmId = getBusinessIdForPhone(phone)
     if (!farmId) {
       throw new Error(`Could not determine farmId for phone: ${phone}`)
     }

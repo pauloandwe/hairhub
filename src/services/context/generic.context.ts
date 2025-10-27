@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { sendWhatsAppMessage } from '../../api/meta.api'
-import { env, getFarmIdForPhone, getFarmNameForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
+import { env, getBusinessIdForPhone, getBusinessNameForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
 import { formatAssistantReply } from '../../utils/message'
 import { appendIntentHistory, clearIntentHistory, ChatMessage } from '../intent-history.service'
 import { draftHistoryService } from '../drafts/draft-history'
@@ -22,13 +22,13 @@ export abstract class GenericContextService<TDraft> {
     }
   }
 
-  protected async buildBasePrompt(draft: any, history: ChatMessage[], incomingMessage: string, farmName?: string, userId?: string, awaitingField?: string, isEditingExistingRecord?: boolean): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
+  protected async buildBasePrompt(draft: any, history: ChatMessage[], incomingMessage: string, businessName?: string, userId?: string, awaitingField?: string, isEditingExistingRecord?: boolean): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
     if (awaitingField) {
       if (isEditingExistingRecord) {
         return [
           {
             role: 'system',
-            content: `Você é um assistente para edição de registros de ${FlowTypeTranslation[this.flowType]} na plataforma Inttegra.
+            content: `Você é um assistente para edição de registros de ${FlowTypeTranslation[this.flowType]} na plataforma de agendamento de barbearia.
 
             **Tarefa específica:** Extrair o novo valor para o campo: "${awaitingField}"
 
@@ -55,7 +55,7 @@ export abstract class GenericContextService<TDraft> {
             - Números sem símbolos especiais
             - Não faça perguntas, apenas extraia e execute
 
-            ${farmName ? `Fazenda: ${farmName}` : ''}`,
+            ${businessName ? `Barbearia: ${businessName}` : ''}`,
           },
           { role: 'user', content: incomingMessage },
         ]
@@ -63,7 +63,7 @@ export abstract class GenericContextService<TDraft> {
       return [
         {
           role: 'system',
-          content: `Você é um assistente de coleta de dados para cadastro de ${FlowTypeTranslation[this.flowType]} na plataforma Inttegra.
+          content: `Você é um assistente de coleta de dados para ${FlowTypeTranslation[this.flowType]} na plataforma de agendamento de barbearia.
 
           **Tarefa específica:** Extrair o valor para o campo: "${awaitingField}"
 
@@ -89,7 +89,7 @@ export abstract class GenericContextService<TDraft> {
           - Datas devem estar em formato YYYY-MM-DD
           - Não faça perguntas, apenas extraia e execute
 
-          ${farmName ? `Fazenda: ${farmName}` : ''}`,
+          ${businessName ? `Barbearia: ${businessName}` : ''}`,
         },
         { role: 'user', content: incomingMessage },
       ]
@@ -98,7 +98,7 @@ export abstract class GenericContextService<TDraft> {
     return [
       {
         role: 'system',
-        content: `Você é um assistente virtual amigável da Inttegra, plataforma de gestão pecuária.
+        content: `Você é um assistente virtual amigável da plataforma de agendamento de barbearia.
         Sua única função é auxiliar o usuário no cadastro de ${FlowTypeTranslation[this.flowType]}.
 
         **Contexto:** Cadastro de ${FlowTypeTranslation[this.flowType]}
@@ -121,7 +121,7 @@ export abstract class GenericContextService<TDraft> {
         - Datas: sempre normalize para formato ISO (YYYY-MM-DD)
         - Valores monetários: remova "R$" e converta para número
 
-        ${farmName ? `Fazenda: ${farmName}` : ''}
+        ${businessName ? `Barbearia: ${businessName}` : ''}
 
         Não explique, não pergunte. Apenas extraia e chame a ferramenta.`,
       },
@@ -179,7 +179,7 @@ export abstract class GenericContextService<TDraft> {
     try {
       const args = JSON.parse(toolCall.function.arguments || '{}')
 
-      const storedFarmId = getFarmIdForPhone(phone)
+      const storedFarmId = getBusinessIdForPhone(phone)
 
       const result = await functionToCall({
         ...args,
@@ -207,7 +207,7 @@ export abstract class GenericContextService<TDraft> {
   protected handleEditingFlow = async (args: { userId: string; incomingMessage: string; flowConfig: FlowConfig; editingField: string; userContext: UserRuntimeContext }): Promise<AIResponseResult> => {
     const { userId, incomingMessage, flowConfig, editingField, userContext } = args
     const { activeRegistration } = userContext
-    const farmName = getFarmNameForPhone(userId)
+    const businessName = getBusinessNameForPhone(userId)
 
     try {
       const editFunctionName = flowConfig?.editFunction
@@ -223,7 +223,7 @@ export abstract class GenericContextService<TDraft> {
       console.log(`Handling editing flow for user ${userId}, field: ${editingField}, message: ${incomingMessage}`)
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
 
-      const editFieldPrompt = await this.buildBasePrompt({}, [], incomingMessage, farmName, userId, editingField, true)
+      const editFieldPrompt = await this.buildBasePrompt({}, [], incomingMessage, businessName, userId, editingField, true)
 
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
       console.log(`editFieldPrompt`, incomingMessage, editFieldPrompt)
@@ -344,15 +344,18 @@ export abstract class GenericContextService<TDraft> {
     return null
   }
 
-  protected getLlmResponse = async (args: { history: ChatMessage[]; incomingMessage: string; userId: string; farmName?: string }): Promise<AIResponseResult> => {
-    const { history, incomingMessage, userId, farmName } = args
+  protected getLlmResponse = async (args: { history: ChatMessage[]; incomingMessage: string; userId: string; businessName?: string }): Promise<AIResponseResult> => {
+    const { history, incomingMessage, userId, businessName } = args
+
     const userContext = getUserContextSync(userId)
     const awaitingField = userContext?.activeRegistration?.awaitingInputForField
     const activeRegistration = userContext?.activeRegistration
     const activeFlowStatus = activeRegistration?.status
     const activeFlowType = activeRegistration?.type
     const activeFlowStep = activeRegistration?.step
+
     const draft = await this.getDraft(userId)
+
     if (!activeFlowType && activeFlowStatus !== 'completed') {
       const currentRegistration = activeRegistration || {}
       const status = currentRegistration.status && currentRegistration.status !== 'completed' ? currentRegistration.status : 'collecting'
@@ -367,8 +370,10 @@ export abstract class GenericContextService<TDraft> {
         },
       })
     }
+
     const flowConfig = this.getFlowConfig()
     console.log(`[GenericContextService] Active flow for user ${userId}:`, { activeFlowType, activeFlowStatus, activeFlowStep, awaitingField })
+
     if (awaitingField) {
       if (activeFlowStep === FlowStep.Editing) {
         return this.handleEditingFlow({ userId, incomingMessage, flowConfig, editingField: awaitingField, userContext })
@@ -377,12 +382,14 @@ export abstract class GenericContextService<TDraft> {
       }
     }
 
-    const defaultFlowPrompt = await this.buildBasePrompt(draft, history, incomingMessage, farmName, userId)
+    const defaultFlowPrompt = await this.buildBasePrompt(draft, history, incomingMessage, businessName, userId)
+
     //-------------LOG
     console.log('\n\n')
     console.log('[OpenAI] Prompt base:\n', defaultFlowPrompt)
     console.log('\n\n')
     //-------------
+
     const openAiAgent = await this.openai.chat.completions.create({
       model: 'gpt-5-mini',
       messages: defaultFlowPrompt,
@@ -405,6 +412,7 @@ export abstract class GenericContextService<TDraft> {
           },
         }
         await this.executeToolFunction(toolCall, userId)
+
         return { text: '', suppress: true }
       } else {
         await resetActiveRegistration(userId)
@@ -437,17 +445,17 @@ export abstract class GenericContextService<TDraft> {
 
   handleFlowInitiation = async (userId: string, incomingMessage: string) => {
     try {
-      const farmName = getFarmNameForPhone(userId)
+      const businessName = getBusinessNameForPhone(userId)
       const batchContent: ChatMessage[] = []
       const draftHistory = await this.getDraftHistory(userId)
-      const llmResponse = await this.getLlmResponse({ history: draftHistory, incomingMessage, userId, farmName })
+      const llmResponse = await this.getLlmResponse({ history: draftHistory, incomingMessage, userId, businessName })
       let responseText = llmResponse.text
 
       const userContext = getUserContextSync(userId)
       const flowType = userContext?.activeRegistration?.type
       const flowStep = userContext?.activeRegistration?.step
 
-      const { display, history: historyContent } = formatAssistantReply(responseText, farmName || undefined, flowType, flowStep)
+      const { display, history: historyContent } = formatAssistantReply(responseText, businessName || undefined, flowType, flowStep)
 
       responseText = display
       batchContent.push({ role: 'user', content: incomingMessage })

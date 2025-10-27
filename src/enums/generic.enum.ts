@@ -1,7 +1,9 @@
 export enum FlowType {
-  AppointmentCreate = 'appointmentCreate',
-  AppointmentReschedule = 'appointmentReschedule',
-  AppointmentCancel = 'appointmentCancel',
+  SimplifiedExpense = 'simplifiedExpense',
+  Death = 'death',
+  Birth = 'birth',
+  Selling = 'selling',
+  Appointment = 'appointment',
 }
 
 export enum FlowStep {
@@ -16,7 +18,9 @@ export enum FunctionTypeEnum {
 }
 
 export enum FlowTypeTranslation {
-  appointmentCreate = 'Agendamento',
-  appointmentReschedule = 'Remarcação',
-  appointmentCancel = 'Cancelamento',
+  simplifiedExpense = 'Despesa',
+  death = 'Morte',
+  birth = 'Nascimento',
+  selling = 'Venda',
+  appointment = 'Agendamento',
 }

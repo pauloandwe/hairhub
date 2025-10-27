@@ -1,170 +1,182 @@
-import { getAppointmentsByPhone, getNextAppointment, getUpcomingAppointments, getAvailableSlots } from '../../api/appointments.api'
-import { getOrCreateBusinessConfig } from '../../api/business.api'
-import { sendWhatsAppMessage } from '../../api/meta.api'
-import { formatAppointmentList, formatAppointmentSummary, formatAvailableSlots, formatServiceList, formatBarberList } from '../../utils/appointment-formatters'
+import { getBusinessIdForPhone } from '../../env.config'
+import { aiLogger } from '../../utils/pino'
 
-/**
- * Get all appointments for a customer
- */
-export async function getMyAppointments(args: { phone: string }): Promise<string> {
-  const { phone } = args
+const logger = aiLogger.child({ module: 'appointment-queries' })
 
-  try {
-    const appointments = await getAppointmentsByPhone(phone)
+export const appointmentQueryFunctions = {
+  /**
+   * Retorna os horários disponíveis para agendamento em um determinado dia
+   */
+  getAvailableTimeSlots: async (args: { phone: string; date?: string; barberId?: number }): Promise<any> => {
+    const { phone, date, barberId } = args
+    const businessId = getBusinessIdForPhone(phone)
 
-    if (appointments.length === 0) {
-      await sendWhatsAppMessage(phone, 'Você não tem agendamentos.')
-      return 'No appointments found'
+    logger.info({ businessId, date, barberId }, 'Consultando horários disponíveis')
+
+    try {
+      // TODO: Integrar com API de horários disponíveis
+      // Por enquanto, retorna uma resposta simulada
+      return {
+        status: 'success',
+        data: {
+          date: date || new Date().toISOString().split('T')[0],
+          available_slots: [
+            { time: '09:00', barbier_id: barberId },
+            { time: '09:30', barbier_id: barberId },
+            { time: '10:00', barbier_id: barberId },
+            { time: '10:30', barbier_id: barberId },
+            { time: '14:00', barbier_id: barberId },
+            { time: '14:30', barbier_id: barberId },
+            { time: '15:00', barbier_id: barberId },
+            { time: '15:30', barbier_id: barberId },
+          ],
+        },
+      }
+    } catch (error) {
+      logger.error({ error }, 'Erro ao consultar horários disponíveis')
+      return {
+        error: 'Não consegui buscar os horários disponíveis. Tenta de novo mais tarde.',
+      }
     }
+  },
 
-    const formattedList = formatAppointmentList(appointments)
-    await sendWhatsAppMessage(phone, formattedList)
+  /**
+   * Retorna o histórico de agendamentos do cliente
+   */
+  getAppointmentHistory: async (args: { phone: string; clientPhone?: string; limit?: number }): Promise<any> => {
+    const { phone, clientPhone, limit = 10 } = args
+    const businessId = getBusinessIdForPhone(phone)
 
-    return 'Appointments list sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar agendamentos. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
+    logger.info({ businessId, clientPhone, limit }, 'Consultando histórico de agendamentos')
 
-/**
- * Get next upcoming appointment
- */
-export async function getNextAppointmentInfo(args: { phone: string }): Promise<string> {
-  const { phone } = args
-
-  try {
-    const appointment = await getNextAppointment(phone)
-
-    if (!appointment) {
-      await sendWhatsAppMessage(phone, 'Você não tem agendamentos futuros.')
-      return 'No upcoming appointments'
+    try {
+      // TODO: Integrar com API de histórico de agendamentos
+      // Por enquanto, retorna uma resposta simulada
+      return {
+        status: 'success',
+        data: {
+          appointments: [
+            {
+              id: '1',
+              date: '2024-10-20',
+              time: '14:00',
+              service: 'Corte Masculino',
+              barber: 'João',
+              status: 'completed',
+            },
+            {
+              id: '2',
+              date: '2024-10-15',
+              time: '10:00',
+              service: 'Corte + Barba',
+              barber: 'Carlos',
+              status: 'completed',
+            },
+          ],
+          total: 2,
+        },
+      }
+    } catch (error) {
+      logger.error({ error }, 'Erro ao consultar histórico de agendamentos')
+      return {
+        error: 'Não consegui buscar o histórico de agendamentos. Tenta de novo mais tarde.',
+      }
     }
+  },
 
-    const summary = formatAppointmentSummary(appointment)
-    await sendWhatsAppMessage(phone, `Seu próximo agendamento:\n\n${summary}`)
+  /**
+   * Retorna os serviços disponíveis na barbearia
+   */
+  getServices: async (args: { phone: string }): Promise<any> => {
+    const { phone } = args
+    const businessId = getBusinessIdForPhone(phone)
 
-    return 'Next appointment sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar próximo agendamento. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
+    logger.info({ businessId }, 'Consultando serviços disponíveis')
 
-/**
- * Get upcoming appointments
- */
-export async function getUpcomingAppointmentsInfo(args: { phone: string; limit?: number }): Promise<string> {
-  const { phone, limit = 5 } = args
-
-  try {
-    const appointments = await getUpcomingAppointments(phone, limit)
-
-    if (appointments.length === 0) {
-      await sendWhatsAppMessage(phone, 'Você não tem agendamentos futuros.')
-      return 'No upcoming appointments'
+    try {
+      // TODO: Integrar com API de serviços
+      // Por enquanto, retorna uma resposta simulada
+      return {
+        status: 'success',
+        data: {
+          services: [
+            {
+              id: 1,
+              name: 'Corte Masculino',
+              duration: 30,
+              price: 40.0,
+            },
+            {
+              id: 2,
+              name: 'Barba',
+              duration: 20,
+              price: 30.0,
+            },
+            {
+              id: 3,
+              name: 'Corte + Barba',
+              duration: 50,
+              price: 65.0,
+            },
+            {
+              id: 4,
+              name: 'Hidratação Capilar',
+              duration: 20,
+              price: 25.0,
+            },
+          ],
+        },
+      }
+    } catch (error) {
+      logger.error({ error }, 'Erro ao consultar serviços')
+      return {
+        error: 'Não consegui buscar os serviços. Tenta de novo mais tarde.',
+      }
     }
+  },
 
-    const formattedList = formatAppointmentList(appointments)
-    await sendWhatsAppMessage(phone, `Seus próximos agendamentos:\n\n${formattedList}`)
+  /**
+   * Retorna os barbeiros disponíveis
+   */
+  getBarbers: async (args: { phone: string }): Promise<any> => {
+    const { phone } = args
+    const businessId = getBusinessIdForPhone(phone)
 
-    return 'Upcoming appointments sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar agendamentos. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
+    logger.info({ businessId }, 'Consultando barbeiros disponíveis')
 
-/**
- * Get available slots for a specific date
- */
-export async function getAvailableSlotsInfo(args: { phone: string; date: string; serviceId?: string; barberId?: string }): Promise<string> {
-  const { phone, date, serviceId, barberId } = args
-
-  try {
-    const businessConfig = await getOrCreateBusinessConfig(phone)
-
-    // If no serviceId provided, use first service
-    const actualServiceId = serviceId || businessConfig.services[0]?.id
-
-    if (!actualServiceId) {
-      await sendWhatsAppMessage(phone, 'Erro: nenhum serviço disponível.')
-      return 'No services available'
+    try {
+      // TODO: Integrar com API de barbeiros
+      // Por enquanto, retorna uma resposta simulada
+      return {
+        status: 'success',
+        data: {
+          barbers: [
+            {
+              id: 1,
+              name: 'João',
+              specialty: 'Cortes clássicos',
+              available: true,
+            },
+            {
+              id: 2,
+              name: 'Carlos',
+              specialty: 'Design de barba',
+              available: true,
+            },
+            {
+              id: 3,
+              name: 'Pedro',
+              specialty: 'Cortes modernos',
+              available: true,
+            },
+          ],
+        },
+      }
+    } catch (error) {
+      logger.error({ error }, 'Erro ao consultar barbeiros')
+      return {
+        error: 'Não consegui buscar os barbeiros. Tenta de novo mais tarde.',
+      }
     }
-
-    const slots = await getAvailableSlots(businessConfig.id, date, actualServiceId, barberId)
-
-    if (slots.length === 0) {
-      await sendWhatsAppMessage(phone, `Não há horários disponíveis para ${date}.`)
-      return 'No slots available'
-    }
-
-    const formattedSlots = formatAvailableSlots(slots, !!barberId)
-    await sendWhatsAppMessage(phone, `Horários disponíveis para ${date}:\n\n${formattedSlots}`)
-
-    return 'Available slots sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar horários disponíveis. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
-
-/**
- * Get list of services
- */
-export async function getServices(args: { phone: string }): Promise<string> {
-  const { phone } = args
-
-  try {
-    const businessConfig = await getOrCreateBusinessConfig(phone)
-    const activeServices = businessConfig.services.filter((s) => s.active)
-
-    if (activeServices.length === 0) {
-      await sendWhatsAppMessage(phone, 'Nenhum serviço disponível no momento.')
-      return 'No services available'
-    }
-
-    const formattedList = formatServiceList(activeServices)
-    await sendWhatsAppMessage(phone, formattedList)
-
-    return 'Services list sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar serviços. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
-
-/**
- * Get list of barbers
- */
-export async function getBarbers(args: { phone: string }): Promise<string> {
-  const { phone } = args
-
-  try {
-    const businessConfig = await getOrCreateBusinessConfig(phone)
-    const activeBarbers = businessConfig.barbers.filter((b) => b.active)
-
-    if (activeBarbers.length === 0) {
-      await sendWhatsAppMessage(phone, 'Nenhum barbeiro disponível no momento.')
-      return 'No barbers available'
-    }
-
-    const formattedList = formatBarberList(activeBarbers)
-    await sendWhatsAppMessage(phone, formattedList)
-
-    return 'Barbers list sent'
-  } catch (error: any) {
-    await sendWhatsAppMessage(phone, 'Erro ao buscar barbeiros. Tente novamente.')
-    return `Error: ${error.message}`
-  }
-}
-
-// Export all functions
-export const appointmentQueriesFunctions = {
-  getMyAppointments,
-  getNextAppointmentInfo,
-  getUpcomingAppointmentsInfo,
-  getAvailableSlotsInfo,
-  getServices,
-  getBarbers,
+  },
 }

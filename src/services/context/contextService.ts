@@ -1,21 +1,31 @@
+import { downloadMedia, sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
 import { getUserContext } from '../../env.config'
-import { DefaultContextService } from '../defaultContext'
-import { AppointmentContextService } from '../appointments/create/appointmentContext.service'
-import { downloadMedia, sendWhatsAppMessage } from '../../api/meta.api'
-import { trackIntentChange } from '../intent-tracker.service'
-import { transcribeAudio } from '../openai.service'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
+import { ensureUserApiToken } from '../auth-token.service'
+import { transcribeAudio } from '../openai.service'
+import { SimplifiedExpenseContextService } from '../finances/simplifiedExpense/simplifiedExpense.context'
+import { DeathContextService } from '../livestocks/Death/death.context'
+import { DefaultContextService } from '../defaultContext'
+import { BirthContextService } from '../livestocks/Birth/birthService.context'
+import { SellingContextService } from '../livestocks/Selling/sellingService.context'
+import { AppointmentContextService } from '../appointments/appointmentService.context'
 
 export class ContextService {
   private static instance: ContextService
+  private readonly simplifiedExpenseContext = SimplifiedExpenseContextService.getInstance()
+  private readonly deathContext = DeathContextService.getInstance()
   private readonly defaultContext = DefaultContextService.getInstance()
+  private readonly birthContext = BirthContextService.getInstance()
+  private readonly sellingContext = SellingContextService.getInstance()
   private readonly appointmentContext = AppointmentContextService.getInstance()
 
   private readonly contextMap = {
-    [FlowType.AppointmentCreate]: this.appointmentContext,
-    [FlowType.AppointmentReschedule]: this.defaultContext,
-    [FlowType.AppointmentCancel]: this.defaultContext,
+    [FlowType.SimplifiedExpense]: this.simplifiedExpenseContext,
+    [FlowType.Death]: this.deathContext,
+    [FlowType.Birth]: this.birthContext,
+    [FlowType.Selling]: this.sellingContext,
+    [FlowType.Appointment]: this.appointmentContext,
   }
 
   static getInstance(): ContextService {
@@ -50,22 +60,15 @@ export class ContextService {
     }
   }
 
-  async getContextService(phone: string) {
-    const userContext = await getUserContext(phone)
-    const activeFlowType = userContext?.activeFlow?.type
-
-    if (activeFlowType && this.contextMap[activeFlowType as FlowType]) {
-      return this.contextMap[activeFlowType as FlowType]
-    }
-
-    return this.defaultContext
+  private verifyUserClearance = async (businessId: string, userId: string) => {
+    return await ensureUserApiToken(businessId, userId)
   }
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
-    let context: DefaultContextService | AppointmentContextService = this.defaultContext
-    const currentIntent = activeFlowType || 'default'
+    let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService = this.defaultContext
+    // const currentIntent = activeFlowType || 'default'
 
-    await trackIntentChange(userId, currentIntent)
+    // await trackIntentChange(userId, currentIntent)
 
     if (activeFlowType) {
       context = this.contextMap[activeFlowType as keyof typeof this.contextMap]
@@ -80,7 +83,7 @@ export class ContextService {
     return await context.handleFlowInitiation(userId, incomingMessage)
   }
 
-  handleIncomingMessage = async (messageData: any) => {
+  handleIncomingMessage = async (messageData: any, businessId?: string) => {
     const { from: userId } = messageData
 
     await getUserContext(userId)
@@ -93,6 +96,18 @@ export class ContextService {
       const incomingMessage = await this.transformMessage(messageData)
 
       if (!incomingMessage) return
+
+      if (!businessId) {
+        return await sendWhatsAppMessage(userId, 'Não consegui identificar o estabelecimento. Tente novamente em instantes.')
+      }
+
+      const hasClearance = await this.verifyUserClearance(businessId, userId)
+
+      if (!hasClearance) {
+        return await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
+      }
+
+      // Adicionar validação para salvar o nome do cliente
 
       await this.handleFlow(activeFlowType, userId, incomingMessage)
     } catch (error) {

@@ -31,12 +31,13 @@ export class WebhookService {
     if (body.object !== 'whatsapp_business_account') return
 
     const messageData = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]
+    const businessId = body.entry?.[0]?.changes?.[0]?.value?.metadata?.display_phone_number
 
     if (!messageData?.id || !messageData?.from) return
 
     try {
       // await markMessageAsRead(messageData.id)
-      await this.contextService.handleIncomingMessage(messageData)
+      await this.contextService.handleIncomingMessage(messageData, businessId)
     } catch (error) {
       console.error('[WebhookService] Erro inesperado ao processar webhook:', error)
       try {

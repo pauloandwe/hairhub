@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { env } from 'process'
 import { buildNaturalLanguagePrompt } from '../utils/systemPrompts'
-import { getUserNameForPhone, getFarmNameForPhone } from '../env.config'
+import { getUserNameForPhone, getBusinessNameForPhone } from '../env.config'
 import { aiLogger } from '../utils/pino'
 
 export interface GenerateNaturalTextOptions {
@@ -112,7 +112,7 @@ export class NaturalLanguageGeneratorService {
     const { phone, context, purpose, additionalInstructions, maxLength, maxTokens } = options
 
     const userName = getUserNameForPhone(phone)
-    const farmName = getFarmNameForPhone(phone)
+    const farmName = getBusinessNameForPhone(phone)
 
     return this.generateNaturalText({
       context,
@@ -129,7 +129,7 @@ export class NaturalLanguageGeneratorService {
     return this.generateNaturalTextByPhone({
       phone,
       context: summaryContext,
-      purpose: 'Gerar um resumo amigável do registro que foi criado',
+      purpose: 'Gerar um resumo amigável do agendamento que foi criado',
       additionalInstructions: 'Transforme os tópicos e listas em um texto fluido e natural, integrando todas as informações em um parágrafo contínuo. NÃO use bullet points, listas ou quebras de linha. Destaque os principais dados de forma conversacional.',
       maxLength,
     })

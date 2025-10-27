@@ -1,4 +1,4 @@
-import { getFarmNameForPhone, getUserContextSync } from '../env.config'
+import { getBusinessNameForPhone, getUserContextSync } from '../env.config'
 import { FlowTypeTranslation, FlowStep } from '../enums/generic.enum'
 
 export function buildAssistantTitle(farmName: string, flowType?: string, flowStep?: string): string {
@@ -6,7 +6,7 @@ export function buildAssistantTitle(farmName: string, flowType?: string, flowSte
     const typeTranslation = FlowTypeTranslation[flowType as keyof typeof FlowTypeTranslation]
 
     if (flowStep === FlowStep.Creating && typeTranslation) {
-      const titleText = farmName ? `Lançamento de ${typeTranslation} - ${farmName}` : `Lançamento de ${typeTranslation}`
+      const titleText = farmName ? `Novo ${typeTranslation} - ${farmName}` : `Novo ${typeTranslation}`
       return `*${titleText}*`
     }
 
@@ -17,15 +17,15 @@ export function buildAssistantTitle(farmName: string, flowType?: string, flowSte
   }
 
   if (farmName) {
-    return `*Assistente Inttegra - ${farmName}*`
+    return `*Assistente de Barbearia - ${farmName}*`
   }
 
-  return '*Assistente Inttegra*'
+  return '*Assistente de Barbearia*'
 }
 
 export function stripAssistantTitle(text: string): string {
   if (!text) return text
-  return text.replace(/^(\*?(?:Assistente Inttegra|Lançamento de|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
+  return text.replace(/^(\*?(?:Assistente de Barbearia|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
 }
 
 export function sanitizeOutgoingText(text: string): string {
@@ -61,7 +61,7 @@ export function withAssistantTitle(text: string, farmName?: string, flowType?: s
 }
 
 export function withAssistantTitlePhone(text: string, phone: string): string {
-  const farmName = getFarmNameForPhone(phone)
+  const farmName = getBusinessNameForPhone(phone)
   const userContext = getUserContextSync(phone)
   const flowType = userContext?.activeRegistration?.type
   const flowStep = userContext?.activeRegistration?.step
