@@ -74,6 +74,7 @@ export interface UserRuntimeContext {
   barbers: BusinessBarber[]
   settings: BusinessSettings
   businessId?: string
+  businessPhone?: string
   businessName?: string
   businessType?: string
   userName?: string
@@ -121,7 +122,13 @@ export function getUserContextSync(phone: string): UserRuntimeContext | undefine
 }
 
 export function getBusinessIdForPhone(phone: string): string {
+  console.log('asdasdasdasdasdasdasdas', userContexts[phone])
+
   return userContexts[phone]?.businessId || ''
+}
+
+export function getBusinessPhoneForPhone(phone: string): string {
+  return userContexts[phone]?.businessPhone || ''
 }
 
 export function getBusinessNameForPhone(phone: string): string {
@@ -136,9 +143,9 @@ export function getUserNameForPhone(phone: string): string {
   return userContexts[phone]?.userName || ''
 }
 
-export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string) {
+export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string, businessPhone?: string) {
   if (phone && businessId) {
-    await setUserContext(phone, { businessId, businessName, businessType })
+    await setUserContext(phone, { businessId, businessName, businessType, businessPhone })
   }
 }
 

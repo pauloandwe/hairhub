@@ -6,8 +6,8 @@ import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
 import { FieldEditor } from '../functions.types'
 
-export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'clientName' | 'clientPhone' | 'notes'
-export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'clientName' | 'clientPhone'
+export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'notes'
+export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber'
 
 type ChangeResponse = { message: string; interactive: boolean }
 
@@ -42,18 +42,6 @@ const editBarber: FieldEditor = async (phone) => {
   return respond('Menu de barbeiros enviado', true)
 }
 
-const editClientName: FieldEditor = async (phone) => {
-  const message = 'Qual é o seu nome?'
-  await askWithTitle(phone, message)
-  return respond('Nome solicitado', false)
-}
-
-const editClientPhone: FieldEditor = async (phone) => {
-  const message = 'Qual seu telefone? (com DDD)'
-  await askWithTitle(phone, message)
-  return respond('Telefone solicitado', false)
-}
-
 const editNotes: FieldEditor = async (phone) => {
   const message = 'Alguma observação ou preferência especial?'
   await askWithTitle(phone, message)
@@ -65,8 +53,6 @@ export const appointmentFieldEditors: Record<AppointmentEditField, FieldEditor> 
   appointmentTime: editTime,
   service: editService,
   barber: editBarber,
-  clientName: editClientName,
-  clientPhone: editClientPhone,
   notes: editNotes,
 }
 
@@ -93,23 +79,9 @@ const askBarber: MissingFieldHandler = async (phone, draft) => {
   return { message: 'Menu de barbeiros enviado', interactive: true, draft }
 }
 
-const askClientName: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Qual é o seu nome?'
-  await askWithTitle(phone, message)
-  return { message, interactive: false, draft }
-}
-
-const askClientPhone: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Qual seu telefone? (com DDD)'
-  await askWithTitle(phone, message)
-  return { message, interactive: false, draft }
-}
-
 export const missingFieldHandlers: Record<AppointmentMissingField, MissingFieldHandler> = {
   appointmentDate: askDate,
   appointmentTime: askTime,
   service: askService,
   barber: askBarber,
-  clientName: askClientName,
-  clientPhone: askClientPhone,
 }

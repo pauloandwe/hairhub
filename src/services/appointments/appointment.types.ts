@@ -14,14 +14,16 @@ export interface IAppointmentValidationDraft {
 }
 
 export interface IAppointmentCreationPayload {
-  appointmentDate: string
-  appointmentTime: string
+  businessId: number
   serviceId: number
   barberId: number
-  clientName: string
-  clientPhone: string
+  startDate: string
+  endDate: string
+  clientId: number
+  source: string
+  clientName?: string
+  clientPhone?: string
   notes?: string | null
-  businessId: number
 }
 
 export interface AppointmentRecord extends IAppointmentCreationPayload {

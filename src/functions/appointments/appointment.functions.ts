@@ -1,6 +1,5 @@
 import { FlowType } from '../../enums/generic.enum'
-import { Plan, SubPlan } from '../../enums/plans.enums'
-import { sendConfirmationButtons, sendEditDeleteButtons } from '../../interactives/genericConfirmation'
+import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../interactives/genericConfirmation'
 import { appendUserTextAuto } from '../../services/history-router.service'
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
@@ -8,14 +7,10 @@ import { GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
-  protected sendEditDeleteOptionsAfterError(phone: string, draft: IAppointmentValidationDraft, summary: string, recordId: string, errorMessage: string): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
-  protected sendEditCancelOptionsAfterCreationError(phone: string, draft: IAppointmentValidationDraft, summary: string, errorMessage: string): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
   private readonly editDeleteNamespace = 'APPOINTMENT_EDIT_DELETE'
+  private readonly editDeleteErrorNamespace = 'APPOINTMENT_EDIT_DELETE_ERROR'
+  private readonly editCancelErrorNamespace = 'APPOINTMENT_EDIT_CANCEL_ERROR'
 
   constructor() {
     super({
@@ -67,8 +62,16 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return super.confirmRegistration(args)
   }
 
+  continueAppointmentRegistration = async (args: { phone: string }) => {
+    return super.continueRegistration(args)
+  }
+
   cancelAppointmentRegistration = async (args: { phone: string }) => {
     return super.cancelRegistration(args)
+  }
+
+  editAppointmentRegistration = async (args: { phone: string }) => {
+    return super.enterEditMode(args)
   }
 
   editAppointmentRecordField = async (args: { phone: string; field: AppointmentEditField; value?: any }) => {
@@ -110,23 +113,56 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
-        return
+        await this.editAppointmentRegistration({ phone: userId })
       },
       onDelete: async (userId) => {
         await appendUserTextAuto(userId, 'Excluir')
-        return
+        await this.deleteAppointmentRegistration({ phone: userId })
+      },
+    })
+  }
+
+  protected async sendEditDeleteOptionsAfterError(phone: string, _draft: IAppointmentValidationDraft, summary: string, recordId: string, errorMessage: string): Promise<void> {
+    await sendEditDeleteButtonsAfterError({
+      namespace: `${this.editDeleteErrorNamespace}_${recordId}`,
+      userId: phone,
+      message: 'O que você quer fazer agora?',
+      editLabel: 'Editar',
+      deleteLabel: 'Deletar',
+      summaryText: summary,
+      header: this.options.messages.buttonHeaderEdit || 'Ops!',
+      errorMessage,
+      onEdit: async (userId) => {
+        await appendUserTextAuto(userId, 'Editar')
+        await this.editAppointmentRegistration({ phone: userId })
+      },
+      onDelete: async (userId) => {
+        await appendUserTextAuto(userId, 'Excluir')
+        await this.deleteAppointmentRegistration({ phone: userId })
+      },
+    })
+  }
+
+  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: IAppointmentValidationDraft, summary: string, errorMessage: string): Promise<void> {
+    await sendEditCancelButtonsAfterCreationError({
+      namespace: `${this.editCancelErrorNamespace}_${Date.now()}`,
+      userId: phone,
+      message: 'Como você quer continuar?',
+      editLabel: 'Editar dados',
+      cancelLabel: 'Cancelar',
+      summaryText: summary,
+      header: this.options.messages.buttonHeaderEdit || 'Ops!',
+      errorMessage,
+      onEdit: async (userId) => {
+        await appendUserTextAuto(userId, 'Editar dados')
+        await this.promptForDraftEdit(userId)
+      },
+      onCancel: async (userId) => {
+        await appendUserTextAuto(userId, 'Cancelar')
+        await this.cancelAppointmentRegistration({ phone: userId })
       },
     })
   }
 }
 
-const appointmentFlowServiceInstance = new AppointmentFlowService()
-
-export const appointmentFunctions = {
-  startAppointmentRegistration: appointmentFlowServiceInstance.startAppointmentRegistration,
-  changeAppointmentRegistrationField: appointmentFlowServiceInstance.changeAppointmentRegistrationField,
-  confirmAppointmentRegistration: appointmentFlowServiceInstance.confirmAppointmentRegistration,
-  cancelAppointmentRegistration: appointmentFlowServiceInstance.cancelAppointmentRegistration,
-  editAppointmentRecordField: appointmentFlowServiceInstance.editAppointmentRecordField,
-  deleteAppointmentRegistration: appointmentFlowServiceInstance.deleteAppointmentRegistration,
-}
+export const appointmentFunctions = new AppointmentFlowService()

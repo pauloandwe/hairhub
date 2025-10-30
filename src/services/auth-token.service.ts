@@ -35,14 +35,15 @@ interface CachedUserTokenData {
 export async function ensureUserApiToken(businessId: string, phone: string): Promise<CachedUserTokenData | null> {
   try {
     const responseBusiness = await usersService.getBusiness(businessId, phone)
-    const data = responseBusiness?.data?.data
+    const data = responseBusiness?.data?.data?.data
     const token = data?.token as string | undefined
     if (token) setApiBearerToken(token)
-
+    console.log('[AuthToken] Token encontrado para businessId:', data)
     await setUserContext(phone, {
       token,
       ...data,
       businessId: data.id,
+      businessPhone: data.phone,
       businessName: data.name,
       businessType: data.type,
     })

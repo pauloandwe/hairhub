@@ -144,10 +144,61 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       barber?: unknown
     }
 
+    const normalizeIdValue = (value: unknown): string | null => {
+      if (value === undefined || value === null) return null
+      const normalized = String(value).trim()
+      return normalized.length ? normalized : null
+    }
+
+    const previousServiceId = normalizeIdValue(currentDraft.service?.id)
+    const previousBarberId = normalizeIdValue(currentDraft.barber?.id)
+    const previousDate = currentDraft.appointmentDate ?? null
+
+    const assignRef = (field: keyof Pick<IAppointmentValidationDraft, 'service' | 'barber'>, incoming: IdNameRef | null | undefined) => {
+      if (incoming === undefined) return
+      if (incoming === null) {
+        currentDraft[field] = null
+        return
+      }
+
+      const target = currentDraft[field]
+      if (!target) {
+        currentDraft[field] = { id: incoming.id ?? null, name: incoming.name ?? null }
+        return
+      }
+
+      mergeIdNameRef(target, incoming)
+    }
+
+    const normalizedService = this.normalizeRefInput(extendedArgs.service)
+    if (normalizedService !== undefined) {
+      const incomingServiceId = normalizeIdValue(normalizedService?.id)
+      const hasServiceChanged = incomingServiceId !== previousServiceId
+      if (hasServiceChanged) {
+        currentDraft.barber = null
+        currentDraft.appointmentTime = null
+      }
+      assignRef('service', normalizedService)
+    }
+
+    const normalizedBarber = this.normalizeRefInput(extendedArgs.barber)
+    if (normalizedBarber !== undefined) {
+      const incomingBarberId = normalizeIdValue(normalizedBarber?.id)
+      const hasBarberChanged = incomingBarberId !== previousBarberId
+      if (hasBarberChanged) {
+        currentDraft.appointmentTime = null
+      }
+      assignRef('barber', normalizedBarber)
+    }
+
     const appointmentDateInput = extendedArgs.appointmentDate ?? extendedArgs.date
     if (appointmentDateInput !== undefined) {
+      let nextDate: string | null = currentDraft.appointmentDate ?? null
+      let hasNewValue = false
+
       if (appointmentDateInput === null) {
-        currentDraft.appointmentDate = null
+        nextDate = null
+        hasNewValue = true
       } else {
         const rawDate = String(appointmentDateInput).trim()
         if (rawDate) {
@@ -159,8 +210,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           }
 
           if (isValid(parsedDate)) {
-            currentDraft.appointmentDate = format(parsedDate, 'yyyy-MM-dd')
+            nextDate = format(parsedDate, 'yyyy-MM-dd')
+            hasNewValue = true
           }
+        }
+      }
+
+      if (hasNewValue) {
+        const hasDateChanged = nextDate !== previousDate
+        currentDraft.appointmentDate = nextDate
+        if (hasDateChanged) {
+          currentDraft.appointmentTime = null
         }
       }
     }
@@ -188,36 +248,14 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     if (args.notes !== undefined) {
       currentDraft.notes = args.notes ? String(args.notes).trim() : null
     }
-
-    const assignRef = (field: keyof Pick<IAppointmentValidationDraft, 'service' | 'barber'>, incoming: IdNameRef | null | undefined) => {
-      if (incoming === undefined) return
-      if (incoming === null) {
-        currentDraft[field] = null
-        return
-      }
-
-      const target = currentDraft[field]
-      if (!target) {
-        currentDraft[field] = { id: incoming.id ?? null, name: incoming.name ?? null }
-        return
-      }
-
-      mergeIdNameRef(target, incoming)
-    }
-
-    const normalizedService = this.normalizeRefInput(extendedArgs.service)
-    if (normalizedService !== undefined) assignRef('service', normalizedService)
-
-    const normalizedBarber = this.normalizeRefInput(extendedArgs.barber)
-    if (normalizedBarber !== undefined) assignRef('barber', normalizedBarber)
   }
 
   protected getRequiredFields = (): MissingRule<IAppointmentValidationDraft>[] => {
     return [
-      { key: 'appointmentDate' as keyof IAppointmentValidationDraft, kind: 'string' },
-      { key: 'appointmentTime' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'service' as keyof IAppointmentValidationDraft, kind: 'ref' },
       { key: 'barber' as keyof IAppointmentValidationDraft, kind: 'ref' },
+      { key: 'appointmentDate' as keyof IAppointmentValidationDraft, kind: 'string' },
+      { key: 'appointmentTime' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'clientName' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'clientPhone' as keyof IAppointmentValidationDraft, kind: 'string' },
     ]
@@ -258,15 +296,25 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
   protected transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
     const businessId = context.businessId || context.farmId || 0
+    const clientId = Number(context.phone?.replace(/\D/g, '')) || 0 // Usar phone como clientId se não fornecido
+
+    const dateStr = draft.appointmentDate as string
+    const timeStr = draft.appointmentTime as string
+    const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
+
+    const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
+
     const finalPayload: IAppointmentCreationPayload = {
-      appointmentDate: draft.appointmentDate as string,
-      appointmentTime: draft.appointmentTime as string,
+      businessId,
       serviceId: Number(draft.service?.id),
       barberId: Number(draft.barber?.id),
-      clientName: draft.clientName as string,
-      clientPhone: draft.clientPhone as string,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      clientId,
+      source: 'web',
+      clientName: draft.clientName ?? undefined,
+      clientPhone: draft.clientPhone ?? undefined,
       notes: draft.notes ?? null,
-      businessId,
     }
 
     return finalPayload
@@ -337,12 +385,16 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       console.warn(`[AppointmentService] Invalid fields for update ignored: ${invalidFields.join(', ')}`)
     }
 
-    if (has('appointmentDate')) {
-      payload.appointmentDate = draft.appointmentDate ?? undefined
-    }
-
-    if (has('appointmentTime')) {
-      payload.appointmentTime = draft.appointmentTime ?? undefined
+    if (has('appointmentDate') || has('appointmentTime')) {
+      // Converter data e hora em startDate e endDate
+      const dateStr = draft.appointmentDate as string
+      const timeStr = draft.appointmentTime as string
+      if (dateStr && timeStr) {
+        const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
+        const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
+        payload.startDate = startDate.toISOString()
+        payload.endDate = endDate.toISOString()
+      }
     }
 
     if (has('service')) {
@@ -378,7 +430,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const businessId = getBusinessIdForPhone(phone)
     const endpoint = `/${businessId}/appointments`
     try {
+      // Precisamos passar o phone no context para extrair o clientId
+      const originalTransform = this.transformToApiPayload
+      this.transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
+        return originalTransform.call(this, draft, { ...context, phone })
+      }
+
       const result = await this._createRecord(phone, draft, endpoint)
+
+      // Restaurar a função original
+      this.transformToApiPayload = originalTransform
+
       await resetActiveRegistration(phone)
       await clearAllUserIntents(phone)
       return result

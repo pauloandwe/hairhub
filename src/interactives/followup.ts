@@ -1,6 +1,7 @@
 import { sendWhatsAppMessage } from '../api/meta.api'
 import { FlowType } from '../enums/generic.enum'
 import { getUserContext } from '../env.config'
+import { appointmentFunctions } from '../functions/appointments/appointment.functions'
 import { simplifiedExpenseFunctions } from '../functions/finances/simplifiedExpense/simplifiedExpense.functions'
 import { birthFunctions } from '../functions/livestocks/birth/birth.functions'
 import { deathFunctions } from '../functions/livestocks/death/death.functions'
@@ -14,6 +15,7 @@ const continuationStrategies: Readonly<Record<string, ContinuationFunction>> = {
   [FlowType.Birth]: continueBirthRegistration,
   [FlowType.SimplifiedExpense]: continueSimplifiedExpenseRegistration,
   [FlowType.Selling]: continueSaleRegistration,
+  [FlowType.Appointment]: continueAppointmentRegistration,
 } as const
 
 const cancellationStrategies: Readonly<Record<string, CancellationFunction>> = {
@@ -21,6 +23,7 @@ const cancellationStrategies: Readonly<Record<string, CancellationFunction>> = {
   [FlowType.Birth]: cancelBirthRegistration,
   [FlowType.SimplifiedExpense]: cancelSimplifiedExpenseRegistration,
   [FlowType.Selling]: cancelSaleRegistration,
+  [FlowType.Appointment]: cancelAppointmentRegistration,
 } as const
 
 export async function tryContinueRegistration(userId: string): Promise<void> {
@@ -81,6 +84,10 @@ async function continueSaleRegistration(userId: string): Promise<void> {
   await saleFunctions.continueSaleRegistration({ phone: userId })
 }
 
+async function continueAppointmentRegistration(userId: string): Promise<void> {
+  await appointmentFunctions.continueAppointmentRegistration({ phone: userId })
+}
+
 async function cancelDeathRegistration(userId: string): Promise<void> {
   await deathFunctions.cancelAnimalDeathRegistration({ phone: userId })
 }
@@ -95,4 +102,8 @@ async function cancelSimplifiedExpenseRegistration(userId: string): Promise<void
 
 async function cancelSaleRegistration(userId: string): Promise<void> {
   await saleFunctions.cancelSaleRegistration({ phone: userId })
+}
+
+async function cancelAppointmentRegistration(userId: string): Promise<void> {
+  await appointmentFunctions.cancelAppointmentRegistration({ phone: userId })
 }

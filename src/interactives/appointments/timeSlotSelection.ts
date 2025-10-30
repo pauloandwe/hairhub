@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
-import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
+import { getUserContext, setUserContext, getUserContextSync, getBusinessPhoneForPhone } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { barberService } from '../../services/appointments/barber.service'
 import { SelectionItem } from '../../services/generic/generic.types'
@@ -15,13 +15,18 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
   namespace: TIME_SLOT_NAMESPACE,
   type: 'selectTimeSlot',
   fetchItems: async (phone) => {
-    const ctx = getUserContextSync(phone)
     const draft = await appointmentService.loadDraft(phone)
+    const serviceId = draft.service?.id ? Number(draft.service.id) : null
+    const barberId = draft.barber?.id ? Number(draft.barber.id) : null
+    const date = draft.appointmentDate ?? null
 
-    // Get available slots based on selected date and service
-    const slots = await barberService.getAvailableSlots(phone, draft.appointmentDate || undefined, draft.service?.id ? Number(draft.service.id) : undefined)
+    const slots = await barberService.getAvailableSlots({
+      phone,
+      barberId,
+      date,
+      serviceId,
+    })
 
-    // Convert time strings to SelectionItem format
     return slots.map((slot) => ({
       id: slot,
       name: slot,
