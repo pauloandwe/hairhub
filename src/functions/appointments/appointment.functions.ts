@@ -64,7 +64,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         deleteSuccess: 'Agendamento deletado com sucesso!',
         deleteError: 'Erro ao deletar. Tenta de novo?',
         buttonHeaderSuccess: 'Agendamento confirmado!',
-        useNaturalLanguage: true,
+        useNaturalLanguage: false,
       },
       accessControl: {
         deniedMessage: 'Esse plano ainda não tem essa funcionalidade.',

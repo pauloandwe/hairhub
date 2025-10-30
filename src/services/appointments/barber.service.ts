@@ -112,7 +112,7 @@ export class BarberService {
 
     try {
       const params: Record<string, any> = {
-        days: 15,  // Próximos 15 dias
+        days: 15, // Próximos 15 dias
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -142,19 +142,21 @@ export class BarberService {
       }
 
       // Transformar em SelectionItem para compatibilidade com o select flow
-      return data.availableDays.map((day: any) => {
-        // Garantir que day tem os campos esperados
-        if (!day.date || !day.displayDate) {
-          console.warn('[BarberService] Day object missing required fields:', day)
-          return null
-        }
+      return data.availableDays
+        .map((day: any) => {
+          // Garantir que day tem os campos esperados
+          if (!day.date || !day.displayDate) {
+            console.warn('[BarberService] Day object missing required fields:', day)
+            return null
+          }
 
-        return {
-          id: day.date,
-          name: day.displayDate,
-          description: `${day.slotsCount || 0} horários disponíveis`,
-        }
-      }).filter((item: any) => item !== null)
+          return {
+            id: day.date,
+            name: day.displayDate,
+            description: `${day.slotsCount || 0} horários disponíveis`,
+          }
+        })
+        .filter((item: any) => item !== null)
     } catch (error) {
       console.error('[BarberService] Error fetching available days:', error)
       throw new Error('Erro ao buscar dias disponíveis.')

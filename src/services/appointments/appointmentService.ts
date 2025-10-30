@@ -45,10 +45,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       VALID_EDITABLE_FIELDS,
       {
         endpoints: {
-          create: ({ businessId }) => (businessId ? `/${businessId}/appointments` : '/appointments'),
-          update: ({ businessId }) => (businessId ? `/${businessId}/appointments` : '/appointments'),
-          patch: ({ businessId }) => (businessId ? `/${businessId}/appointments` : '/appointments'),
-          delete: ({ businessId }) => (businessId ? `/${businessId}/appointments` : '/appointments'),
+          create: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
+          update: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
+          patch: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
+          delete: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
         },
       },
       true,
@@ -253,8 +253,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       { key: 'barber' as keyof IAppointmentValidationDraft, kind: 'ref' },
       { key: 'appointmentDate' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'appointmentTime' as keyof IAppointmentValidationDraft, kind: 'string' },
-      { key: 'clientName' as keyof IAppointmentValidationDraft, kind: 'string' },
-      { key: 'clientPhone' as keyof IAppointmentValidationDraft, kind: 'string' },
     ]
   }
 
@@ -281,10 +279,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         value: (draft: IAppointmentValidationDraft) => draft.clientName,
       },
       {
-        label: 'Telefone do Cliente',
-        value: (draft: IAppointmentValidationDraft) => draft.clientPhone,
-      },
-      {
         label: 'Observações',
         value: (draft: IAppointmentValidationDraft) => draft.notes,
       },
@@ -292,31 +286,23 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   }
 
   protected transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
-    const businessId = context.businessId || context.farmId || 0
-    const clientId = Number(context.phone?.replace(/\D/g, '')) || 0
+    const businessId = context.businessId || 0
 
-    // Converter draft (appointmentDate: "yyyy-MM-dd", appointmentTime: "HH:mm")
-    // para timestamps ISO strings (startDate: "YYYY-MM-DDTHH:mm:00.000Z")
-    const dateStr = draft.appointmentDate as string // ex: "2024-11-20"
-    const timeStr = draft.appointmentTime as string // ex: "14:30"
+    const dateStr = draft.appointmentDate as string
+    const timeStr = draft.appointmentTime as string
 
-    // Combina data + hora + UTC para criar startDate ISO
-    // Exemplo: "2024-11-20" + "14:30" → "2024-11-20T14:30:00.000Z"
     const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
 
-    // Calcula endDate adicionando 20 minutos (duração padrão do corte)
     const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
 
     const finalPayload: IAppointmentCreationPayload = {
       businessId,
       serviceId: Number(draft.service?.id),
       barberId: Number(draft.barber?.id),
-      startDate: startDate.toISOString(), // "2024-11-20T14:30:00.000Z"
-      endDate: endDate.toISOString(), // "2024-11-20T14:50:00.000Z"
-      clientId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      clientId: 3,
       source: 'web',
-      clientName: draft.clientName ?? undefined,
-      clientPhone: draft.clientPhone ?? undefined,
       notes: draft.notes ?? null,
     }
     console.log('n\\n\n\n\n[AppointmentService] Payload para API de Agendamentos', finalPayload)
@@ -430,21 +416,16 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
   create = async (phone: string, draft: IAppointmentValidationDraft): Promise<{ id: string }> => {
     const businessId = getBusinessIdForPhone(phone)
-    const endpoint = `/${businessId}/appointments`
+    const endpoint = `/appointments/${businessId}/appointments`
 
     try {
-      // Validar que o draft tem todos os campos necessários
       if (!draft.appointmentDate || !draft.appointmentTime) {
         throw new Error('Data e horário do agendamento são obrigatórios')
       }
       if (!draft.service?.id || !draft.barber?.id) {
         throw new Error('Serviço e barbeiro são obrigatórios')
       }
-      if (!draft.clientName || !draft.clientPhone) {
-        throw new Error('Nome e telefone do cliente são obrigatórios')
-      }
 
-      // Precisamos passar o phone no context para extrair o clientId
       const originalTransform = this.transformToApiPayload
       this.transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
         return originalTransform.call(this, draft, { ...context, phone, businessId })
@@ -452,7 +433,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
       const result = await this._createRecord(phone, draft, endpoint)
 
-      // Restaurar a função original
       this.transformToApiPayload = originalTransform
 
       await resetActiveRegistration(phone)

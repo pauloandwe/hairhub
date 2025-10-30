@@ -51,10 +51,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
       // Se não houver dias disponíveis, mostrar mensagem apropriada
       if (!days || days.length === 0) {
         console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, barberId, serviceId })
-        await sendWhatsAppMessage(
-          phone,
-          'Infelizmente não há datas disponíveis para os próximos dias com o barbeiro selecionado. Tente novamente mais tarde ou escolha outro barbeiro.'
-        )
+        await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias com o barbeiro selecionado. Tente novamente mais tarde ou escolha outro barbeiro.')
         return []
       }
 
