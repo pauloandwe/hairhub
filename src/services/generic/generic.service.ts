@@ -31,6 +31,7 @@ interface GenericServiceEndpointConfig {
 
 interface GenericServiceOptions {
   endpoints?: GenericServiceEndpointConfig
+  rawPayload?: boolean
 }
 
 export abstract class GenericService<TDraft, TCreationPayload, TRecord extends IBaseEntity, TUpsertArgs> {
@@ -127,7 +128,8 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     const url = this.resolveEndpointUrl('autoComplete', { phone })
     const farmId = getBusinessIdForPhone(phone) || undefined
     const payload = this.buildAutoCompletePayload(data, { phone, farmId })
-    return api.post(url, payload)
+    const requestPayload = this.options.rawPayload ? payload.data : payload
+    return api.post(url, requestPayload)
   }
 
   private getEndpointTemplate(action: keyof GenericServiceEndpointConfig): EndpointTemplate | undefined {
@@ -220,7 +222,8 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
       )
 
       console.log('\n\n\n\n[BaseService] Payload para criação de registro:', apiPayload)
-      const response = (await api.post(url, { data: apiPayload })) as APIResponseCreate<TCreationPayload>
+      const requestPayload = this.options.rawPayload ? apiPayload : { data: apiPayload }
+      const response = (await api.post(url, requestPayload)) as APIResponseCreate<TCreationPayload>
       console.log('\n\n\n\n[BaseService] Resposta da API para criação de registro:', response)
 
       const newRecord: TRecord = {
@@ -478,7 +481,8 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
         },
         'PUT to API made with success.',
       )
-      const response = (await api.put(url, { data: apiPayload })) as APIResponseCreate<TCreationPayload>
+      const requestPayload = this.options.rawPayload ? apiPayload : { data: apiPayload }
+      const response = (await api.put(url, requestPayload)) as APIResponseCreate<TCreationPayload>
 
       const index = this.memoryDb.findIndex((record) => String(record.id) === recordId)
       if (index !== -1) {
@@ -515,7 +519,8 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
         },
         'PATCH to API made with success.',
       )
-      const response = (await api.patch(url, { data: payload })) as APIResponseCreate<TCreationPayload>
+      const requestPayload = this.options.rawPayload ? payload : { data: payload }
+      const response = (await api.patch(url, requestPayload)) as APIResponseCreate<TCreationPayload>
 
       const index = this.memoryDb.findIndex((record) => String(record.id) === recordId)
       if (index !== -1) {

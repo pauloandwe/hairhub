@@ -26,10 +26,12 @@ import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors,
  *    - appointmentService.transformToApiPayload() converte para ISO strings
  *    - Dados são enviados à API como:
  *      {
- *        businessId, serviceId, barberId, clientId,
+ *        businessId, serviceId, barberId,
  *        startDate: "2024-11-20T14:30:00.000Z",
  *        endDate: "2024-11-20T14:50:00.000Z",
- *        source: "web"
+ *        source: "whatsapp",
+ *        clientPhone: "+5511999999999",
+ *        clientName: "Fulano"
  *      }
  */
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {

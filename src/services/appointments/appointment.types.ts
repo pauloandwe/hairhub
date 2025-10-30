@@ -19,10 +19,10 @@ export interface IAppointmentCreationPayload {
   barberId: number
   startDate: string
   endDate: string
-  clientId: number
   source: string
-  clientName?: string
-  clientPhone?: string
+  clientId?: number
+  clientName?: string | null
+  clientPhone?: string | null
   notes?: string | null
 }
 
@@ -30,6 +30,8 @@ export interface AppointmentRecord extends IAppointmentCreationPayload {
   id: string
   createdAt: string
   updatedAt: string
+  clientContactId?: number | null
+  clientContact?: { id: number; name: string | null; phone: string }
 }
 
 export type UpsertAppointmentArgs = Partial<IAppointmentValidationDraft>

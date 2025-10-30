@@ -35,17 +35,25 @@ interface CachedUserTokenData {
 export async function ensureUserApiToken(businessId: string, phone: string): Promise<CachedUserTokenData | null> {
   try {
     const responseBusiness = await usersService.getBusiness(businessId, phone)
-    const data = responseBusiness?.data?.data?.data
-    const token = data?.token as string | undefined
+    const payload = responseBusiness?.data?.data?.data
+    if (!payload) return null
+
+    const { workingHours, barbers, ...sanitizedData } = payload
+    const token = sanitizedData?.token as string | undefined
     if (token) setApiBearerToken(token)
-    console.log('[AuthToken] Token encontrado para businessId:', data)
+    console.log('[AuthToken] Token encontrado para businessId:', {
+      id: sanitizedData?.id,
+      name: sanitizedData?.name,
+      phone: sanitizedData?.phone,
+      type: sanitizedData?.type,
+    })
     await setUserContext(phone, {
       token,
-      ...data,
-      businessId: data.id,
-      businessPhone: data.phone,
-      businessName: data.name,
-      businessType: data.type,
+      ...sanitizedData,
+      businessId: sanitizedData.id,
+      businessPhone: sanitizedData.phone,
+      businessName: sanitizedData.name,
+      businessType: sanitizedData.type,
     })
 
     systemLogger.info(
@@ -53,15 +61,13 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
         context: 'System',
         phone,
         businessId,
-        token: data?.token,
-        payload: data,
+        token: sanitizedData?.token,
+        payload: sanitizedData,
       },
       'User authenticated successfully with token.',
     )
 
-    if (data) return data as CachedUserTokenData
-
-    return null
+    return sanitizedData as CachedUserTokenData
   } catch (remoteErr) {
     console.error('[AuthToken] Erro ao buscar token remoto:', remoteErr)
     throw remoteErr

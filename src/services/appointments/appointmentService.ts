@@ -44,6 +44,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       autoCompleteEndpoint,
       VALID_EDITABLE_FIELDS,
       {
+        rawPayload: true,
         endpoints: {
           create: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
           update: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
@@ -295,16 +296,36 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
 
+    const clientPhone = draft.clientPhone ?? context.phone ?? null
+
     const finalPayload: IAppointmentCreationPayload = {
       businessId,
       serviceId: Number(draft.service?.id),
       barberId: Number(draft.barber?.id),
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      clientId: 3,
-      source: 'web',
+      source: 'whatsapp',
       notes: draft.notes ?? null,
     }
+
+    if (context.clientId) {
+      finalPayload.clientId = context.clientId
+    }
+
+    const sanitizedPhone = clientPhone?.replace(/\D/g, '') || null
+
+    if (sanitizedPhone) {
+      finalPayload.clientPhone = sanitizedPhone
+    }
+
+    if (draft.clientName) {
+      finalPayload.clientName = draft.clientName.trim()
+    }
+
+    if (!finalPayload.clientId && !finalPayload.clientPhone) {
+      throw new Error('Cliente sem identificador: informe clientId ou clientPhone')
+    }
+
     console.log('n\\n\n\n\n[AppointmentService] Payload para API de Agendamentos', finalPayload)
     return finalPayload
   }
@@ -400,11 +421,12 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     if (has('clientName')) {
-      payload.clientName = draft.clientName ?? undefined
+      payload.clientName = draft.clientName ? draft.clientName.trim() : undefined
     }
 
     if (has('clientPhone')) {
-      payload.clientPhone = draft.clientPhone ?? undefined
+      const sanitizedPhone = draft.clientPhone?.replace(/\D/g, '')
+      payload.clientPhone = sanitizedPhone || undefined
     }
 
     if (has('notes')) {
