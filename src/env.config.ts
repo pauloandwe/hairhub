@@ -19,6 +19,7 @@ export const env = {
   META_ACCESS_TOKEN: getEnvVar('META_ACCESS_TOKEN'),
   PHONE_NUMBER_ID: getEnvVar('PHONE_NUMBER_ID'),
   API_URL: getEnvVar('API_URL'),
+  WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION || 'v24.0',
   APPOINTMENTS_URL: process.env.APPOINTMENTS_URL || getEnvVar('API_URL'),
   PORT: process.env.PORT || 3000,
   WHISPER_MODEL: process.env.WHISPER_MODEL || 'base',

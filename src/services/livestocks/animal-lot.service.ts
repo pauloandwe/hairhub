@@ -13,12 +13,12 @@ export interface AnimalLotOption {
 export class AnimalLotSelectionService {
   private servicePrefix = process.env.AREAS_URL
 
-  async listAnimalLots(farmId: string): Promise<AnimalLotOption[]> {
+  async listAnimalLots(farmId: string, onlyWithAnimals = true): Promise<AnimalLotOption[]> {
     if (!farmId) {
       throw new Error('Fazenda não selecionada. Selecione uma fazenda antes de continuar.')
     }
     const params = {
-      onlyWithAnimals: true,
+      onlyWithAnimals: onlyWithAnimals,
     }
 
     try {

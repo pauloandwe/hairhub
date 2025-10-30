@@ -1,6 +1,6 @@
-import { ISaleValidationDraft } from '../../../livestocks/Selling/selling.types'
+import { ISellingsValidationDraft } from '../../../livestocks/Selling/selling.types'
 
-export function emptySaleDraft(): ISaleValidationDraft {
+export function emptySaleDraft(): ISellingsValidationDraft {
   return {
     saleType: null,
     saleDate: null,

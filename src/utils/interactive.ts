@@ -72,13 +72,13 @@ export function hasPendingInteraction(userId: string, namespace?: string): boole
 export type ListRow = { id: string; title: string; description?: string }
 export type ListSection = { title: string; rows: ListRow[] }
 
-export function buildListRows<T extends { id: string; name?: string }>(namespace: string, items: ReadonlyArray<T>, titleBuilder?: (item: T, index: number) => string, descriptionBuilder?: (item: T, index: number) => string | undefined): ListRow[] {
+export function buildListRows<T extends { id: string; name?: string; description?: string }>(namespace: string, items: ReadonlyArray<T>, titleBuilder?: (item: T, index: number) => string, descriptionBuilder?: (item: T, index: number) => string | undefined): ListRow[] {
   return items.map((item, idx) => {
     const rawTitle = titleBuilder ? titleBuilder(item, idx) : `${idx + 1}. ${item.name ?? item.id}`
     const title = truncateListTitle(rawTitle, 24)
 
-    const rawDescription = descriptionBuilder ? descriptionBuilder(item, idx) : undefined
-    const description = typeof rawDescription === 'string' ? truncateListTitle(rawDescription, 72) : undefined
+    const rawDescription = descriptionBuilder ? descriptionBuilder(item, idx) : item.description
+    const description = typeof rawDescription === 'string' && rawDescription.trim().length > 0 ? truncateListTitle(rawDescription, 72) : undefined
 
     return {
       id: buildNamespacedId(namespace, String(item.id)),
@@ -101,7 +101,14 @@ export interface PaginatedRowsResult {
   visibleIds: string[]
 }
 
-export function buildPaginatedListRows<T extends { id: string; name?: string }>(namespace: string, items: ReadonlyArray<T>, offset = 0, limit = 10, titleBuilder?: (item: T, index: number) => string, descriptionBuilder?: (item: T, index: number) => string | undefined): PaginatedRowsResult {
+export function buildPaginatedListRows<T extends { id: string; name?: string; description?: string }>(
+  namespace: string,
+  items: ReadonlyArray<T>,
+  offset = 0,
+  limit = 10,
+  titleBuilder?: (item: T, index: number) => string,
+  descriptionBuilder?: (item: T, index: number) => string | undefined,
+): PaginatedRowsResult {
   const remaining = Math.max(0, items.length - offset)
   const hasMore = remaining > limit
   const pageCount = hasMore ? Math.max(0, limit - 1) : Math.min(remaining, limit)

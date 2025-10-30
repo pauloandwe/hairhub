@@ -1,28 +1,28 @@
+import { log } from 'console'
 import { FlowType } from '../../../enums/generic.enum'
 import { Plan, SubPlan } from '../../../enums/plans.enums'
-import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../../interactives/genericConfirmation'
+import { sendConfirmationButtons, sendEditCancelButtonsAfterCreationError, sendEditDeleteButtons, sendEditDeleteButtonsAfterError } from '../../../interactives/genericConfirmation'
 import { appendUserTextAuto } from '../../../services/history-router.service'
-import { birthService } from '../../../services/livestocks/Birth/birthService'
-import { BirthRecord, IBirthCreationPayload, IBirthValidationDraft, UpsertBirthArgs } from '../../../services/livestocks/Birth/birth.types'
+import { IPurchaseCreationPayload, IPurchaseValidationDraft, PurchaseEditField, PurchaseMissingField, PurchaseRecord, UpsertPurchaseArgs } from '../../../services/livestocks/Purchase/purchase.types'
+import { purchaseService } from '../../../services/livestocks/Purchase/purchaseService'
 import { GenericCrudFlow } from '../../generic/generic.flow'
-import { BirthEditField, BirthMissingField, birthFieldEditors, missingFieldHandlers } from './birth.selects'
-import { log } from 'console'
+import { purchaseFieldEditors, missingFieldHandlers } from './purchase.selects'
 
-class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCreationPayload, BirthRecord, UpsertBirthArgs, BirthEditField, BirthMissingField> {
-  private readonly confirmationNamespace = 'BIRTH_CONFIRMATION'
-  private readonly editDeleteNamespace = 'BIRTH_EDIT_DELETE'
-  private readonly editDeleteErrorNamespace = 'BIRTH_EDIT_DELETE_ERROR'
-  private readonly editCancelCreationErrorNamespace = 'BIRTH_EDIT_CANCEL_CREATION_ERROR'
+class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPurchaseCreationPayload, PurchaseRecord, UpsertPurchaseArgs, PurchaseEditField, PurchaseMissingField> {
+  private readonly confirmationNamespace = 'PURCHASE_CONFIRMATION'
+  private readonly editDeleteNamespace = 'PURCHASE_EDIT_DELETE'
+  private readonly editDeleteErrorNamespace = 'PURCHASE_EDIT_DELETE_ERROR'
+  private readonly editCancelCreationErrorNamespace = 'PURCHASE_EDIT_CANCEL_CREATION_ERROR'
 
   constructor() {
     super({
-      service: birthService,
-      flowType: FlowType.Birth,
-      fieldEditors: birthFieldEditors,
+      service: purchaseService,
+      flowType: FlowType.Appointment,
+      fieldEditors: purchaseFieldEditors,
       missingFieldHandlers,
       messages: {
-        confirmation: 'Confira o resumo e confirma pra mim?',
-        creationSuccess: 'Nascimento registrado com sucesso!',
+        confirmation: 'Confirma o resumo e confirma pra mim?',
+        creationSuccess: 'Compra registrada com sucesso!',
         creationResponse: 'Tudo certo, registro criado.',
         cancelSent: 'Beleza, cadastro cancelado.',
         cancelResponse: 'Operação cancelada.',
@@ -39,8 +39,6 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
         deleteRecordNotFound: 'Não achei o registro pra deletar.',
         deleteSuccess: 'Registro deletado com sucesso!',
         deleteError: 'Erro ao deletar. Tenta de novo?',
-        buttonHeaderSuccess: 'Nascimento cadastrado!',
-        useNaturalLanguage: false,
       },
       accessControl: {
         allowedPlanIds: [Plan.BASIC, Plan.ADVANCED],
@@ -50,7 +48,7 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
     })
   }
 
-  changeAnimalBirthRegistrationField = async (args: { phone: string; field: BirthEditField; value?: any }) => {
+  changePurchaseRegistrationField = async (args: { phone: string; field: PurchaseEditField; value?: any }) => {
     const logContext = args.value !== undefined ? `Campo ${args.field} atualizado com valor ${JSON.stringify(args.value)}` : undefined
     return this.changeRegistrationWithValue({
       ...args,
@@ -58,38 +56,36 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
     })
   }
 
-  startAnimalBirthRegistration = async (args: { phone: string } & UpsertBirthArgs) => {
+  startPurchaseRegistration = async (args: { phone: string } & UpsertPurchaseArgs) => {
     return super.startRegistration(args)
   }
 
-  continueAnimalBirthRegistration = async (args: { phone: string }) => {
+  continuePurchaseRegistration = async (args: { phone: string }) => {
     return super.continueRegistration(args)
   }
 
-  confirmAnimalBirthRegistration = async (args: { phone: string }) => {
+  confirmPurchaseRegistration = async (args: { phone: string }) => {
     return super.confirmRegistration(args)
   }
 
-  cancelAnimalBirthRegistration = async (args: { phone: string }) => {
+  cancelPurchaseRegistration = async (args: { phone: string }) => {
     return super.cancelRegistration(args)
   }
 
-  protected async onFirstStart(phone: string, _draft: IBirthValidationDraft): Promise<void> {
+  protected async onFirstStart(phone: string, _draft: IPurchaseValidationDraft): Promise<void> {
     void _draft
-    console.log(`[BirthFlow] O usuário iniciou um novo cadastro de nascimento. (userId: ${phone})`)
   }
 
-  protected async beforeConfirmation(phone: string, draft: IBirthValidationDraft): Promise<void> {
+  protected async beforeConfirmation(phone: string, draft: IPurchaseValidationDraft): Promise<void> {
     void phone
     void draft
-    console.log(`[BirthFlow] O usuário está prestes a confirmar o cadastro de nascimento. (userId: ${phone})`)
   }
 
-  protected async prepareDraftForConfirmation(phone: string, draft: IBirthValidationDraft): Promise<void> {
-    await birthService.saveDraft(phone, draft)
+  protected async prepareDraftForConfirmation(phone: string, draft: IPurchaseValidationDraft): Promise<void> {
+    await purchaseService.saveDraft(phone, draft)
   }
 
-  protected async sendConfirmation(phone: string, draft: IBirthValidationDraft, summary: string): Promise<void> {
+  protected async sendConfirmation(phone: string, draft: IPurchaseValidationDraft, summary: string): Promise<void> {
     await sendConfirmationButtons({
       namespace: this.confirmationNamespace,
       userId: phone,
@@ -99,17 +95,17 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
       summaryText: summary,
       onConfirm: async (userId) => {
         await appendUserTextAuto(userId, 'Confirmar')
-        await this.confirmAnimalBirthRegistration({ phone: userId })
+        await this.confirmPurchaseRegistration({ phone: userId })
       },
       onCancel: async (userId) => {
         await appendUserTextAuto(userId, 'Cancelar')
-        await this.cancelAnimalBirthRegistration({ phone: userId })
+        await this.cancelPurchaseRegistration({ phone: userId })
       },
-      loadDraft: birthService.loadDraft,
+      loadDraft: purchaseService.loadDraft,
     })
   }
 
-  protected async sendEditDeleteOptions(phone: string, _draft: IBirthValidationDraft, summary: string, _recordId: string): Promise<void> {
+  protected async sendEditDeleteOptions(phone: string, _draft: IPurchaseValidationDraft, summary: string, _recordId: string): Promise<void> {
     await sendEditDeleteButtons({
       namespace: this.editDeleteNamespace,
       userId: phone,
@@ -117,19 +113,18 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
       editLabel: 'Editar',
       deleteLabel: 'Deletar',
       summaryText: summary,
-      header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
-        await this.editBirthRegistration({ phone: userId })
+        await this.editPurchaseRegistration({ phone: userId })
       },
       onDelete: async (userId) => {
         await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteBirthRegistration({ phone: userId })
+        await this.deletePurchaseRegistration({ phone: userId })
       },
     })
   }
 
-  protected async sendEditDeleteOptionsAfterError(phone: string, _draft: IBirthValidationDraft, summary: string, _recordId: string, errorMessage: string): Promise<void> {
+  protected async sendEditDeleteOptionsAfterError(phone: string, _draft: IPurchaseValidationDraft, summary: string, _recordId: string, errorMessage: string): Promise<void> {
     await sendEditDeleteButtonsAfterError({
       namespace: this.editDeleteErrorNamespace,
       userId: phone,
@@ -137,20 +132,19 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
       editLabel: 'Editar',
       deleteLabel: 'Deletar',
       summaryText: summary,
-      header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
-        await this.editBirthRegistration({ phone: userId })
+        await this.editPurchaseRegistration({ phone: userId })
       },
       onDelete: async (userId) => {
         await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteBirthRegistration({ phone: userId })
+        await this.deletePurchaseRegistration({ phone: userId })
       },
     })
   }
 
-  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: IBirthValidationDraft, summary: string, errorMessage: string, recordId: string | null): Promise<void> {
+  protected async sendEditCancelOptionsAfterCreationError(phone: string, draft: IPurchaseValidationDraft, summary: string, errorMessage: string): Promise<void> {
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
@@ -162,11 +156,7 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
       errorMessage,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar dados')
-        if (recordId) {
-          await this.promptForDraftEdit(userId)
-        } else {
-          await this.promptForDraftCorrection(userId)
-        }
+        await this.promptForDraftEdit(userId)
       },
       onCancel: async (userId) => {
         await appendUserTextAuto(userId, 'Cancelar cadastro')
@@ -175,17 +165,17 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
     })
   }
 
-  async editBirthRegistration(args: { phone: string }): Promise<void> {
+  async editPurchaseRegistration(args: { phone: string }): Promise<void> {
     await this.enterEditMode(args)
   }
 
-  editBirthRecordField = async (args: { phone: string; field: BirthEditField; value?: any } & Partial<UpsertBirthArgs>) => {
+  editPurchaseRecordField = async (args: { phone: string; field: string; value?: any }) => {
     const { phone, field, value, ...rest } = args
     const providedValue = value ?? (rest as Record<string, any>)[field]
     if (providedValue !== undefined) {
-      return this.applyBirthRecordUpdates({
+      return this.applyPurchaseRecordUpdates({
         phone,
-        updates: { [field]: providedValue } as Partial<UpsertBirthArgs>,
+        updates: { [field]: providedValue } as Partial<UpsertPurchaseArgs>,
         logContext: `Campo ${field} atualizado com valor ${JSON.stringify(providedValue)}`,
       })
     }
@@ -197,11 +187,11 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
     })
   }
 
-  applyBirthRecordUpdates = async (args: { phone: string; updates: Partial<UpsertBirthArgs>; successMessage?: string; logContext?: string }) => {
+  applyPurchaseRecordUpdates = async (args: { phone: string; updates: Partial<UpsertPurchaseArgs>; successMessage?: string; logContext?: string }) => {
     return this.applyRecordUpdates(args)
   }
 
-  async deleteBirthRegistration(args: { phone: string; confirmation?: boolean }): Promise<void> {
+  async deletePurchaseRegistration(args: { phone: string; confirmation?: boolean }): Promise<void> {
     await this.deleteRecord({ phone: args.phone })
   }
 
@@ -211,51 +201,48 @@ class BirthFlowService extends GenericCrudFlow<IBirthValidationDraft, IBirthCrea
 
     const cleanupReason = reason ?? 'limpeza manual'
     await this.resetFlowSession(phone, cleanupReason)
-    log(`[BirthFlow] Sessão de cadastro de nascimento limpa. Motivo: ${cleanupReason}. (userId: ${phone})`)
+    log(`[PurchaseFlow] Sessão de cadastro de compra limpa. Motivo: ${cleanupReason}. (userId: ${phone})`)
   }
-  protected async onAfterCreateSuccess(phone: string, draft: IBirthValidationDraft, summary: string): Promise<void> {
-    console.log(`[BirthFlow] O Usuário finalizou o cadastro de nascimento. (userId: ${phone})`)
+  protected async onAfterCreateSuccess(_phone: string, draft: IPurchaseValidationDraft, _summary: string): Promise<void> {
+    void draft
   }
 
-  protected override async afterEnterEditMode(phone: string, recordId: string, _draft: IBirthValidationDraft | null): Promise<void> {
+  protected override async afterEnterEditMode(phone: string, recordId: string, _draft: IPurchaseValidationDraft | null): Promise<void> {
     void _draft
-    console.log(`[BirthFlow] O usuário entrou em modo de edição do registro ${recordId}. (userId: ${phone})`)
   }
 
-  protected override async afterEditSuccess(phone: string, recordId: string, _updates: Partial<UpsertBirthArgs>, logContext?: string): Promise<void> {
+  protected override async afterEditSuccess(phone: string, recordId: string, _updates: Partial<UpsertPurchaseArgs>, logContext?: string): Promise<void> {
     void _updates
-    console.log(`[BirthFlow] ${logContext ?? 'Registro atualizado via edição.'} (registro ${recordId}, userId: ${phone})`)
   }
 
   protected override async onEditFailure(phone: string, recordId: string | null, error: unknown, logContext?: string): Promise<void> {
     const contextMessage = logContext ?? 'Erro ao atualizar registro em modo edição.'
-    console.error(`[BirthFlow] ${contextMessage} (registro ${recordId ?? 'desconhecido'}, userId: ${phone})`, error)
   }
 
   protected override async afterDeleteSuccess(phone: string, recordId: string): Promise<void> {
-    console.log(`[BirthFlow] O usuário excluiu o registro ${recordId}. (userId: ${phone})`)
+    void recordId
   }
 
   protected override async onDeleteCleanupError(phone: string, recordId: string, step: 'clearDraft' | 'clearIntents', error: unknown): Promise<void> {
     const baseMessage = step === 'clearDraft' ? 'Erro ao limpar rascunho após exclusão.' : 'Erro ao limpar históricos após exclusão.'
-    console.error(`[BirthFlow] ${baseMessage} (userId: ${phone})`, error)
+    console.error(`[PurchaseFlow] ${baseMessage} (userId: ${phone})`, error)
   }
 
   protected override async onDeleteFailure(phone: string, recordId: string | null, error: unknown): Promise<void> {
-    console.error(`[BirthFlow] Erro ao excluir registro ${recordId ?? 'desconhecido'}. (userId: ${phone})`, error)
+    console.error(`[PurchaseFlow] Erro ao excluir registro ${recordId ?? 'desconhecido'}. (userId: ${phone})`, error)
   }
 
-  protected async onCreateError(phone: string, draft: IBirthValidationDraft, error: unknown, userMessage: string): Promise<void> {
+  protected async onCreateError(phone: string, draft: IPurchaseValidationDraft, error: unknown, userMessage: string): Promise<void> {
     await super.onCreateError(phone, draft, error, userMessage)
 
     void draft
     void userMessage
-    console.error(`[BirthFlow] Ocorreu um erro ao criar o cadastro de nascimento. (userId: ${phone})`, error)
+    console.error(`[PurchaseFlow] Ocorreu um erro ao criar o cadastro de compra. (userId: ${phone})`, error)
   }
 
   protected async onCancel(phone: string): Promise<void> {
-    console.log(`[BirthFlow] O usuário cancelou o cadastro de nascimento. (userId: ${phone})`)
+    console.log(`[PurchaseFlow] O usuário cancelou o cadastro de compra. (userId: ${phone})`)
   }
 }
 
-export const birthFunctions = new BirthFlowService()
+export const purchaseFunctions = new PurchaseFlowService()

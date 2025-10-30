@@ -1,5 +1,3 @@
-import { clearDeathDraft } from '../../../services/livestocks/death-draft.service'
-import { resetActiveRegistration } from '../../../env.config'
 import { deathFieldEditors, missingFieldHandlers } from './death.selects'
 import { FlowType } from '../../../enums/generic.enum'
 import { DeathField } from '../../../enums/cruds/deathFields.enums'
@@ -43,7 +41,7 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
         deleteSuccess: 'Registro deletado com sucesso!',
         deleteError: 'Erro ao deletar. Tenta de novo?',
         buttonHeaderSuccess: 'Morte cadastrada!',
-        useNaturalLanguage: true,
+        useNaturalLanguage: false,
       },
       accessControl: {
         allowedPlanIds: [Plan.BASIC, Plan.ADVANCED],
@@ -139,19 +137,23 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     })
   }
 
-  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: DeathValidationDraft, summary: string, errorMessage: string): Promise<void> {
+  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: DeathValidationDraft, summary: string, errorMessage: string, recordId: string | null): Promise<void> {
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
       message: 'O que você quer fazer?',
-      editLabel: '✏️ Editar',
-      cancelLabel: '❌ Cancelar',
+      editLabel: 'Editar',
+      cancelLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar dados')
-        await this.promptForDraftEdit(userId)
+        if (recordId) {
+          await this.promptForDraftEdit(userId)
+        } else {
+          await this.promptForDraftCorrection(userId)
+        }
       },
       onCancel: async (userId) => {
         await appendUserTextAuto(userId, 'Cancelar cadastro')
@@ -179,11 +181,13 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     return this.applyRecordUpdates(args)
   }
 
-  async clearSession(args: { phone: string }) {
-    const { phone } = args || ({} as any)
-    await resetActiveRegistration(phone)
-    await clearDeathDraft(phone)
-    log(`[DeathFlow] O Usuário limpou a sessão de cadastro de morte. (userId: ${phone})`)
+  async clearSession(args: { phone: string; reason?: string }) {
+    const { phone, reason } = args || ({} as any)
+    if (!phone) return
+
+    const cleanupReason = reason ?? 'limpeza manual'
+    await this.resetFlowSession(phone, cleanupReason)
+    log(`[DeathFlow] Sessão de cadastro de morte limpa. Motivo: ${cleanupReason}. (userId: ${phone})`)
   }
 
   protected async onAfterCreateSuccess(phone: string, draft: DeathValidationDraft, summary: string): Promise<void> {
@@ -218,8 +222,10 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     log(`[DeathFlow] Erro ao excluir registro ${recordId ?? 'desconhecido'}. (userId: ${phone})`, error)
   }
 
-  protected async onCreateError(phone: string, _draft: DeathValidationDraft, error: unknown, userMessage: string): Promise<void> {
-    void _draft
+  protected async onCreateError(phone: string, draft: DeathValidationDraft, error: unknown, userMessage: string): Promise<void> {
+    await super.onCreateError(phone, draft, error, userMessage)
+
+    void draft
     void userMessage
     log(`[DeathFlow] Ocorreu um erro ao criar o cadastro de morte. (userId: ${phone})`, error)
   }

@@ -6,6 +6,32 @@ import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationD
 import { GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 
+/**
+ * AppointmentFlowService - Gerenciador de fluxo de agendamentos
+ *
+ * Fluxo de Dados:
+ * 1. Usuário inicia: startAppointmentRegistration()
+ *    - Draft é criado vazio
+ *    - Sistema pede dados um a um
+ *
+ * 2. Usuário preenche dados:
+ *    - appointmentDate: "dd/MM/yyyy" (ex: "20/11/2024")
+ *    - appointmentTime: "HH:mm" (ex: "14:30")
+ *    - service: { id, name }
+ *    - barber: { id, name }
+ *    - clientName, clientPhone, notes
+ *
+ * 3. Confirmação: confirmAppointmentRegistration()
+ *    - Draft é validado
+ *    - appointmentService.transformToApiPayload() converte para ISO strings
+ *    - Dados são enviados à API como:
+ *      {
+ *        businessId, serviceId, barberId, clientId,
+ *        startDate: "2024-11-20T14:30:00.000Z",
+ *        endDate: "2024-11-20T14:50:00.000Z",
+ *        source: "web"
+ *      }
+ */
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
   private readonly editDeleteNamespace = 'APPOINTMENT_EDIT_DELETE'

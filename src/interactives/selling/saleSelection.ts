@@ -1,8 +1,8 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { SellingTypesEnum, SellingTypesLabels } from '../../enums/saleTypes.enum'
+import { SellingTypesEnum, SellingTypesLabels } from '../../enums/sellingTypes.enum'
 import { AnimalLotOption, AnimalLotSelectionService } from '../../services/livestocks/animal-lot.service'
-import { getBusinessIdForPhone, getUserContext, setUserContext, getUserContextSync } from '../../env.config'
+import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { saleFunctions } from '../../functions/livestocks/selling/selling.functions'
@@ -53,7 +53,7 @@ const saleTypesFlow = createSelectionFlow<SelectArrayItem>({
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    await saleFunctions.applySaleRecordUpdates({
+    await saleFunctions.applySellingsRecordUpdates({
       phone: userId,
       updates: { saleType: item.id },
       logContext: `Tipo de venda atualizado para ${item.name}`,
@@ -79,8 +79,7 @@ function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: F
     type: 'selectLocation',
     fetchItems: async (userId) => {
       const service = new AnimalLotSelectionService()
-      const farmId = getBusinessIdForPhone(userId)
-      return service.listAnimalLots(farmId)
+      return service.listAnimalLots('1')
     },
     ui: {
       header: 'Qual a localização?',
@@ -119,7 +118,7 @@ function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: F
       await tryContinueRegistration(userId)
     },
     onEditModeSelected: async ({ userId, item }) => {
-      await saleFunctions.applySaleRecordUpdates({
+      await saleFunctions.applySellingsRecordUpdates({
         phone: userId,
         updates: { retreat: { id: item.retreatId, name: item.retreatName }, area: { id: item.areaId, name: item.areaName } },
         logContext: `Localização atualizada para ${item.retreatName} -> ${item.areaName}`,
@@ -185,7 +184,7 @@ function buildSaleDestinationFarmSelectionFlow(config: { namespace: string; flow
       await tryContinueRegistration(userId)
     },
     onEditModeSelected: async ({ userId, item }) => {
-      await saleFunctions.applySaleRecordUpdates({
+      await saleFunctions.applySellingsRecordUpdates({
         phone: userId,
         updates: { destinationFarm: { id: item.id, name: item.name } },
         logContext: `Fazenda de destino atualizada para ${item.name}`,

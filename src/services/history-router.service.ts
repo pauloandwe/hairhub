@@ -6,9 +6,11 @@ export type RouterChatMessage = OpenAI.Chat.Completions.ChatCompletionMessagePar
 
 export async function appendHistoryAuto(userId: string, messages: RouterChatMessage[]): Promise<void> {
   if (!messages?.length) return
-  const inRegistration = !!(await getUserContext(userId))?.activeRegistration?.type
+  const context = await getUserContext(userId)
+  const inRegistration = !!context?.activeRegistration?.type
+  const isEditMode = !!context?.activeRegistration?.editMode
 
-  if (inRegistration) {
+  if (inRegistration && !isEditMode) {
     await draftHistoryService.appendActiveDraftHistory(userId, messages)
   }
 }

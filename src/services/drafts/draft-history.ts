@@ -5,6 +5,7 @@ import { FlowType, FunctionTypeEnum } from '../../enums/generic.enum'
 import { simplifiedExpenseService } from '../finances/simplifiedExpense/simplifiedExpenseService'
 import { birthService } from '../livestocks/Birth/birthService'
 import { sellingService } from '../livestocks/Selling/sellingService'
+import { purchaseService } from '../livestocks/Purchase/purchaseService'
 
 export class DraftHistoryService {
   appendActiveDraftHistory = async (userId: string, messages: ChatMessage[]): Promise<void> => {

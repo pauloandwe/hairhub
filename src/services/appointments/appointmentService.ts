@@ -24,17 +24,14 @@ const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = [
 
 export class AppointmentService extends GenericService<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs> {
   getValidFieldsFormatted(): string {
-    const fieldLabels: Partial<Record<keyof any, string>> = {
-      quantity: 'quantidade',
-      observation: 'observação',
-      deathDate: 'data da morte',
-      age: 'idade',
-      category: 'categoria',
-      deathCause: 'causa da morte',
-      animalLot: 'lote',
-      retreat: 'retiro',
-      area: 'área',
-      harvestConfiguration: 'configuração de safra',
+    const fieldLabels: Partial<Record<keyof UpsertAppointmentArgs, string>> = {
+      appointmentDate: 'data do agendamento',
+      appointmentTime: 'horário do agendamento',
+      service: 'serviço',
+      barber: 'barbeiro',
+      clientName: 'nome do cliente',
+      clientPhone: 'telefone do cliente',
+      notes: 'observações',
     }
 
     return VALID_EDITABLE_FIELDS.map((field) => fieldLabels[field] || field).join(', ')
@@ -296,27 +293,33 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
   protected transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
     const businessId = context.businessId || context.farmId || 0
-    const clientId = Number(context.phone?.replace(/\D/g, '')) || 0 // Usar phone como clientId se não fornecido
+    const clientId = Number(context.phone?.replace(/\D/g, '')) || 0
 
-    const dateStr = draft.appointmentDate as string
-    const timeStr = draft.appointmentTime as string
+    // Converter draft (appointmentDate: "yyyy-MM-dd", appointmentTime: "HH:mm")
+    // para timestamps ISO strings (startDate: "YYYY-MM-DDTHH:mm:00.000Z")
+    const dateStr = draft.appointmentDate as string // ex: "2024-11-20"
+    const timeStr = draft.appointmentTime as string // ex: "14:30"
+
+    // Combina data + hora + UTC para criar startDate ISO
+    // Exemplo: "2024-11-20" + "14:30" → "2024-11-20T14:30:00.000Z"
     const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
 
+    // Calcula endDate adicionando 20 minutos (duração padrão do corte)
     const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
 
     const finalPayload: IAppointmentCreationPayload = {
       businessId,
       serviceId: Number(draft.service?.id),
       barberId: Number(draft.barber?.id),
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
+      startDate: startDate.toISOString(), // "2024-11-20T14:30:00.000Z"
+      endDate: endDate.toISOString(), // "2024-11-20T14:50:00.000Z"
       clientId,
       source: 'web',
       clientName: draft.clientName ?? undefined,
       clientPhone: draft.clientPhone ?? undefined,
       notes: draft.notes ?? null,
     }
-
+    console.log('n\\n\n\n\n[AppointmentService] Payload para API de Agendamentos', finalPayload)
     return finalPayload
   }
 
@@ -386,7 +389,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     if (has('appointmentDate') || has('appointmentTime')) {
-      // Converter data e hora em startDate e endDate
       const dateStr = draft.appointmentDate as string
       const timeStr = draft.appointmentTime as string
       if (dateStr && timeStr) {
@@ -429,11 +431,23 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   create = async (phone: string, draft: IAppointmentValidationDraft): Promise<{ id: string }> => {
     const businessId = getBusinessIdForPhone(phone)
     const endpoint = `/${businessId}/appointments`
+
     try {
+      // Validar que o draft tem todos os campos necessários
+      if (!draft.appointmentDate || !draft.appointmentTime) {
+        throw new Error('Data e horário do agendamento são obrigatórios')
+      }
+      if (!draft.service?.id || !draft.barber?.id) {
+        throw new Error('Serviço e barbeiro são obrigatórios')
+      }
+      if (!draft.clientName || !draft.clientPhone) {
+        throw new Error('Nome e telefone do cliente são obrigatórios')
+      }
+
       // Precisamos passar o phone no context para extrair o clientId
       const originalTransform = this.transformToApiPayload
       this.transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
-        return originalTransform.call(this, draft, { ...context, phone })
+        return originalTransform.call(this, draft, { ...context, phone, businessId })
       }
 
       const result = await this._createRecord(phone, draft, endpoint)

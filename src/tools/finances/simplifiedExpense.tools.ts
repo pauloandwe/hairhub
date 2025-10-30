@@ -42,6 +42,10 @@ export const expenseTools: OpenAITool[] = [
             type: 'string',
             description: 'A área de negócio associada. Ex: "gado de corte", "safra de soja".',
           },
+          productServiceName: {
+            type: 'string',
+            description: 'O nome do produto ou serviço adquirido. Pode ser qualquer coisa que o usuário mencionar como gasto. Ex: "ração", "vacina", "consulta veterinária".',
+          },
         },
         required: [],
       },
@@ -119,7 +123,7 @@ export const expenseTools: OpenAITool[] = [
         properties: {
           field: {
             type: 'string',
-            enum: ['value', 'supplier', 'description', 'emissionDate', 'dueDate', 'paymentDate', 'paymentMethod', 'businessArea'],
+            enum: ['value', 'supplier', 'description', 'emissionDate', 'dueDate', 'paymentDate', 'paymentMethod', 'businessArea', 'productServiceName'],
             description: 'Campo que será editado no registro de despesa',
           },
           value: {
@@ -128,6 +132,23 @@ export const expenseTools: OpenAITool[] = [
           },
         },
         required: ['field'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'searchCostCenter',
+      description: 'Busca por centros de custo usando nome ou índice. Use quando precisar buscar um centro de custo específico para a despesa. O usuário pode informar o nome (ex: "Aveia") ou o índice (ex: "1.1.1") do centro de custo desejado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Nome ou índice do centro de custo a buscar. Ex: "Aveia", "1.1.1", "Rebanho".',
+          },
+        },
+        required: ['query'],
       },
     },
   },

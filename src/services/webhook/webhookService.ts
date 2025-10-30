@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { env } from 'process'
 import { ContextService } from '../context/contextService'
+import { markMessageAsRead } from '../../api/meta.api'
 
 export class WebhookService {
   private static instance: WebhookService
@@ -36,7 +37,7 @@ export class WebhookService {
     if (!messageData?.id || !messageData?.from) return
 
     try {
-      // await markMessageAsRead(messageData.id)
+      markMessageAsRead(messageData.id)
       await this.contextService.handleIncomingMessage(messageData, businessId)
     } catch (error) {
       console.error('[WebhookService] Erro inesperado ao processar webhook:', error)

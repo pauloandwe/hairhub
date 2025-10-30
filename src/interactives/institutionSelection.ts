@@ -35,7 +35,6 @@ const institutionFlow = createSelectionFlow<{ id: string; name: string }>({
       console.error('Falha ao persistir instituição no UsersService', e)
     }
 
-    // await setInstitutionIdForPhone(userId, String(item.id))
     await setUserContext(userId, { farmId: '', farmName: '' })
 
     await sendWhatsAppMessage(userId, `Instituição '${item.name}' selecionada. Agora selecione a fazenda.`)

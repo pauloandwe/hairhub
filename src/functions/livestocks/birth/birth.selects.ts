@@ -22,13 +22,13 @@ const askWithTitle = async (phone: string, message: string): Promise<void> => {
 }
 
 const editBirthDate: FieldEditor = async (phone) => {
-  const message = 'Qual foi a data do nascimento? (formato dd/mm/aaaa)'
+  const message = 'Qual foi a data do nascimento? 📆'
   await askWithTitle(phone, message)
   return respond('Data solicitada', false)
 }
 
 const editQuantity: FieldEditor = async (phone) => {
-  const message = 'Quantos animais nasceram? (só o número)'
+  const message = 'Quantos animais nasceram? (mínimo 1) 🐄'
   await askWithTitle(phone, message)
   return respond('Quantidade solicitada', false)
 }
@@ -59,13 +59,13 @@ export const birthFieldEditors: Record<BirthEditField, FieldEditor> = {
 type MissingFieldHandler = (phone: string, draft: IBirthValidationDraft) => Promise<{ message: string; interactive: boolean; draft: IBirthValidationDraft }>
 
 const askBirthDate: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Qual foi a data do nascimento? (formato dd/mm/aaaa)'
+  const message = 'Qual foi a data do nascimento? 📆'
   await askWithTitle(phone, message)
   return { message, interactive: false, draft }
 }
 
 const askQuantity: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Quantos animais nasceram? (só o número)'
+  const message = 'Quantos animais nasceram? (mínimo 1) 🐄'
   await askWithTitle(phone, message)
   return { message, interactive: false, draft }
 }

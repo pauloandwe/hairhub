@@ -5,15 +5,15 @@ import { OpenAITool } from '../../../types/openai-types'
 import { GenericContextService } from '../../context/generic.context'
 import { ChatMessage } from '../../drafts/types'
 import { FlowConfig } from '../../openai.config'
-import { ISaleValidationDraft } from './selling.types'
+import { ISellingsValidationDraft } from './selling.types'
 import { sellingService } from './sellingService'
 import { registerSellingEditDeleteHandler } from '../../../interactives/selling/sellingInteractives'
 
-export class SellingContextService extends GenericContextService<ISaleValidationDraft> {
+export class SellingContextService extends GenericContextService<ISellingsValidationDraft> {
   private static instance: SellingContextService
   private serviceFunctions = {
     ...saleFunctions,
-    editSaleRecordField: saleFunctions.editSaleRecordField,
+    editSellingsRecordField: saleFunctions.editSellingsRecordField,
   }
   private contextTools = [...sellingTools]
   protected flowType = FlowType.Selling
@@ -23,7 +23,7 @@ export class SellingContextService extends GenericContextService<ISaleValidation
     registerSellingEditDeleteHandler()
   }
 
-  protected getDraft = async (phone: string): Promise<ISaleValidationDraft> => {
+  protected getDraft = async (phone: string): Promise<ISellingsValidationDraft> => {
     return await sellingService.loadDraft(phone)
   }
 
@@ -33,10 +33,10 @@ export class SellingContextService extends GenericContextService<ISaleValidation
 
   protected getFlowConfig = (): Required<FlowConfig> => {
     return {
-      allowedFunctions: ['startSaleRegistration', 'changeSaleRegistrationField', 'confirmSaleRegistration', 'cancelSaleRegistration', 'editSaleRecordField', 'deleteSaleRegistration'],
-      startFunction: 'startSaleRegistration',
+      allowedFunctions: ['startSellingRegistration', 'changeSaleRegistrationField', 'confirmSaleRegistration', 'cancelSaleRegistration', 'editSellingsRecordField', 'deleteSaleRegistration'],
+      startFunction: 'startSellingRegistration',
       changeFunction: 'changeSaleRegistrationField',
-      editFunction: 'editSaleRecordField',
+      editFunction: 'editSellingsRecordField',
       cancelFunction: 'cancelSaleRegistration',
     }
   }

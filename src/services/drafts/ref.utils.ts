@@ -17,8 +17,8 @@ export function mergeIdNameRef(dst: IdNameRef, name?: string | PartialIdNameRef)
     if (name !== undefined) dst.name = name ?? null
   }
   if (typeof name === 'object') {
-    if (name.id !== undefined) dst.id = name.id ?? null
-    if (name.name !== undefined) dst.name = name.name ?? null
+    if (name?.id !== undefined) dst.id = name.id ?? null
+    if (name?.name !== undefined) dst.name = name.name ?? null
   }
 }
 

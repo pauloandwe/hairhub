@@ -1,5 +1,5 @@
 import api from '../../config/api.config'
-import { getBusinessIdForPhone, getUserContext, getUserContextSync } from '../../env.config'
+import { getBusinessIdForPhone, getUserContextSync } from '../../env.config'
 import { CacheKeys, EnvKeys } from '../../helpers/Enums'
 import { APIResponseCreate } from '../../types/api.types'
 import { createDraftStore } from '../drafts/draft-store'
@@ -38,7 +38,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
   protected memoryDb: TRecord[] = []
   protected readonly options: GenericServiceOptions
   protected readonly disableAutoComplete: boolean
-  constructor(protected type: string, protected emptyDraft: () => TDraft, protected servicePrefix: string, protected autoCompleteEndpoint: string, protected validEditableFields: (keyof TUpsertArgs)[], options: GenericServiceOptions = {}, disableAutoComplete: boolean = false) {
+  constructor(protected type: string, protected emptyDraft: () => TDraft, protected servicePrefix: string, protected autoCompleteEndpoint: string, protected validEditableFields: (keyof TUpsertArgs)[], options: GenericServiceOptions = {}, disableAutoComplete = false) {
     this.store = createDraftStore<ChatDraftEnvelope<TDraft>>({
       keyPrefix: CacheKeys.CHAT_DRAFT,
       empty: () => ({
@@ -48,7 +48,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
         sessionId: undefined,
       }),
       ttlEnvVar: EnvKeys.REDIS_DRAFT_TTL_SEC,
-      defaultTtlSec: 86400,
+      defaultTtlSec: 3600,
     })
     this.options = options
     this.disableAutoComplete = disableAutoComplete
@@ -218,7 +218,11 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
         },
         'POST to API made with success.',
       )
+
+      console.log('\n\n\n\n[BaseService] Payload para criação de registro:', apiPayload)
       const response = (await api.post(url, { data: apiPayload })) as APIResponseCreate<TCreationPayload>
+      console.log('\n\n\n\n[BaseService] Resposta da API para criação de registro:', response)
+
       const newRecord: TRecord = {
         createdAt: new Date().toISOString(),
         ...response.data.data,
@@ -335,6 +339,19 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     return wasRemoved
   }
 
+  clearDraftHistory = async (userId: string): Promise<void> => {
+    const envelope = await this.loadEnvelope(userId)
+    if (envelope.history.length === 0) return
+
+    const context = getUserContextSync(userId)
+    envelope.history = []
+    if (!envelope.sessionId && context?.activeRegistration?.sessionId) {
+      envelope.sessionId = context.activeRegistration.sessionId
+    }
+
+    await this.store.save(userId, envelope)
+  }
+
   clearDraft = async (userId: string): Promise<void> => {
     await this.store.clear(userId)
   }
@@ -370,8 +387,12 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     return !!updated
   }
 
-  fetchSelectionList = async (phone: string, listType: string, endpoint: string): Promise<SelectionItem[]> => {
-    const params = this.buildListParams(listType, { phone })
+  fetchSelectionList = async (phone: string, listType: string, endpoint: string, paramsOverride?: Record<string, any>): Promise<SelectionItem[]> => {
+    const baseParams = this.buildListParams(listType, { phone })
+    const params = {
+      ...baseParams,
+      ...(paramsOverride ?? {}),
+    }
     const url = `${this.servicePrefix}${endpoint}`
 
     try {
@@ -394,10 +415,14 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     return buildSummary<TDraft>('Resumo do registro:', draft, sections)
   }
 
-  buildDraftSummaryNatural = async (draft: TDraft, phone: string, maxLength: 'short' | 'medium' | 'long' = 'medium'): Promise<string> => {
+  buildDraftSummaryNatural = async (draft: TDraft, phone: string, options?: { maxLength?: 'short' | 'medium' | 'long'; title?: string; tone?: 'success' | 'error' }): Promise<string> => {
+    const fixedSummary = await this.buildDraftSummary(draft)
     try {
-      const fixedSummary = await this.buildDraftSummary(draft)
-      return await naturalLanguageGenerator.generateSummaryText(phone, fixedSummary, maxLength)
+      return await naturalLanguageGenerator.generateSummaryText(phone, fixedSummary, {
+        maxLength: options?.maxLength,
+        title: options?.title,
+        tone: options?.tone,
+      })
     } catch (error) {
       systemLogger.warn(
         {
@@ -407,7 +432,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
         },
         'Falha ao gerar resumo em linguagem natural, usando resumo fixo como fallback.',
       )
-      return this.buildDraftSummary(draft)
+      return fixedSummary
     }
   }
 

@@ -125,12 +125,23 @@ export class NaturalLanguageGeneratorService {
     })
   }
 
-  async generateSummaryText(phone: string, summaryContext: string, maxLength: 'short' | 'medium' | 'long' = 'medium'): Promise<string> {
+  async generateSummaryText(phone: string, summaryContext: string, options?: { maxLength?: 'short' | 'medium' | 'long'; title?: string; tone?: 'success' | 'error' }): Promise<string> {
+    const { maxLength = 'medium', title, tone = 'success' } = options ?? {}
+    const toneContext = tone === 'error' ? 'Situação: Falha ao cadastrar o registro.' : ''
+    const contextWithTitle = [title ? `Título: ${title}` : null, toneContext, summaryContext].filter(Boolean).join('\n\n')
+    const instructions = [
+      'Transforme os tópicos e listas em um texto fluido e natural, integrando todas as informações em um parágrafo contínuo. NÃO use bullet points, listas ou quebras de linha. Destaque os principais dados de forma conversacional.',
+      title ? `Use o título "${title}" como ponto de partida, conectando-o naturalmente à mensagem.` : null,
+      tone === 'error' ? 'Deixe explícito que o registro NÃO foi cadastrado e que o usuário precisa corrigir ou tentar novamente mais tarde.' : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
     return this.generateNaturalTextByPhone({
       phone,
-      context: summaryContext,
-      purpose: 'Gerar um resumo amigável do agendamento que foi criado',
-      additionalInstructions: 'Transforme os tópicos e listas em um texto fluido e natural, integrando todas as informações em um parágrafo contínuo. NÃO use bullet points, listas ou quebras de linha. Destaque os principais dados de forma conversacional.',
+      context: contextWithTitle,
+      purpose: 'Gerar um resumo amigável do registro que foi criado',
+      additionalInstructions: instructions,
       maxLength,
     })
   }

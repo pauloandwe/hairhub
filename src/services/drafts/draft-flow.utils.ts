@@ -20,11 +20,11 @@ export function computeMissing<T, K extends keyof T>(draft: T, rules: MissingRul
         break
       case 'ref': {
         const v = value as { id?: unknown } | null | undefined
-        ok = !!(v && v.id)
+        ok = Boolean(v && v.id)
         break
       }
       case 'custom':
-        ok = r.validate ? !!r.validate(value, draft) : true
+        ok = r.validate ? Boolean(r.validate(value, draft)) : true
         break
     }
     if (!ok) missing.push(r.key)

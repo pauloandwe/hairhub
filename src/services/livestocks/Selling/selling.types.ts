@@ -1,8 +1,8 @@
 import { IdNameRef } from '../../drafts/types'
 import { DraftStatus } from '../../generic/generic.types'
-import { SellingTypesEnum } from '../../../enums/saleTypes.enum'
+import { SellingTypesEnum } from '../../../enums/sellingTypes.enum'
 
-export interface ISaleValidationDraft {
+export interface ISellingsValidationDraft {
   saleType: SellingTypesEnum | null
   saleDate: string | null
   aliveWeight: number | null
@@ -28,7 +28,7 @@ export interface ISaleValidationDraft {
   recordId?: string
 }
 
-export interface ISaleCreationPayload {
+export interface ISellingsCreationPayload {
   sellingDate: string
   sellingTypeId: number
   categoryId: number
@@ -53,9 +53,9 @@ export interface ISaleCreationPayload {
   fatteningSystemId?: string | null
 }
 
-export interface SaleRecord extends ISaleCreationPayload {
+export interface SellingsRecord extends ISellingsCreationPayload {
   id: string
   createdAt: string
 }
 
-export type UpsertSaleArgs = Partial<ISaleValidationDraft>
+export type UpsertSellingsArgs = Partial<ISellingsValidationDraft>

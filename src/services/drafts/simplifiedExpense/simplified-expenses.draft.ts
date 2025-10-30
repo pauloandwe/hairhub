@@ -10,6 +10,8 @@ export function emptyExpenseDraft(): SimplifiedExpenseValidationDraft {
     dueDate: null,
     paymentDate: null,
     businessArea: { id: null, name: null },
+    costCenter: { id: null, name: null },
+    productServiceName: null,
     status: 'collecting',
     recordId: undefined,
   }

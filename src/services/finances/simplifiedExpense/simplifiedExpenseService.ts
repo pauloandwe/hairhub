@@ -1,5 +1,3 @@
-import { isValid, parse, format } from 'date-fns'
-import { getBusinessIdForPhone } from '../../../env.config'
 import { emptyExpenseDraft } from '../../drafts/simplifiedExpense/simplified-expenses.draft'
 import { GenericService } from '../../generic/generic.service'
 import { SelectionItem, SummarySections } from '../../generic/generic.types'
@@ -12,7 +10,7 @@ import { DateFormatter } from '../../../utils/date'
 import { parseLocalizedNumber } from '../../../utils/numbers'
 
 const autoCompleteEndpoint = '/bills/simplified-financial-entry/chat-auto-complete'
-const VALID_EDITABLE_FIELDS: (keyof UpsertSimplifiedExpenseArgs)[] = [
+const VALID_EDITABLE_FIELDS: (keyof UpsertSimplifiedExpenseArgs | 'costCenter')[] = [
   SimplifiedExpenseField.EmissionDate,
   SimplifiedExpenseField.Supplier,
   SimplifiedExpenseField.Description,
@@ -21,6 +19,8 @@ const VALID_EDITABLE_FIELDS: (keyof UpsertSimplifiedExpenseArgs)[] = [
   SimplifiedExpenseField.PaymentDate,
   SimplifiedExpenseField.PaymentMethod,
   SimplifiedExpenseField.BusinessArea,
+  SimplifiedExpenseField.ProductServiceName,
+  SimplifiedExpenseField.CostCenter,
 ]
 
 export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseValidationDraft, SimplifiedExpenseCreationPayload, SimpleExpenseRecord, UpsertSimplifiedExpenseArgs> {
@@ -35,7 +35,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     })
   }
 
-  protected validateDraftArgsTypes = (args: Partial<UpsertSimplifiedExpenseArgs>, currentDraft: SimplifiedExpenseValidationDraft): void => {
+  protected validateDraftArgsTypes = (args: Partial<UpsertSimplifiedExpenseArgs> & { costCenter?: any }, currentDraft: SimplifiedExpenseValidationDraft): void => {
     if (args.value !== undefined) {
       if (args.value === null) {
         currentDraft.value = null
@@ -46,22 +46,35 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
         }
       }
     }
-    if (args.emissionDate) {
-      const date = parse(args.emissionDate, 'dd/MM/yyyy', new Date())
-      currentDraft.emissionDate = isValid(date) ? format(date, 'yyyy-MM-dd') : currentDraft.emissionDate
+    if (args.emissionDate !== undefined) {
+      const normalizedEmission = DateFormatter.normalizeToISODate(args.emissionDate)
+      if (normalizedEmission && DateFormatter.isValidISODate(normalizedEmission)) {
+        currentDraft.emissionDate = normalizedEmission
+      }
     }
-    if (args.dueDate) {
-      const date = parse(args.dueDate, 'dd/MM/yyyy', new Date())
-      currentDraft.dueDate = isValid(date) ? format(date, 'yyyy-MM-dd') : currentDraft.dueDate
+    if (args.dueDate !== undefined) {
+      const normalizedDue = DateFormatter.normalizeToISODate(args.dueDate)
+      if (normalizedDue && DateFormatter.isValidISODate(normalizedDue)) {
+        currentDraft.dueDate = normalizedDue
+      }
     }
-    if (args.paymentDate) {
-      const date = parse(args.paymentDate, 'dd/MM/yyyy', new Date())
-      currentDraft.paymentDate = isValid(date) ? format(date, 'yyyy-MM-dd') : currentDraft.paymentDate
+    if (args.paymentDate !== undefined) {
+      const normalizedPayment = DateFormatter.normalizeToISODate(args.paymentDate)
+      if (normalizedPayment && DateFormatter.isValidISODate(normalizedPayment)) {
+        currentDraft.paymentDate = normalizedPayment
+      }
     }
     if (args.description) currentDraft.description = args.description ?? 'Lançamento realizado via Inttegra Assistente'
+    if (args.productServiceName) currentDraft.productServiceName = args.productServiceName
     if (args.supplier) mergeIdNameRef(currentDraft.supplier, args.supplier)
     if (args.paymentMethod) mergeIdNameRef(currentDraft.paymentMethod, args.paymentMethod)
     if (args.businessArea) mergeIdNameRef(currentDraft.businessArea, args.businessArea)
+    if (args.costCenter) {
+      if (!currentDraft.costCenter) {
+        currentDraft.costCenter = { id: null, name: null }
+      }
+      mergeIdNameRef(currentDraft.costCenter, args.costCenter)
+    }
   }
 
   protected getRequiredFields = (): MissingRule<SimplifiedExpenseValidationDraft>[] => {
@@ -69,6 +82,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
       { key: SimplifiedExpenseField.Supplier, kind: 'ref' },
       { key: SimplifiedExpenseField.Value, kind: 'number' },
       { key: SimplifiedExpenseField.BusinessArea, kind: 'ref' },
+      { key: SimplifiedExpenseField.CostCenter, kind: 'ref' },
     ]
   }
 
@@ -76,11 +90,11 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     return [
       {
         label: 'Data de emissão',
-        value: (draft: SimplifiedExpenseValidationDraft) => DateFormatter.formatToBrazilianDate(draft.emissionDate),
+        value: (draft: SimplifiedExpenseValidationDraft) => DateFormatter.formatToBrazilianDate(draft?.emissionDate),
       },
       {
         label: 'Fornecedor',
-        value: (draft: SimplifiedExpenseValidationDraft) => draft.supplier.name,
+        value: (draft: SimplifiedExpenseValidationDraft) => draft?.supplier.name,
       },
       {
         label: 'Valor',
@@ -88,7 +102,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
           new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL',
-          }).format(Number(draft.value)),
+          }).format(Number(draft?.value)),
       },
       {
         label: 'Data de Vencimento',
@@ -98,40 +112,53 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
       {
         label: 'Data de Pagamento',
         value: (draft: SimplifiedExpenseValidationDraft) => {
-          return DateFormatter.formatToBrazilianDate(draft.paymentDate)
+          return DateFormatter.formatToBrazilianDate(draft?.paymentDate)
         },
       },
       {
         label: 'Método de Pagamento',
         value: (draft: SimplifiedExpenseValidationDraft) => {
-          return draft.paymentMethod.name ?? null
+          return draft?.paymentMethod.name ?? null
         },
       },
       {
         label: 'Área de Negócio',
         value: (draft: SimplifiedExpenseValidationDraft) => {
-          return draft.businessArea.name ?? null
+          return draft?.businessArea.name ?? null
+        },
+      },
+      {
+        label: 'Centro de Custo',
+        value: (draft: SimplifiedExpenseValidationDraft) => {
+          return draft?.costCenter?.name ?? null
         },
       },
     ]
   }
 
   protected transformToApiPayload = (draft: SimplifiedExpenseValidationDraft, context: { farmId: number }): SimplifiedExpenseCreationPayload => {
+    const normalizeOrNull = (value?: string | Date | null) => {
+      const normalized = DateFormatter.normalizeToISODate(value)
+      return normalized && DateFormatter.isValidISODate(normalized) ? normalized : null
+    }
+    const normalizeOrNow = (value?: string | Date | null) => normalizeOrNull(value) ?? DateFormatter.toISODate(new Date())
+
     const finalPayload: SimplifiedExpenseCreationPayload = {
       billType: 'SIMPLIFIED',
       releaseType: 'TO_PAY',
       farmId: context.farmId,
       supplierId: Number(draft.supplier.id),
       clientId: null,
-      costCenterId: 616,
-      editionDate: draft.emissionDate ?? new Date().toISOString(),
-      paymentDate: draft?.paymentDate ?? null,
-      dueDate: draft?.dueDate ?? null,
+      costCenterId: draft?.costCenter?.id ? Number(draft.costCenter.id) : undefined,
+      editionDate: normalizeOrNow(draft.emissionDate),
+      paymentDate: normalizeOrNull(draft?.paymentDate),
+      dueDate: normalizeOrNull(draft?.dueDate),
       value: (draft.value ?? 0) * 100,
       observation: draft?.description ?? 'Lançamento realizado via Inttegra Assistente',
       paymentMethodId: Number(draft.paymentMethod.id) > 0 ? Number(draft.paymentMethod.id) : null,
       businessAreaId: Number(draft?.businessArea?.id ?? 12),
       cultureId: null,
+      productServiceName: draft?.productServiceName ?? '',
     }
 
     return finalPayload
@@ -140,10 +167,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
   protected buildListParams = (listType: string, context: { phone: string }): Record<string, any> => {
     switch (listType) {
       case SimplifiedExpenseField.Supplier:
-        // const institutionId = getInstitutionIdForPhone(context.phone)
-        const institutionId = 0
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isSupplier:EQ:1;isActive:IN:1',
         }
       case 'businessAreas':
@@ -154,6 +178,8 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
         return {
           advancedFilters: 'code:NOT_EQ:NULL',
         }
+      case SimplifiedExpenseField.CostCenter:
+        return {}
       default:
         return {}
     }
@@ -162,7 +188,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
   protected extractDataFromResult = (listType: string, result: any): any[] => {
     systemLogger.info(
       {
-        data: result,
+        data: result?.data?.data || [],
         type: listType,
       },
       'Fetched list form the API',
@@ -170,6 +196,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     switch (listType) {
       case SimplifiedExpenseField.Supplier:
       case SimplifiedExpenseField.BusinessArea:
+      case SimplifiedExpenseField.CostCenter:
         return result?.data?.data ?? []
       case SimplifiedExpenseField.PaymentMethod:
       case 'autoComplete':
@@ -183,9 +210,12 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     switch (listType) {
       case SimplifiedExpenseField.Supplier:
       case SimplifiedExpenseField.PaymentMethod:
+      case SimplifiedExpenseField.CostCenter:
         return {
           id: item.id,
           name: item.name,
+          ...(item?.description ? { description: item.description } : {}),
+          ...(item?.index !== undefined && item?.index !== null ? { index: item.index } : {}),
         }
       case SimplifiedExpenseField.BusinessArea:
         return {
@@ -205,13 +235,15 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
         return 'Erro ao listar áreas de negócio.'
       case SimplifiedExpenseField.PaymentMethod:
         return 'Erro ao listar métodos de pagamento.'
+      case SimplifiedExpenseField.CostCenter:
+        return 'Erro ao listar centros de custo.'
       default:
         return 'Erro ao carregar a lista.'
     }
   }
 
   getValidFieldsFormatted = (): string => {
-    const fieldLabels: Partial<Record<keyof UpsertSimplifiedExpenseArgs, string>> = {
+    const fieldLabels: Partial<Record<keyof UpsertSimplifiedExpenseArgs | 'costCenter', string>> = {
       emissionDate: 'data de emissão',
       supplier: 'fornecedor',
       description: 'descrição',
@@ -220,6 +252,8 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
       paymentDate: 'data de pagamento',
       paymentMethod: 'forma de pagamento',
       businessArea: 'área de negócio',
+      productServiceName: 'produto/serviço',
+      costCenter: 'centro de custo',
     }
 
     return VALID_EDITABLE_FIELDS.map((field) => fieldLabels[field] || field).join(', ')
@@ -232,8 +266,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
   }
 
   async listBusinessAreas(phone: string): Promise<SelectionItem[]> {
-    const farmId = getBusinessIdForPhone(phone)
-    const endpoint = `/business-area/${farmId}/list-by-farm`
+    const endpoint = `/business-area/list-by-farm`
     const type = SimplifiedExpenseField.BusinessArea
     return this.fetchSelectionList(phone, type, endpoint)
   }
@@ -244,12 +277,56 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     return this.fetchSelectionList(phone, type, endpoint)
   }
 
-  protected override buildPartialUpdatePayload(draft: SimplifiedExpenseValidationDraft, updates: Partial<UpsertSimplifiedExpenseArgs>): Partial<SimplifiedExpenseCreationPayload> {
+  async listCostCenters(phone: string, options?: { advancedFilters?: string }): Promise<SelectionItem[]> {
+    const endpoint = '/cost-center'
+    const type = SimplifiedExpenseField.CostCenter
+    return this.fetchSelectionList(phone, type, endpoint, options)
+  }
+
+  private buildCostCenterSearchAdvancedFilters(query: string): string | null {
+    if (!query) return null
+
+    const normalized = query.trim()
+    if (!normalized) return null
+
+    const indexMatches = normalized.match(/(\d+\.)*\d+/g) || []
+    const textPart = normalized.replace(/(\d+\.)*\d+/g, '').trim()
+
+    const filters: string[] = []
+
+    if (indexMatches.length > 0) {
+      filters.push(`index:IN:${indexMatches.join(',')}`)
+    }
+
+    if (textPart) {
+      filters.push(`name:LIKE:${textPart}`)
+    } else if (filters.length === 0) {
+      filters.push(`name:LIKE:${normalized}`)
+    }
+
+    return filters.length > 0 ? filters.join(';') : null
+  }
+
+  async searchCostCenters(phone: string, query: string): Promise<SelectionItem[]> {
+    const advancedFilters = this.buildCostCenterSearchAdvancedFilters(query)
+    if (!advancedFilters) {
+      return []
+    }
+
+    return this.listCostCenters(phone, { advancedFilters })
+  }
+
+  protected override buildPartialUpdatePayload(draft: SimplifiedExpenseValidationDraft, updates: Partial<UpsertSimplifiedExpenseArgs> & { costCenter?: any }): Partial<SimplifiedExpenseCreationPayload> {
     const payload: Partial<SimplifiedExpenseCreationPayload> = {}
-    const has = (field: keyof UpsertSimplifiedExpenseArgs): boolean => Object.prototype.hasOwnProperty.call(updates, field)
+    const has = (field: keyof UpsertSimplifiedExpenseArgs | 'costCenter'): boolean => Object.prototype.hasOwnProperty.call(updates, field)
+    const normalizeOrNull = (value?: string | Date | null) => {
+      const normalized = DateFormatter.normalizeToISODate(value)
+      return normalized && DateFormatter.isValidISODate(normalized) ? normalized : null
+    }
+    const normalizeOrNow = (value?: string | Date | null) => normalizeOrNull(value) ?? DateFormatter.toISODate(new Date())
 
     if (has(SimplifiedExpenseField.EmissionDate)) {
-      payload.editionDate = draft.emissionDate ?? new Date().toISOString()
+      payload.editionDate = normalizeOrNow(draft.emissionDate)
     }
 
     if (has(SimplifiedExpenseField.Supplier)) {
@@ -270,11 +347,11 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     }
 
     if (has(SimplifiedExpenseField.DueDate)) {
-      payload.dueDate = draft.dueDate ?? null
+      payload.dueDate = normalizeOrNull(draft.dueDate)
     }
 
     if (has(SimplifiedExpenseField.PaymentDate)) {
-      payload.paymentDate = draft.paymentDate ?? null
+      payload.paymentDate = normalizeOrNull(draft.paymentDate)
     }
 
     if (has(SimplifiedExpenseField.PaymentMethod)) {
@@ -287,6 +364,15 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
       if (Number.isFinite(businessAreaId) && businessAreaId > 0) {
         payload.businessAreaId = businessAreaId
       }
+    }
+
+    if (has(SimplifiedExpenseField.ProductServiceName)) {
+      payload.productServiceName = draft.productServiceName ?? ''
+    }
+
+    if (has(SimplifiedExpenseField.CostCenter)) {
+      const costCenterId = Number(draft.costCenter?.id)
+      payload.costCenterId = costCenterId > 0 ? costCenterId : undefined
     }
 
     return payload

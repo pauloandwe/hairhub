@@ -1,9 +1,10 @@
 import { sendWhatsAppMessageWithTitle } from '../../../api/meta.api'
 import { SellingField } from '../../../enums/cruds/sellingFields.enum'
+import { SellingTypesEnum, SellingTypesLabels } from '../../../enums/sellingTypes.enum'
 import { sendSaleLocationSelectionList, sendSaleTypeSelectionList, sendSaleDestinationFarmSelectionList } from '../../../interactives/selling/saleSelection'
 import { sendSaleCategoriesList } from '../../../interactives/selling/saleCategorySelection'
 import { appendAssistantTextAuto } from '../../../services/history-router.service'
-import { ISaleValidationDraft } from '../../../services/livestocks/Selling/selling.types'
+import { ISellingsValidationDraft } from '../../../services/livestocks/Selling/selling.types'
 import { FieldEditor } from '../../functions.types'
 import { AnimalLotSelectionService } from '../../../services/livestocks/animal-lot.service'
 import { sellingService } from '../../../services/livestocks/Selling/sellingService'
@@ -57,6 +58,20 @@ const respond = (message: string, interactive: boolean): ChangeResponse => ({
   interactive,
 })
 
+const DEFAULT_SALE_TYPE_LABEL = SellingTypesLabels[SellingTypesEnum.SALE]
+
+const resolveSaleTypeLabel = (saleType: ISellingsValidationDraft['saleType']): string => {
+  if (!saleType) return DEFAULT_SALE_TYPE_LABEL
+  return SellingTypesLabels[saleType] ?? DEFAULT_SALE_TYPE_LABEL
+}
+
+const resolveSaleTypeOperation = (saleType: ISellingsValidationDraft['saleType']): string => resolveSaleTypeLabel(saleType).toLowerCase()
+
+const loadSaleTypeOperation = async (phone: string): Promise<string> => {
+  const draft = await sellingService.loadDraft(phone)
+  return resolveSaleTypeOperation(draft.saleType)
+}
+
 const askWithTitle = async (phone: string, message: string): Promise<void> => {
   await appendAssistantTextAuto(phone, message)
   await sendWhatsAppMessageWithTitle(phone, message)
@@ -68,7 +83,8 @@ const editSaleType: FieldEditor = async (phone) => {
 }
 
 const editSaleDate: FieldEditor = async (phone) => {
-  const message = 'Qual foi a data da venda?  📆'
+  const operation = await loadSaleTypeOperation(phone)
+  const message = `Qual foi a data da operação de ${operation}? 📆`
   await askWithTitle(phone, message)
   return respond('Data solicitada', false)
 }
@@ -86,7 +102,8 @@ const editDeadWeight: FieldEditor = async (phone) => {
 }
 
 const editQuantity: FieldEditor = async (phone) => {
-  const message = 'Quantos animais/unidades foram vendidos? (mínimo 1) 🐄'
+  const operation = await loadSaleTypeOperation(phone)
+  const message = `Quantos animais/unidades participaram da operação de ${operation}? (mínimo 1) 🐄`
   await askWithTitle(phone, message)
   return respond('Quantidade solicitada', false)
 }
@@ -125,7 +142,8 @@ const editArea: FieldEditor = async (phone) => {
 }
 
 const editObservation: FieldEditor = async (phone) => {
-  const message = 'Alguma observação sobre a venda? (ou digite "pular" se não houver)'
+  const operation = await loadSaleTypeOperation(phone)
+  const message = `Alguma observação sobre a operação de ${operation}? (ou digite "pular" se não houver)`
   await askWithTitle(phone, message)
   return respond('Observação solicitada', false)
 }
@@ -146,7 +164,7 @@ const editDestinationRetreat: FieldEditor = async (phone) => {
   const destinationFarmId = draft.destinationFarm?.id
 
   if (!destinationFarmId) {
-    return editDestinationFarm(phone)
+    return editDestinationFarm(phone, draft)
   }
 
   let itemsOverride
@@ -167,7 +185,7 @@ const editDestinationArea: FieldEditor = async (phone) => {
   const destinationFarmId = draft.destinationFarm?.id
 
   if (!destinationFarmId) {
-    return editDestinationFarm(phone)
+    return editDestinationFarm(phone, draft)
   }
 
   let itemsOverride
@@ -223,7 +241,7 @@ export const saleFieldEditors: Record<SaleEditField, FieldEditor> = {
   [SellingField.FatteningSystemId]: editFatteningSystemId,
 }
 
-type MissingFieldHandler = (phone: string, draft: ISaleValidationDraft) => Promise<{ message: string; interactive: boolean; draft: ISaleValidationDraft }>
+type MissingFieldHandler = (phone: string, draft: ISellingsValidationDraft) => Promise<{ message: string; interactive: boolean; draft: ISellingsValidationDraft }>
 
 const askSaleType: MissingFieldHandler = async (phone, draft) => {
   await sendSaleTypeSelectionList(phone, 'Qual o tipo de venda? 👇')
@@ -231,7 +249,8 @@ const askSaleType: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askSaleDate: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Qual foi a data da venda? 📆'
+  const operation = resolveSaleTypeOperation(draft.saleType)
+  const message = `Qual foi a data da operação de ${operation}? 📆`
   await askWithTitle(phone, message)
   return { message, interactive: false, draft }
 }
@@ -249,7 +268,8 @@ const askDeadWeight: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askQuantity: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Quantos animais/unidades foram vendidos? (mínimo 1) 🐄'
+  const operation = resolveSaleTypeOperation(draft.saleType)
+  const message = `Quantos animais/unidades participaram da operação de ${operation}? (mínimo 1) 🐄`
   await askWithTitle(phone, message)
   return { message, interactive: false, draft }
 }
@@ -287,7 +307,8 @@ const askRetreatAndArea: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askObservation: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Alguma observação sobre a venda? (ou digite "pular" se não houver)'
+  const operation = resolveSaleTypeOperation(draft.saleType)
+  const message = `Alguma observação sobre a operação de ${operation}? (ou digite "pular" se não houver)`
   await askWithTitle(phone, message)
   return { message, interactive: false, draft }
 }

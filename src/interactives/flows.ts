@@ -1,11 +1,10 @@
-import { sendWhatsAppInteractiveList, sendWhatsAppMessage } from '../api/meta.api'
-import { appendUserTextAuto } from '../services/history-router.service'
-import { MORE_ACTION_TOKEN, buildPaginatedListRows, registerPendingListInteraction } from '../utils/interactive'
+import { markMessageAsRead, sendWhatsAppInteractiveList, sendWhatsAppMessage } from '../api/meta.api'
+import { MORE_ACTION_TOKEN, buildNamespacedId, buildPaginatedListRows, registerPendingListInteraction } from '../utils/interactive'
 import { registerInteractiveSelectionHandler } from './registry'
 import { getUserContextSync } from '../env.config'
 import { UiDefaults } from './types'
 
-export interface SelectionFlowConfig<T extends { id: string; name?: string }> {
+export interface SelectionFlowConfig<T extends { id: string; name?: string; description?: string }> {
   namespace: string
   type: string
   fetchItems: (userId: string) => Promise<T[]>
@@ -19,14 +18,97 @@ export interface SelectionFlowConfig<T extends { id: string; name?: string }> {
   historyTextBuilder?: (item: T) => string
   onSelected: (ctx: { userId: string; item: T; messageId: string }) => Promise<void>
   onEditModeSelected?: (ctx: { userId: string; item: T; messageId: string }) => Promise<void>
+  extraActions?: SelectionFlowExtraAction[]
+  onError?: (ctx: { userId: string; error: unknown; stage: 'list' | 'selection' }) => Promise<boolean | void> | boolean | void
 }
 
-export function createSelectionFlow<T extends { id: string; name?: string }>(config: SelectionFlowConfig<T>) {
+export interface SelectionFlowExtraAction {
+  id: string
+  title: string
+  description?: string
+  sectionTitle?: string
+  onSelected: (ctx: { userId: string; messageId: string }) => Promise<void>
+}
+
+const MAX_WHATSAPP_LIST_ROWS = 10
+const MAX_WHATSAPP_SECTION_TITLE_LENGTH = 24
+const MAX_WHATSAPP_ROW_TITLE_LENGTH = 24
+const MAX_WHATSAPP_ROW_DESCRIPTION_LENGTH = 72
+
+function sanitizeSectionTitle(title: string): string {
+  if (!title) return 'Ações'
+  if (title.length <= MAX_WHATSAPP_SECTION_TITLE_LENGTH) return title
+  const trimmed = title.slice(0, MAX_WHATSAPP_SECTION_TITLE_LENGTH - 1).trimEnd()
+  return `${trimmed}…`
+}
+
+function sanitizeRowTitle(title: string): string {
+  const normalized = title?.trim() ?? ''
+  if (!normalized) return 'Opção'
+  if (normalized.length <= MAX_WHATSAPP_ROW_TITLE_LENGTH) return normalized
+  const trimmed = normalized.slice(0, MAX_WHATSAPP_ROW_TITLE_LENGTH - 1).trimEnd()
+  return `${trimmed}…`
+}
+
+function sanitizeRowDescription(description?: string): string | undefined {
+  if (!description) return undefined
+  const normalized = description.trim()
+  if (!normalized) return undefined
+  if (normalized.length <= MAX_WHATSAPP_ROW_DESCRIPTION_LENGTH) return normalized
+  const trimmed = normalized.slice(0, MAX_WHATSAPP_ROW_DESCRIPTION_LENGTH - 1).trimEnd()
+  return `${trimmed}…`
+}
+
+export function createSelectionFlow<T extends { id: string; name?: string; description?: string }>(config: SelectionFlowConfig<T>) {
   const pageLimit = config.pageLimit ?? 10
+  const overrideItemCache = new Map<string, T[]>()
+  const availableExtraActionSlots = Math.max(0, MAX_WHATSAPP_LIST_ROWS - 1)
+  const configuredExtraActions = (config.extraActions ?? []).filter((action): action is SelectionFlowExtraAction => Boolean(action?.id))
+  const registeredExtraActions = configuredExtraActions.slice(0, availableExtraActionSlots)
+  if (configuredExtraActions.length > availableExtraActionSlots) {
+    console.warn(`[SelectionFlow] Limiting extra actions for ${config.namespace} to ${availableExtraActionSlots}. Received ${configuredExtraActions.length} actions.`)
+  }
+  const extraActionHandlers = new Map<string, SelectionFlowExtraAction>()
+  const sanitizedExtraActions = registeredExtraActions.map((action) => {
+    extraActionHandlers.set(action.id, action)
+    return {
+      id: action.id,
+      sectionTitle: sanitizeSectionTitle(action.sectionTitle?.trim() || 'Ações'),
+      title: sanitizeRowTitle(action.title),
+      description: sanitizeRowDescription(action.description),
+    }
+  })
+
+  async function handleFlowError(userId: string, error: unknown, stage: 'list' | 'selection'): Promise<boolean> {
+    if (!config.onError) return false
+    try {
+      const handled = await config.onError({ userId, error, stage })
+      return handled === true
+    } catch (handlerError) {
+      console.error(`[SelectionFlow] Erro ao executar handler de erro em ${config.namespace}:`, handlerError)
+      return false
+    }
+  }
 
   async function sendList(userId: string, bodyMsg?: string, offset = 0, itemsOverride?: T[]) {
     try {
-      const items: T[] = itemsOverride ?? (await config.fetchItems(userId))
+      if (Array.isArray(itemsOverride)) {
+        if (itemsOverride.length > 0) {
+          overrideItemCache.set(userId, itemsOverride)
+        } else {
+          overrideItemCache.delete(userId)
+        }
+      }
+
+      const overrideItems = overrideItemCache.get(userId)
+      let items: T[]
+      if (overrideItems && overrideItems.length > 0) {
+        items = overrideItems
+      } else if (Array.isArray(itemsOverride) && itemsOverride.length > 0) {
+        items = itemsOverride
+      } else {
+        items = await config.fetchItems(userId)
+      }
 
       if (items.length === 0) {
         const emptyMessage = config.emptyListMessage || `Nenhum(a) ${config.ui.sectionTitle.toLowerCase()} encontrado(a)`
@@ -34,14 +116,61 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
         return
       }
 
+      const extraActionCount = sanitizedExtraActions.length
+      const availableRowSlots = MAX_WHATSAPP_LIST_ROWS - extraActionCount
+      if (availableRowSlots <= 0) {
+        console.error(`[SelectionFlow] Unable to render list for ${config.namespace}: no row slots available after reserving extra actions.`)
+        await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+        return
+      }
+
+      const effectivePageLimit = Math.max(1, Math.min(pageLimit, availableRowSlots))
+
       const { rows, actionRows, nextOffset, visibleIds } = buildPaginatedListRows<T>(
         config.namespace,
         items,
         offset,
-        pageLimit,
+        effectivePageLimit,
         (item: T, idx: number) => (config.titleBuilder ? config.titleBuilder(item, idx, offset) : `${offset + idx + 1}. ${item.name ?? item.id}`),
         (item: T, idx: number) => config.descriptionBuilder?.(item, idx, offset),
       )
+
+      const extraSections: { title: string; rows: { id: string; title: string; description?: string }[] }[] = []
+
+      if (actionRows.length) {
+        extraSections.push({
+          title: 'Ações',
+          rows: actionRows,
+        })
+      }
+
+      if (sanitizedExtraActions.length > 0) {
+        const groupedSections = new Map<string, { title: string; rows: { id: string; title: string; description?: string }[] }>()
+
+        sanitizedExtraActions.forEach((action) => {
+          const sectionKey = action.sectionTitle
+          const existing = groupedSections.get(sectionKey)
+          const row = {
+            id: buildNamespacedId(config.namespace, action.id),
+            title: action.title,
+            description: action.description,
+          }
+
+          if (existing) {
+            existing.rows.push(row)
+          } else {
+            groupedSections.set(sectionKey, {
+              title: sectionKey,
+              rows: [row],
+            })
+          }
+        })
+
+        groupedSections.forEach((section) => {
+          if (!section.rows.length) return
+          extraSections.push(section)
+        })
+      }
 
       await sendWhatsAppInteractiveList({
         to: userId,
@@ -51,20 +180,14 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
         buttonLabel: config.ui.buttonLabel ?? 'Ver opções',
         sectionTitle: config.ui.sectionTitle,
         rows,
-        extraSections: actionRows.length
-          ? [
-              {
-                title: 'Ações',
-                rows: actionRows,
-              },
-            ]
-          : undefined,
+        extraSections: extraSections.length ? extraSections : undefined,
       })
 
       const historyMessage = `Enviei a lista de "${config.ui.sectionTitle}" para você escolher`
 
       console.log(`[SelectionFlow] ${historyMessage} (userId: ${userId})`)
-      const ids = [...visibleIds, ...(nextOffset !== undefined ? [`${MORE_ACTION_TOKEN}:${nextOffset}`] : [])]
+      const extraActionIds = sanitizedExtraActions.map((action) => action.id)
+      const ids = [...visibleIds, ...extraActionIds, ...(nextOffset !== undefined ? [`${MORE_ACTION_TOKEN}:${nextOffset}`] : [])]
 
       registerPendingListInteraction({
         userId,
@@ -74,7 +197,10 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
       })
     } catch (error) {
       console.error(`[SelectionFlow] Erro ao carregar lista em ${config.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+      const handled = await handleFlowError(userId, error, 'list')
+      if (!handled) {
+        await sendWhatsAppMessage(userId, 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+      }
     }
   }
 
@@ -86,8 +212,40 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
         return
       }
 
-      const items = await config.fetchItems(userId)
-      const selected = items.find((it) => String(it.id) === String(value))
+      if (extraActionHandlers.has(String(value))) {
+        if (!accepted) {
+          await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
+          await sendList(userId, config.defaultBody || 'Selecione uma opção')
+          return
+        }
+
+        const action = extraActionHandlers.get(String(value))
+
+        if (action) {
+          overrideItemCache.delete(userId)
+          await action.onSelected({ userId, messageId })
+          return
+        }
+      }
+
+      const overrideItems = overrideItemCache.get(userId) ?? []
+      let selected = overrideItems.find((it) => String(it.id) === String(value))
+
+      if (!selected) {
+        let items: T[]
+        try {
+          items = await config.fetchItems(userId)
+        } catch (error) {
+          console.error(`[SelectionFlow] Erro ao recarregar lista em ${config.namespace}:`, error)
+          const handled = await handleFlowError(userId, error, 'selection')
+          if (!handled) {
+            await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
+            await sendList(userId, config.defaultBody || 'Selecione uma opção')
+          }
+          return
+        }
+        selected = items.find((it) => String(it.id) === String(value))
+      }
 
       if (!accepted || !selected) {
         await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
@@ -95,17 +253,16 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
         return
       }
 
-      const historyText = config.historyTextBuilder?.(selected) || `${config.ui.sectionTitle} selecionado(a): ${selected.name ?? selected.id}`
-      await appendUserTextAuto(userId, historyText)
-
       const ctx = getUserContextSync(userId)
       const isEditMode = !!ctx?.activeRegistration?.editMode
       if (isEditMode && config.onEditModeSelected) {
         await config.onEditModeSelected({ userId, item: selected, messageId })
+        overrideItemCache.delete(userId)
         return
       }
 
       await config.onSelected({ userId, item: selected, messageId })
+      overrideItemCache.delete(userId)
     } catch (error) {
       console.error(`[SelectionFlow] Erro ao processar seleção em ${config.namespace}:`, error)
       await sendWhatsAppMessage(userId, 'Não consegui processar sua seleção no momento. Por favor, tente novamente.')
@@ -115,7 +272,7 @@ export function createSelectionFlow<T extends { id: string; name?: string }>(con
   return { sendList }
 }
 
-export interface TwoStepFlowConfig<G extends { id: string; name?: string }, C extends { id: string; name?: string }> {
+export interface TwoStepFlowConfig<G extends { id: string; name?: string; description?: string }, C extends { id: string; name?: string; description?: string }> {
   step1: {
     namespace: string
     type: string
@@ -148,7 +305,7 @@ export interface TwoStepFlowConfig<G extends { id: string; name?: string }, C ex
   pageLimit?: number
 }
 
-export function createTwoStepSelectionFlow<G extends { id: string; name?: string }, C extends { id: string; name?: string }>(config: TwoStepFlowConfig<G, C>) {
+export function createTwoStepSelectionFlow<G extends { id: string; name?: string; description?: string }, C extends { id: string; name?: string; description?: string }>(config: TwoStepFlowConfig<G, C>) {
   const pageLimit = config.pageLimit ?? 10
 
   async function sendStep1List(userId: string, bodyMsg?: string, offset = 0) {
@@ -268,9 +425,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
         return
       }
 
-      // await markMessageAsRead(messageId)
-      const historyText1 = config.step1.historyTextBuilder?.(selected) || `${config.step1.ui.sectionTitle} selecionado(a): ${selected.name ?? selected.id}`
-      await appendUserTextAuto(userId, historyText1)
+      markMessageAsRead(messageId)
       if (config.step1.onSelected) {
         await config.step1.onSelected({ userId, item: selected, messageId })
       }
@@ -312,9 +467,6 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
         await sendStep2List(userId, parentId, config.step2.defaultBody || 'Selecione uma opção')
         return
       }
-
-      const historyText2 = config.step2.historyTextBuilder?.(selected) || `${config.step2.ui.sectionTitle} selecionado(a): ${selected.name ?? selected.id}`
-      await appendUserTextAuto(userId, historyText2)
 
       const ctx = getUserContextSync(userId)
       const isEditMode = !!ctx?.activeRegistration?.editMode

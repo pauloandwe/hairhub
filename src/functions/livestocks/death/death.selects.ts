@@ -15,7 +15,7 @@ export const respond = (message: string, interactive: boolean): ChangeResponse =
 })
 
 const editQuantity: FieldEditor = async (phone) => {
-  await sendWhatsAppMessage(phone, 'Qual a nova quantidade? (só o número)')
+  await sendWhatsAppMessage(phone, 'Qual a nova quantidade? (mínimo 1) 🐄')
   return respond('Quantidade solicitada', false)
 }
 
@@ -35,7 +35,7 @@ const editAnimalLot: FieldEditor = async (phone) => {
 }
 
 const editDeathDate: FieldEditor = async (phone) => {
-  await sendWhatsAppMessage(phone, 'Qual a nova data? (formato YYYY-MM-DD)')
+  await sendWhatsAppMessage(phone, 'Qual a nova data? 📆')
   return respond('Data solicitada', false)
 }
 
@@ -60,7 +60,7 @@ type MissingFieldHandler = (
 }>
 
 const askQuantity: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Quantos animais morreram? (só o número)'
+  const message = 'Quantos animais morreram? (mínimo 1) 🐄'
 
   await appendAssistantTextAuto(phone, message)
   await sendWhatsAppMessageWithTitle(phone, message)

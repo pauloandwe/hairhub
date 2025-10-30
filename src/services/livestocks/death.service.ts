@@ -1,5 +1,5 @@
 import api from '../../config/api.config'
-import { getBusinessIdForPhone } from '../../env.config'
+import { getFarmIdForPhone } from '../../env.config'
 import { DeathCreationPayload, DeathRecord } from './death-draft.service'
 import { APIResponseCreate } from '../../types/api.types'
 
@@ -9,7 +9,7 @@ export class DeathService {
   private servicePrefix = process.env.LIVESTOCKS_URL
 
   async validate(phone: string, data: object): Promise<any> {
-    const farmId = getBusinessIdForPhone(phone)
+    const farmId = getFarmIdForPhone(phone)
 
     const payload = {
       data: {
@@ -21,7 +21,7 @@ export class DeathService {
   }
 
   async create(phone: string, payload: DeathCreationPayload, endpoint = '/deaths'): Promise<{ id: string }> {
-    const farmId = getBusinessIdForPhone(phone)
+    const farmId = getFarmIdForPhone(phone)
 
     try {
       const url = `${this.servicePrefix}/${farmId}${endpoint}`
@@ -56,7 +56,7 @@ export class DeathService {
   }
 
   async update(phone: string, recordId: string, payload: DeathCreationPayload, endpoint = '/deaths'): Promise<{ id: string }> {
-    const farmId = getBusinessIdForPhone(phone)
+    const farmId = getFarmIdForPhone(phone)
 
     try {
       const url = `${this.servicePrefix}/${farmId}${endpoint}/${recordId}`
@@ -79,7 +79,7 @@ export class DeathService {
   }
 
   async patch(phone: string, recordId: string, payload: Partial<DeathCreationPayload>, endpoint = '/deaths'): Promise<{ id: string }> {
-    const farmId = getBusinessIdForPhone(phone)
+    const farmId = getFarmIdForPhone(phone)
 
     try {
       const url = `${this.servicePrefix}/${farmId}${endpoint}/${recordId}`
@@ -103,7 +103,7 @@ export class DeathService {
   }
 
   async delete(phone: string, recordId: string, endpoint = '/deaths'): Promise<{ id: string }> {
-    const farmId = getBusinessIdForPhone(phone)
+    const farmId = getFarmIdForPhone(phone)
 
     try {
       const url = `${this.servicePrefix}/${farmId}${endpoint}/${recordId}`

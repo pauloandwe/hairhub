@@ -7,4 +7,6 @@ export enum SimplifiedExpenseField {
   PaymentDate = 'paymentDate',
   PaymentMethod = 'paymentMethod',
   BusinessArea = 'businessArea',
+  ProductServiceName = 'productServiceName',
+  CostCenter = 'costCenter',
 }

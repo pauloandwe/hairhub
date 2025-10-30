@@ -93,6 +93,73 @@ export class BarberService {
       throw new Error('Erro ao buscar horários disponíveis.')
     }
   }
+
+  async getAvailableDays(args: { phone: string; barberId: string | number; serviceId?: string | number }): Promise<SelectionItem[]> {
+    const { phone, barberId, serviceId } = args
+    const businessPhone = getBusinessPhoneForPhone(phone)
+    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+
+    if (!normalizedBusinessPhone) {
+      console.warn('[BarberService] business phone not found for phone:', phone)
+      return []
+    }
+
+    const resolvedBarberId = barberId !== undefined && barberId !== null ? String(barberId).trim() : ''
+    if (!resolvedBarberId) {
+      console.warn('[BarberService] barberId not provided while fetching available days.', { phone })
+      return []
+    }
+
+    try {
+      const params: Record<string, any> = {
+        days: 15,  // Próximos 15 dias
+      }
+
+      if (serviceId !== undefined && serviceId !== null) {
+        const numericServiceId = Number(serviceId)
+        if (Number.isFinite(numericServiceId)) {
+          params.serviceId = numericServiceId
+        }
+      }
+
+      const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/barbers/${encodeURIComponent(resolvedBarberId)}/available-days`
+      const response = await api.get(url, { params })
+
+      const data = response?.data?.data?.data
+      if (!data) {
+        console.warn('[BarberService] Invalid response structure for available days:', response?.data)
+        return []
+      }
+
+      if (!Array.isArray(data.availableDays)) {
+        console.warn('[BarberService] availableDays is not an array:', data)
+        return []
+      }
+
+      if (data.availableDays.length === 0) {
+        console.info('[BarberService] No available days found for barberId:', resolvedBarberId)
+        return []
+      }
+
+      // Transformar em SelectionItem para compatibilidade com o select flow
+      return data.availableDays.map((day: any) => {
+        // Garantir que day tem os campos esperados
+        if (!day.date || !day.displayDate) {
+          console.warn('[BarberService] Day object missing required fields:', day)
+          return null
+        }
+
+        return {
+          id: day.date,
+          name: day.displayDate,
+          description: `${day.slotsCount || 0} horários disponíveis`,
+        }
+      }).filter((item: any) => item !== null)
+    } catch (error) {
+      console.error('[BarberService] Error fetching available days:', error)
+      throw new Error('Erro ao buscar dias disponíveis.')
+    }
+  }
 }
 
 export const barberService = new BarberService()

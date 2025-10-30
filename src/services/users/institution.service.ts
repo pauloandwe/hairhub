@@ -9,18 +9,12 @@ export class InstitutionService {
   private servicePrefix = process.env.USERS_URL
 
   async listInstitutions(phone: string): Promise<InstitutionSummary[]> {
-    // const institutionConsultantId = getInstitutionConsultantIdForPhone(phone)
-    const institutionConsultantId = 0
-    if (!institutionConsultantId) {
-      console.warn('[InstitutionService] listInstitutions chamado sem institutionConsultantId no contexto do usuário', phone)
-    }
-
     const params: any = {
       filters: 'isActive:true',
       pageSize: 100,
     }
 
-    const response = await api.get(`${this.servicePrefix}/consultants/wallets/${institutionConsultantId}`, { params })
+    const response = await api.get(`${this.servicePrefix}/consultants/wallets/`, { params })
 
     const rawItems: any[] = response?.data?.data?.data ?? []
 

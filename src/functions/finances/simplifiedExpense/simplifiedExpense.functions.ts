@@ -39,7 +39,7 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
         deleteSuccess: 'Registro excluído com sucesso!',
         deleteError: 'Erro ao excluir o registro. Por favor, tente novamente.',
         buttonHeaderSuccess: 'Despesa cadastrada!',
-        useNaturalLanguage: true,
+        useNaturalLanguage: false,
       },
       accessControl: {
         allowedPlanIds: [Plan.BASIC],
@@ -135,19 +135,23 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     })
   }
 
-  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: SimplifiedExpenseValidationDraft, summary: string, errorMessage: string): Promise<void> {
+  protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: SimplifiedExpenseValidationDraft, summary: string, errorMessage: string, recordId: string | null): Promise<void> {
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
       message: 'O que você quer fazer?',
-      editLabel: '✏️ Editar',
-      cancelLabel: '❌ Cancelar',
+      editLabel: 'Editar',
+      cancelLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar dados')
-        await this.promptForDraftEdit(userId)
+        if (recordId) {
+          await this.promptForDraftEdit(userId)
+        } else {
+          await this.promptForDraftCorrection(userId)
+        }
       },
       onCancel: async (userId) => {
         await appendUserTextAuto(userId, 'Cancelar cadastro')
@@ -169,6 +173,46 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
       ...args,
       promptMessage: this.options.messages.editPromptFallback,
     })
+  }
+
+  searchCostCenter = async (args: { phone: string; query: string }) => {
+    const trimmedQuery = args.query?.trim()
+
+    if (!trimmedQuery) {
+      return {
+        success: false,
+        message: 'Preciso que você informe um nome ou índice para pesquisar o centro de custo.',
+        results: [],
+      }
+    }
+
+    try {
+      const results = await simplifiedExpenseService.searchCostCenters(args.phone, trimmedQuery)
+
+      if (results.length === 0) {
+        return {
+          success: false,
+          message: `Nenhum centro de custo encontrado para "${trimmedQuery}". Tente novamente com um nome ou índice diferente.`,
+          results: [],
+        }
+      }
+
+      return {
+        success: true,
+        message: `Encontrei ${results.length} centro(s) de custo para "${trimmedQuery}".`,
+        results: results.map((cc) => ({
+          id: cc.id,
+          name: cc.name,
+        })),
+      }
+    } catch (error) {
+      console.error(`[searchCostCenter] Erro ao buscar centros de custo:`, error)
+      return {
+        success: false,
+        message: 'Erro ao buscar centros de custo. Por favor, tente novamente.',
+        results: [],
+      }
+    }
   }
 
   applyExpenseRecordUpdates = async (args: { phone: string; updates: Partial<UpsertSimplifiedExpenseArgs>; successMessage?: string; logContext?: string }) => {
@@ -198,7 +242,11 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     log(`[SimplifiedExpenseFlow] Registro de despesa simples criado com sucesso. (userId: ${phone})`)
   }
 
-  protected async onCreateError(phone: string, error: unknown): Promise<void> {
+  protected async onCreateError(phone: string, draft: SimplifiedExpenseValidationDraft, error: unknown, userMessage: string): Promise<void> {
+    await super.onCreateError(phone, draft, error, userMessage)
+
+    void draft
+    void userMessage
     log(`[SimplifiedExpenseFlow] Erro ao criar registro de despesa simples. (userId: ${phone})`, error)
   }
 

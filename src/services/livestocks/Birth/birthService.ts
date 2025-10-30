@@ -5,7 +5,7 @@ import { GenericService } from '../../generic/generic.service'
 import { BirthRecord, IBirthCreationPayload, IBirthValidationDraft, UpsertBirthArgs } from './birth.types'
 import { MissingRule } from '../../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../../generic/generic.types'
-import { getBusinessIdForPhone, resetActiveRegistration } from '../../../env.config'
+import { resetActiveRegistration } from '../../../env.config'
 import { convertEnumToSelectArray } from '../../../helpers/converters/converters'
 import { Categories, CategoriesLabels } from '../../../enums/birthCategories.enums'
 import { SelectArrayItem } from '../../../helpers/converters/converters.type'
@@ -179,22 +179,17 @@ export class BirthService extends GenericService<IBirthValidationDraft, IBirthCr
   }
 
   protected buildListParams = (listType: string, context: { phone: string }): Record<string, any> => {
-    // const institutionId = getInstitutionIdForPhone(context.phone)
-    const institutionId = 0
     switch (listType) {
       case BirthField.Category:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isCategory:IN:true',
         }
       case BirthField.Area:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isArea:IN:true',
         }
       case BirthField.Retreat:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isRetreat:IN:true',
         }
       default:
@@ -292,8 +287,7 @@ export class BirthService extends GenericService<IBirthValidationDraft, IBirthCr
   }
 
   create = async (phone: string, draft: IBirthValidationDraft): Promise<{ id: string }> => {
-    const farmId = getBusinessIdForPhone(phone)
-    const endpoint = `/${farmId}/births`
+    const endpoint = `/1/births`
     try {
       const result = await this._createRecord(phone, draft, endpoint)
       return result

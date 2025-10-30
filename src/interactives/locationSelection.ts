@@ -3,7 +3,7 @@ import { FlowType } from '../enums/generic.enum'
 import { AnimalLotOption, AnimalLotSelectionService } from '../services/livestocks/animal-lot.service'
 import { birthService } from '../services/livestocks/Birth/birthService'
 import { updateDraftWithAnimalLotSelection } from '../services/livestocks/death-draft.service'
-import { getBusinessIdForPhone, getUserContext, setUserContext, getUserContextSync } from '../env.config'
+import { getUserContext, setUserContext, getUserContextSync } from '../env.config'
 import { createSelectionFlow } from './flows'
 import { tryContinueRegistration } from './followup'
 import { deathFunctions } from '../functions/livestocks/death/death.functions'
@@ -12,6 +12,9 @@ import { DeathField } from '../enums/cruds/deathFields.enums'
 import { BirthField } from '../enums/cruds/birthFields.enum'
 import { UpsertBirthArgs } from '../services/livestocks/Birth/birth.types'
 import { UpsertArgs as DeathUpsertArgs } from '../services/livestocks/death-draft.service'
+import { purchaseService } from '../services/livestocks/Purchase/purchaseService'
+import { PurchaseField, UpsertPurchaseArgs } from '../services/livestocks/Purchase/purchase.types'
+import { purchaseFunctions } from '../functions/livestocks/purchase/purchase.functions'
 
 type LocationSelectionConfig = {
   namespace: string
@@ -21,6 +24,7 @@ type LocationSelectionConfig = {
   successMessageBuilder?: (item: AnimalLotOption) => string
   applySelection?: (userId: string, item: AnimalLotOption) => Promise<void>
   applyEditModeSelection?: (userId: string, item: AnimalLotOption) => Promise<void>
+  onlyWithAnimals?: boolean
 }
 
 type LocationSelector = {
@@ -37,8 +41,7 @@ const buildBaseSelectionFlow = (config: LocationSelectionConfig): LocationSelect
     type: 'selectLocation',
     fetchItems: async (userId) => {
       const service = new AnimalLotSelectionService()
-      const farmId = getBusinessIdForPhone(userId)
-      return service.listAnimalLots(farmId)
+      return service.listAnimalLots(`1`, config.onlyWithAnimals)
     },
     ui: {
       header: DEFAULT_HEADER,
@@ -91,6 +94,7 @@ const buildBaseSelectionFlow = (config: LocationSelectionConfig): LocationSelect
 
 export const LOCATION_NAMESPACE = 'LOCATION'
 export const BIRTH_LOCATION_NAMESPACE = 'BIRTH_LOCATION'
+export const PURCHASE_LOCATION_NAMESPACE = 'PURCHASE_LOCATION'
 
 const deathLocationSelector = buildBaseSelectionFlow({
   namespace: LOCATION_NAMESPACE,
@@ -147,6 +151,33 @@ const birthLocationSelector = buildBaseSelectionFlow({
       logContext: `Localização atualizada para ${item.retreatName} -> ${item.areaName}`,
     })
   },
+  onlyWithAnimals: false,
+})
+
+const purchaseLocationSelector = buildBaseSelectionFlow({
+  namespace: PURCHASE_LOCATION_NAMESPACE,
+  flowType: FlowType.Appointment,
+  defaultBody: 'Bora escolher a localização (Retiro → Área) 👇',
+  emptyListMessage: 'Nenhuma localização encontrada',
+  successMessageBuilder: (item) => `${item.retreatName} -> ${item.areaName}`,
+  applySelection: async (userId, item) => {
+    await purchaseService.updateDraft(userId, {
+      area: { id: item.areaId, name: item.areaName },
+      retreat: { id: item.retreatId, name: item.retreatName },
+    })
+  },
+  applyEditModeSelection: async (userId, item) => {
+    const updates: Partial<UpsertPurchaseArgs> = {
+      [PurchaseField.Retreat]: { id: item.retreatId, name: item.retreatName },
+      [PurchaseField.Area]: { id: item.areaId, name: item.areaName },
+    }
+    await purchaseFunctions.applyPurchaseRecordUpdates({
+      phone: userId,
+      updates,
+      logContext: `Localização atualizada para ${item.retreatName} -> ${item.areaName}`,
+    })
+  },
+  onlyWithAnimals: false,
 })
 
 export async function sendLocationSelectionList(userId: string, bodyMsg = 'Bora escolher a localização (Retiro → Área → Lote) 👇', offset = 0) {
@@ -155,4 +186,8 @@ export async function sendLocationSelectionList(userId: string, bodyMsg = 'Bora 
 
 export async function sendBirthLocationSelectionList(userId: string, bodyMsg = 'Bora escolher a localização (Retiro → Área) 👇', offset = 0) {
   await birthLocationSelector.sendList(userId, bodyMsg, offset)
+}
+
+export async function sendPurchaseLocationSelectionList(userId: string, bodyMsg = 'Por favor, selecione a localização desejada.', offset = 0) {
+  await purchaseLocationSelector.sendList(userId, bodyMsg, offset)
 }

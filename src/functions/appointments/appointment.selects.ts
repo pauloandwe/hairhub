@@ -2,6 +2,7 @@ import { sendWhatsAppMessageWithTitle } from '../../api/meta.api'
 import { sendServiceSelectionList } from '../../interactives/appointments/serviceSelection'
 import { sendBarberSelectionList } from '../../interactives/appointments/barberSelection'
 import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
+import { sendDateSelectionList } from '../../interactives/appointments/dateSelection'
 import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
 import { FieldEditor } from '../functions.types'
@@ -22,9 +23,8 @@ const askWithTitle = async (phone: string, message: string): Promise<void> => {
 }
 
 const editDate: FieldEditor = async (phone) => {
-  const message = 'Qual a data que você prefere? (formato dd/mm/aaaa)'
-  await askWithTitle(phone, message)
-  return respond('Data solicitada', false)
+  await sendDateSelectionList(phone, 'Qual data você prefere? 👇')
+  return respond('Menu de datas enviado', true)
 }
 
 const editTime: FieldEditor = async (phone) => {
@@ -59,9 +59,8 @@ export const appointmentFieldEditors: Record<AppointmentEditField, FieldEditor> 
 type MissingFieldHandler = (phone: string, draft: IAppointmentValidationDraft) => Promise<{ message: string; interactive: boolean; draft: IAppointmentValidationDraft }>
 
 const askDate: MissingFieldHandler = async (phone, draft) => {
-  const message = 'Qual a data que você prefere? (formato dd/mm/aaaa)'
-  await askWithTitle(phone, message)
-  return { message, interactive: false, draft }
+  await sendDateSelectionList(phone, 'Qual data você prefere? 👇')
+  return { message: 'Menu de datas enviado', interactive: true, draft }
 }
 
 const askTime: MissingFieldHandler = async (phone, draft) => {

@@ -6,6 +6,8 @@ export interface IBaseEntity {
 export interface SelectionItem {
   id: string
   name: string
+  description?: string
+  [key: string]: any
 }
 
 export interface SummarySections {
@@ -15,3 +17,8 @@ export interface SummarySections {
 export type FieldKind = 'number' | 'string' | 'ref' | 'custom'
 
 export type DraftStatus = 'collecting' | 'awaiting_confirmation' | 'confirmed' | 'completed'
+
+export interface RegistrationDraftBase {
+  status?: DraftStatus
+  recordId?: string | null
+}

@@ -4,6 +4,7 @@ import { UsersService } from '../services/users/users.service'
 import { setUserContext } from '../env.config'
 import { createSelectionFlow } from './flows'
 import { clearAllUserIntents } from '../services/intent-history.service'
+import { FarmSelectionError } from '../services/farms/farm.errors'
 
 export const FARM_NAMESPACE = 'FARM'
 
@@ -33,7 +34,6 @@ const farmFlow = createSelectionFlow<{ id: string; name: string }>({
     } catch (e) {
       console.error('Falha ao persistir fazenda no UsersService', e)
     }
-    // await setFarmIdForPhone(userId, item.id)
     try {
       if (item?.name) await setUserContext(userId, { farmName: item.name })
     } catch {}
@@ -41,6 +41,16 @@ const farmFlow = createSelectionFlow<{ id: string; name: string }>({
     const text = `Fazenda '${item.name}' selecionada. Pode continuar sua pergunta.`
     await sendWhatsAppMessage(userId, text)
     clearAllUserIntents(userId)
+  },
+  onError: async ({ userId, error }) => {
+    if (error instanceof FarmSelectionError) {
+      const { sendInstitutionSelectionList } = await import('./institutionSelection')
+      const message = error.code === 'MISSING_INSTITUTION' ? 'Não encontrei a instituição selecionada. Vamos escolher novamente?' : 'Tive um problema ao listar as fazendas. Vamos selecionar a instituição novamente para continuar.'
+      await sendWhatsAppMessage(userId, message)
+      await sendInstitutionSelectionList(userId)
+      return true
+    }
+    return false
   },
 })
 

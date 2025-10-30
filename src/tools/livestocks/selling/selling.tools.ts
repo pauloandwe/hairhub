@@ -5,7 +5,7 @@ export const sellingTools: OpenAITool[] = [
   {
     type: 'function',
     function: {
-      name: 'startSaleRegistration',
+      name: 'startSellingRegistration',
       description: `DISPARADOR (INTENÇÃO):
 - SEMPRE use esta ferramenta quando o usuário mencionar vender, registrar venda, lançar venda, transferir animais, ou qualquer operação de saída de animais.
 - Se houver dados na própria frase (ex.: tipo de venda, data, peso, quantidade, valor unitário, categoria, área, retiro), preencha esses campos e envie junto.
@@ -27,9 +27,9 @@ QUANDO NÃO USAR:
 - Consultas/estatísticas → não usar esta função.
 
 EXEMPLOS:
-- "Quero registrar a venda de 5 animais hoje no retiro 1" → startSaleRegistration({ quantity: 5, saleDate: "<YYYY-MM-DD de hoje>", retreat: "Retiro 1" })
-- "Transferir 10 novilhas da área 2 para a área 3" → startSaleRegistration({ saleType: 2, quantity: 10, category: "novilha", area: "Área 2", originArea: "Área 3" })
-- "Quero lançar uma venda" → startSaleRegistration({})`,
+- "Quero registrar a venda de 5 animais hoje no retiro 1" → startSellingRegistration({ quantity: 5, saleDate: "<YYYY-MM-DD de hoje>", retreat: "Retiro 1" })
+- "Transferir 10 novilhas da área 2 para a área 3" → startSellingRegistration({ saleType: 2, quantity: 10, category: "novilha", area: "Área 2", originArea: "Área 3" })
+- "Quero lançar uma venda" → startSellingRegistration({})`,
       parameters: {
         type: 'object',
         properties: {
@@ -123,7 +123,7 @@ EXEMPLOS:
   {
     type: 'function',
     function: {
-      name: 'editSaleRecordField',
+      name: 'editSellingsRecordField',
       description: `Edita um campo específico de um registro de venda já criado (não um rascunho em andamento).
 
 QUANDO USAR:
@@ -132,9 +132,9 @@ QUANDO USAR:
 - Use esta função para modificar: Tipo de venda, Data, Peso, Quantidade, Valor unitário, Categoria, Retiro, Área ou Observação
 
 EXEMPLOS:
-- "Alterar data de venda para 20/03/2024" → editSaleRecordField({ field: "saleDate", value: "2024-03-20" })
-- "Mudar quantidade para 10" → editSaleRecordField({ field: "quantity", value: 10 })
-- "Trocar categoria" → editSaleRecordField({ field: "category", value: "novilha" })
+- "Alterar data de venda para 20/03/2024" → editSellingsRecordField({ field: "saleDate", value: "2024-03-20" })
+- "Mudar quantidade para 10" → editSellingsRecordField({ field: "quantity", value: 10 })
+- "Trocar categoria" → editSellingsRecordField({ field: "category", value: "novilha" })
 
 NÃO USAR para rascunhos em andamento (use changeSaleRegistrationField)`,
       parameters: {

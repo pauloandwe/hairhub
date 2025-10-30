@@ -3,8 +3,9 @@ import { env } from '../env.config'
 import type { ListRow } from '../utils/interactive'
 import { withAssistantTitlePhone } from '../utils/message'
 import { whatsappLogger } from '../utils/pino'
+import { cancelTypingIndicatorForUser } from '../utils/typingIndicatorManager'
 
-const WHATSAPP_API_VERSION = 'v19.0'
+const WHATSAPP_API_VERSION = env.WHATSAPP_API_VERSION
 const PHONE_NUMBER_ID = env.PHONE_NUMBER_ID
 const META_ACCESS_TOKEN = env.META_ACCESS_TOKEN
 const metaApi = axios.create({
@@ -18,6 +19,8 @@ export function sendWhatsAppMessageWithTitle(to: string, text: string): Promise<
 }
 
 export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+  cancelTypingIndicatorForUser(to)
+
   if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
     throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
   }
@@ -67,6 +70,44 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
   }
 }
 
+export async function sendWhatsAppTypingIndicator(params: { messageId: string; typingType?: 'text' | 'audio' | 'image' | 'video' | 'document' | 'sticker' }): Promise<void> {
+  const { messageId, typingType = 'text' } = params
+
+  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
+    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
+  }
+
+  try {
+    const payload = {
+      messaging_product: 'whatsapp',
+      status: 'read' as const,
+      message_id: messageId,
+      typing_indicator: {
+        type: typingType,
+      },
+    }
+
+    whatsappLogger.info({ messageId, typingType, payload }, 'Sending typing indicator to WhatsApp receiver')
+
+    await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
+      headers: {
+        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    })
+  } catch (error: any) {
+    whatsappLogger.error(
+      {
+        messageId,
+        typingType,
+        responseData: error?.response?.data,
+        error,
+      },
+      'Failed to send typing indicator to WhatsApp receiver',
+    )
+  }
+}
+
 export async function sendWhatsAppInteractiveList(params: {
   to: string
   header?: string
@@ -81,6 +122,8 @@ export async function sendWhatsAppInteractiveList(params: {
   }[]
 }): Promise<void> {
   const { to, header, body, footer, buttonLabel = 'Selecionar', rows, sectionTitle = 'Itens', extraSections } = params
+
+  cancelTypingIndicatorForUser(to)
 
   if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
     throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
@@ -151,6 +194,8 @@ export async function sendWhatsAppInteractiveList(params: {
 
 export async function sendWhatsAppInteractiveButtons(params: { to: string; body: string; header?: string; footer?: string; buttons: { id: string; title: string }[] }): Promise<void> {
   const { to, body, header, footer, buttons } = params
+
+  cancelTypingIndicatorForUser(to)
 
   if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
     throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')

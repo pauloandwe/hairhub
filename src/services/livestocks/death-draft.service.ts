@@ -1,6 +1,6 @@
 import { DeathField } from '../../enums/cruds/deathFields.enums'
 import { GenericService } from '../generic/generic.service'
-import { IBaseEntity, SelectionItem, SummarySections } from '../generic/generic.types'
+import { DraftStatus, IBaseEntity, SelectionItem, SummarySections } from '../generic/generic.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { mergeIdNameRef } from '../drafts/ref.utils'
 import { ChatMessage, IdNameRef, PartialIdNameRef } from '../drafts/types'
@@ -17,7 +17,7 @@ export interface DeathValidationDraft {
   animalLot: IdNameRef
   retreat: IdNameRef
   area: IdNameRef
-  status?: 'collecting' | 'awaiting_confirmation' | 'completed'
+  status?: DraftStatus
   recordId?: string
 }
 

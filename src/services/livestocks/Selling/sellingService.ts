@@ -1,20 +1,20 @@
 import { addMinutes, format, isValid, parse, parseISO } from 'date-fns'
 import api from '../../../config/api.config'
 import { SellingField } from '../../../enums/cruds/sellingFields.enum'
-import { SellingTypesEnum, SellingTypesLabels } from '../../../enums/saleTypes.enum'
+import { SellingTypesEnum, SellingTypesLabels } from '../../../enums/sellingTypes.enum'
 import { emptySaleDraft } from '../../drafts/livestock/selling/selling.draft'
 import { GenericService } from '../../generic/generic.service'
-import { SaleRecord, ISaleCreationPayload, ISaleValidationDraft, UpsertSaleArgs } from './selling.types'
+import { SellingsRecord, ISellingsCreationPayload, ISellingsValidationDraft, UpsertSellingsArgs } from './selling.types'
 import { MissingRule } from '../../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../../generic/generic.types'
-import { getBusinessIdForPhone, resetActiveRegistration } from '../../../env.config'
+import { resetActiveRegistration } from '../../../env.config'
 import { SelectArrayItem } from '../../../helpers/converters/converters.type'
 import { mergeIdNameRef } from '../../drafts/ref.utils'
 import { IdNameRef } from '../../drafts/types'
 import { clearAllUserIntents } from '../../intent-history.service'
 import { formatCurrency, parseLocalizedNumber, parsePositiveInteger, toIntegerCents } from '../../../utils/numbers'
 
-const VALID_EDITABLE_FIELDS: (keyof UpsertSaleArgs)[] = [
+const VALID_EDITABLE_FIELDS: (keyof UpsertSellingsArgs)[] = [
   SellingField.SaleType,
   SellingField.SaleDate,
   SellingField.AliveWeight,
@@ -37,7 +37,7 @@ const VALID_EDITABLE_FIELDS: (keyof UpsertSaleArgs)[] = [
   SellingField.HarvestConfiguration,
 ]
 
-export class SellingService extends GenericService<ISaleValidationDraft, ISaleCreationPayload, SaleRecord, UpsertSaleArgs> {
+export class SellingService extends GenericService<ISellingsValidationDraft, ISellingsCreationPayload, SellingsRecord, UpsertSellingsArgs> {
   constructor() {
     super('selling', emptySaleDraft, process.env.LIVESTOCKS_URL || '', '/sellings/chat-auto-complete', VALID_EDITABLE_FIELDS, {
       endpoints: {
@@ -106,7 +106,7 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
     return format(parsedDate, 'dd/MM/yyyy')
   }
 
-  protected validateDraftArgsTypes = (args: Partial<UpsertSaleArgs>, currentDraft: ISaleValidationDraft): void => {
+  protected validateDraftArgsTypes = (args: Partial<UpsertSellingsArgs>, currentDraft: ISellingsValidationDraft): void => {
     if (args.saleType !== undefined) {
       if (args.saleType === null) {
         currentDraft.saleType = null
@@ -216,7 +216,7 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
       }
     }
 
-    const assignRef = (field: keyof Pick<ISaleValidationDraft, 'category' | 'retreat' | 'area' | 'destinationFarm' | 'destinationRetreat' | 'destinationArea' | 'harvestConfiguration' | 'animalLotId' | 'fatteningSystemId'>, incoming: IdNameRef | null | undefined) => {
+    const assignRef = (field: keyof Pick<ISellingsValidationDraft, 'category' | 'retreat' | 'area' | 'destinationFarm' | 'destinationRetreat' | 'destinationArea' | 'harvestConfiguration' | 'animalLotId' | 'fatteningSystemId'>, incoming: IdNameRef | null | undefined) => {
       if (incoming === undefined) return
       if (incoming === null) {
         currentDraft[field] = null
@@ -259,10 +259,10 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
     if (args.fatteningSystemId) assignRef('fatteningSystemId', args.fatteningSystemId as IdNameRef | null | undefined)
   }
 
-  protected getRequiredFields = (): MissingRule<ISaleValidationDraft>[] => {
+  protected getRequiredFields = (): MissingRule<ISellingsValidationDraft>[] => {
     const isSlaughterLike = (saleType: SellingTypesEnum | null): boolean => [SellingTypesEnum.SLAUGHTER, SellingTypesEnum.CONSUMPTION, SellingTypesEnum.DONATION].includes(saleType ?? (0 as any))
 
-    const rules: MissingRule<ISaleValidationDraft>[] = [
+    const rules: MissingRule<ISellingsValidationDraft>[] = [
       { key: SellingField.SaleType, kind: 'number' },
       { key: SellingField.SaleDate, kind: 'string' },
       {
@@ -405,121 +405,121 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
     return [
       {
         label: 'Tipo de Venda',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           const saleType = draft.saleType
           return saleType ? SellingTypesLabels[saleType] : null
         },
       },
       {
         label: 'Data de Venda',
-        value: (draft: ISaleValidationDraft) => this.formatDraftDate(draft.saleDate),
+        value: (draft: ISellingsValidationDraft) => this.formatDraftDate(draft.saleDate),
       },
       {
         label: 'Peso Vivo',
-        value: (draft: ISaleValidationDraft) => draft.aliveWeight ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.aliveWeight ?? null,
       },
       {
         label: 'Quantidade',
-        value: (draft: ISaleValidationDraft) => draft.quantity,
+        value: (draft: ISellingsValidationDraft) => draft.quantity,
       },
       {
         label: 'Valor Unitário',
-        value: (draft: ISaleValidationDraft) => formatCurrency(draft.unityValue),
+        value: (draft: ISellingsValidationDraft) => formatCurrency(draft.unityValue),
       },
       {
         label: 'Categoria',
-        value: (draft: ISaleValidationDraft) => draft.category?.name ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.category?.name ?? null,
       },
       {
         label: 'Área',
-        value: (draft: ISaleValidationDraft) => draft.area?.name ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.area?.name ?? null,
       },
       {
         label: 'Retiro',
-        value: (draft: ISaleValidationDraft) => draft.retreat?.name ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.retreat?.name ?? null,
       },
       {
         label: 'Safra',
-        value: (draft: ISaleValidationDraft) => draft.harvestConfiguration?.name ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.harvestConfiguration?.name ?? null,
       },
       {
         label: 'Peso Morto',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (!isSlaughterLike(draft.saleType)) return null
           return draft.deadWeight ?? null
         },
       },
       {
         label: 'Custo da Arroba',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (!isSlaughterLike(draft.saleType)) return null
           return formatCurrency(draft.arrobaCost)
         },
       },
       {
         label: 'Rendimento de Carcaça',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (!isSlaughterLike(draft.saleType)) return null
           return draft.carcassYield ?? null
         },
       },
       {
         label: 'Idade',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.SLAUGHTER) return null
           return draft.age ? `${draft.age} meses` : null
         },
       },
       {
         label: 'Sistema de Engorda',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.SLAUGHTER) return null
           return draft.fatteningSystemId?.name ?? null
         },
       },
       {
         label: 'Destino Externo?',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.TRANSFER) return null
           return draft.isExternalDestination ? 'Sim' : 'Não'
         },
       },
       {
         label: 'Fazenda de Destino',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.TRANSFER || draft.isExternalDestination) return null
           return draft.destinationFarm?.name ?? null
         },
       },
       {
         label: 'Área de Destino',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.TRANSFER || draft.isExternalDestination) return null
           return draft.destinationArea?.name ?? null
         },
       },
       {
         label: 'Retiro de Destino',
-        value: (draft: ISaleValidationDraft) => {
+        value: (draft: ISellingsValidationDraft) => {
           if (draft.saleType !== SellingTypesEnum.TRANSFER || draft.isExternalDestination) return null
           return draft.destinationRetreat?.name ?? null
         },
       },
       {
         label: 'Lote Animal',
-        value: (draft: ISaleValidationDraft) => draft.animalLotId?.name ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.animalLotId?.name ?? null,
       },
       {
         label: 'Observação',
-        value: (draft: ISaleValidationDraft) => draft.observation ?? null,
+        value: (draft: ISellingsValidationDraft) => draft.observation ?? null,
       },
     ]
   }
 
-  protected transformToApiPayload = (draft: ISaleValidationDraft, context: { farmId: number }): ISaleCreationPayload => {
+  protected transformToApiPayload = (draft: ISellingsValidationDraft, context: { farmId: number }): ISellingsCreationPayload => {
     const saleType = draft.saleType ?? SellingTypesEnum.SALE
 
-    const finalPayload: ISaleCreationPayload = {
+    const finalPayload: ISellingsCreationPayload = {
       sellingDate: draft.saleDate as string,
       sellingTypeId: saleType,
       categoryId: Number(draft.category?.id) || 0,
@@ -559,24 +559,19 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
   }
 
   protected buildListParams = (listType: string, context: { phone: string }): Record<string, any> => {
-    // const institutionId = getInstitutionIdForPhone(context.phone)
-    const institutionId = 0
     switch (listType) {
       case SellingField.Category:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isCategory:IN:true',
         }
       case SellingField.Area:
       case SellingField.DestinationArea:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isArea:IN:true',
         }
       case SellingField.Retreat:
       case SellingField.DestinationRetreat:
         return {
-          filters: `institutionId:${institutionId}`,
           advancedFilters: 'isRetreat:IN:true',
         }
       default:
@@ -633,9 +628,9 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
     }
   }
 
-  protected override buildPartialUpdatePayload(draft: ISaleValidationDraft, updates: Partial<UpsertSaleArgs>): Partial<ISaleCreationPayload> {
-    const payload: Partial<ISaleCreationPayload> = {}
-    const has = (field: keyof UpsertSaleArgs): boolean => Object.prototype.hasOwnProperty.call(updates, field)
+  protected override buildPartialUpdatePayload(draft: ISellingsValidationDraft, updates: Partial<UpsertSellingsArgs>): Partial<ISellingsCreationPayload> {
+    const payload: Partial<ISellingsCreationPayload> = {}
+    const has = (field: keyof UpsertSellingsArgs): boolean => Object.prototype.hasOwnProperty.call(updates, field)
 
     const invalidFields = Object.keys(updates).filter((field) => !this.isFieldValid(field))
     if (invalidFields.length > 0) {
@@ -766,9 +761,8 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
     return payload
   }
 
-  create = async (phone: string, draft: ISaleValidationDraft): Promise<{ id: string }> => {
-    const farmId = getBusinessIdForPhone(phone)
-    const endpoint = `/${farmId}/sellings`
+  create = async (phone: string, draft: ISellingsValidationDraft): Promise<{ id: string }> => {
+    const endpoint = `/1/sellings`
     try {
       const result = await this._createRecord(phone, draft, endpoint)
       return result
@@ -782,7 +776,7 @@ export class SellingService extends GenericService<ISaleValidationDraft, ISaleCr
   }
 
   getValidFieldsFormatted = (): string => {
-    const fieldLabels: Partial<Record<keyof UpsertSaleArgs, string>> = {
+    const fieldLabels: Partial<Record<keyof UpsertSellingsArgs, string>> = {
       saleType: 'tipo de venda',
       saleDate: 'data de venda',
       aliveWeight: 'peso vivo',

@@ -108,11 +108,11 @@ export async function sendConfirmationButtons({ namespace, userId, message = 'Tu
   })
 }
 
-export async function sendEditDeleteButtons({ namespace, userId, message = 'O que deseja fazer? 🤔', editLabel = '✏️ Editar', deleteLabel = '🗑️ Excluir', onEdit, onDelete, summaryText, header = 'Pronto!' }: EditDeleteOptions) {
+export async function sendEditDeleteButtons({ namespace, userId, message = 'O que deseja fazer?', editLabel = 'Editar', deleteLabel = '🗑️ Excluir', onEdit, onDelete, summaryText, header = 'Pronto!' }: EditDeleteOptions) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const deleteId = buildNamespacedId(namespace, 'DELETE')
 
-  const body = summaryText || '✅ Registro criado.'
+  const body = summaryText || 'Registro criado.'
   const footer = message
 
   await sendWhatsAppInteractiveButtons({
@@ -163,11 +163,11 @@ type EditDeleteOptionsAfterError = EditDeleteOptions & {
   errorMessage?: string
 }
 
-export async function sendEditDeleteButtonsAfterError({ namespace, userId, message = 'O que você quer fazer agora?', editLabel = '✏️ Editar', deleteLabel = '🗑️ Excluir', onEdit, onDelete, summaryText, header = 'Ops!', errorMessage }: EditDeleteOptionsAfterError) {
+export async function sendEditDeleteButtonsAfterError({ namespace, userId, message = 'O que você quer fazer agora?', editLabel = 'Editar', deleteLabel = 'Excluir', onEdit, onDelete, summaryText, header = 'Ops!', errorMessage }: EditDeleteOptionsAfterError) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const deleteId = buildNamespacedId(namespace, 'DELETE')
 
-  const body = summaryText || '⚠️ Houve um problema ao atualizar.'
+  const body = summaryText || 'Houve um problema ao atualizar.'
   const footer = message
 
   await sendWhatsAppInteractiveButtons({
@@ -227,11 +227,11 @@ type EditCancelOptionsAfterCreationError = {
   onCancel: (userId: string) => Promise<void>
 }
 
-export async function sendEditCancelButtonsAfterCreationError({ namespace, userId, message = 'O que você quer fazer?', editLabel = '✏️ Editar', cancelLabel = '❌ Cancelar', onEdit, onCancel, summaryText, header = 'Ops!', errorMessage }: EditCancelOptionsAfterCreationError) {
+export async function sendEditCancelButtonsAfterCreationError({ namespace, userId, message = 'O que você quer fazer?', editLabel = 'Editar', cancelLabel = 'Cancelar', onEdit, onCancel, summaryText, header = 'Ops!', errorMessage }: EditCancelOptionsAfterCreationError) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const cancelId = buildNamespacedId(namespace, 'CANCEL')
 
-  const body = summaryText || '⚠️ Não foi possível criar o registro.'
+  const body = summaryText || 'Não foi possível criar o registro.'
   const footer = message
 
   await sendWhatsAppInteractiveButtons({

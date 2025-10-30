@@ -1,27 +1,27 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
+import { getUserContext, getUserContextSync, setUserContext } from '../../env.config'
+import { purchaseFunctions } from '../../functions/livestocks/purchase/purchase.functions'
 import { SelectArrayItem } from '../../helpers/converters/converters.type'
-import { sellingService } from '../../services/livestocks/Selling/sellingService'
+import { purchaseService } from '../../services/livestocks/Purchase/purchaseService'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
-import { saleFunctions } from '../../functions/livestocks/selling/selling.functions'
 
-export const SALE_CATEGORY_NAMESPACE = 'SALE_CATEGORY'
+export const PURCHASE_CATEGORY_NAMESPACE = 'PURCHASE_CATEGORY'
 
-const saleCategoriesFlow = createSelectionFlow<SelectArrayItem>({
-  namespace: SALE_CATEGORY_NAMESPACE,
-  type: 'selectSaleCategory',
+const purchaseCategoriesFlow = createSelectionFlow<SelectArrayItem>({
+  namespace: PURCHASE_CATEGORY_NAMESPACE,
+  type: 'selectPurchaseCategory',
   fetchItems: async () => {
-    return sellingService.listSaleCategories()
+    return purchaseService.listPurchaseCategories()
   },
   ui: {
-    header: 'Qual categoria do gado?',
+    header: 'Por favor, selecione a categoria desejada.',
     sectionTitle: 'Categorias',
     footer: 'Inttegra',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Bora selecionar a categoria para essa venda.',
+  defaultBody: 'Bora selecionar a categoria para essa compra.',
   invalidSelectionMsg: 'Opa, essa opção expirou. Deixe eu enviar de novo pra você.',
   emptyListMessage: 'Nenhuma categoria encontrada',
   pageLimit: 10,
@@ -32,18 +32,15 @@ const saleCategoriesFlow = createSelectionFlow<SelectArrayItem>({
     const ctx = getUserContextSync(userId)
 
     await setUserContext(userId, {
-      saleCategoryId: item.id,
-      saleCategoryName: item.name,
+      purchaseCategoryId: item.id,
+      purchaseCategoryName: item.name,
     })
 
-    if (ctx?.activeRegistration?.type === FlowType.Selling) {
-      await sellingService.updateDraftField(userId, 'category', { id: item.id, name: item.name })
-    }
     await sendWhatsAppMessage(userId, `Beleza! Categoria '${item.name}' já anotada.`)
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    await saleFunctions.applySellingsRecordUpdates({
+    await purchaseFunctions.applyPurchaseRecordUpdates({
       phone: userId,
       updates: { category: { id: item.id, name: item.name } },
       logContext: `Categoria atualizada para ${item.name}`,
@@ -51,6 +48,6 @@ const saleCategoriesFlow = createSelectionFlow<SelectArrayItem>({
   },
 })
 
-export async function sendSaleCategoriesList(userId: string, bodyMsg = 'Antes de continuar, selecione a categoria desejada.', offset = 0) {
-  await saleCategoriesFlow.sendList(userId, bodyMsg, offset)
+export async function sendPurchaseCategoriesList(userId: string, bodyMsg = 'Antes de continuar, selecione a categoria desejada.', offset = 0) {
+  await purchaseCategoriesFlow.sendList(userId, bodyMsg, offset)
 }
