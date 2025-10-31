@@ -31,8 +31,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return VALID_EDITABLE_FIELDS.map((field) => fieldLabels[field] || field).join(', ')
   }
   constructor() {
-    const buildEndpoint = ({ businessId }: { businessId?: string }): string =>
-      businessId ? `appointments/${businessId}/appointments` : '/appointments'
+    const buildEndpoint = ({ businessId }: { businessId?: string }): string => (businessId ? `appointments/${businessId}/appointments` : '/appointments')
 
     super(
       'appointment',
