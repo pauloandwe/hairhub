@@ -11,13 +11,6 @@ import { UpsertAppointmentArgs } from '../../services/appointments/appointment.t
 
 export const DATE_NAMESPACE = 'DATE_GROUP'
 
-/**
- * Flow de seleção de datas disponíveis
- *
- * Pré-requisitos: Barbeiro e serviço já devem estar selecionados
- * Busca os próximos 15 dias com slots disponíveis para o barbeiro
- * Formato: "Seg, 20/11 (8 horários disponíveis)"
- */
 const dateSelectionFlow = createSelectionFlow<SelectionItem>({
   namespace: DATE_NAMESPACE,
   type: 'selectDate',
@@ -26,12 +19,9 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     const barberId = draft.barber?.id ? Number(draft.barber.id) : null
     const serviceId = draft.service?.id ? Number(draft.service.id) : null
 
-    // Validar que temos os pré-requisitos
     if (!barberId) {
       console.warn('[dateSelectionFlow] Barbeiro não selecionado para buscar dias disponíveis', { phone })
-      // Voltar para seleção de barbeiro
       await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um barbeiro antes de escolher a data.')
-      // Retornar lista vazia para parar o fluxo
       return []
     }
 
@@ -48,7 +38,6 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
         serviceId,
       })
 
-      // Se não houver dias disponíveis, mostrar mensagem apropriada
       if (!days || days.length === 0) {
         console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, barberId, serviceId })
         await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias com o barbeiro selecionado. Tente novamente mais tarde ou escolha outro barbeiro.')

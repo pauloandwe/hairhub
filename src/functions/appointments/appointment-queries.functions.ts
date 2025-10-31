@@ -4,9 +4,6 @@ import { aiLogger } from '../../utils/pino'
 const logger = aiLogger.child({ module: 'appointment-queries' })
 
 export const appointmentQueryFunctions = {
-  /**
-   * Retorna os horários disponíveis para agendamento em um determinado dia
-   */
   getAvailableTimeSlots: async (args: { phone: string; date?: string; barberId?: number }): Promise<any> => {
     const { phone, date, barberId } = args
     const businessId = getBusinessIdForPhone(phone)
@@ -14,8 +11,6 @@ export const appointmentQueryFunctions = {
     logger.info({ businessId, date, barberId }, 'Consultando horários disponíveis')
 
     try {
-      // TODO: Integrar com API de horários disponíveis
-      // Por enquanto, retorna uma resposta simulada
       return {
         status: 'success',
         data: {
@@ -40,9 +35,6 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  /**
-   * Retorna o histórico de agendamentos do cliente
-   */
   getAppointmentHistory: async (args: { phone: string; clientPhone?: string; limit?: number }): Promise<any> => {
     const { phone, clientPhone, limit = 10 } = args
     const businessId = getBusinessIdForPhone(phone)
@@ -50,8 +42,6 @@ export const appointmentQueryFunctions = {
     logger.info({ businessId, clientPhone, limit }, 'Consultando histórico de agendamentos')
 
     try {
-      // TODO: Integrar com API de histórico de agendamentos
-      // Por enquanto, retorna uma resposta simulada
       return {
         status: 'success',
         data: {
@@ -94,8 +84,6 @@ export const appointmentQueryFunctions = {
     logger.info({ businessId }, 'Consultando serviços disponíveis')
 
     try {
-      // TODO: Integrar com API de serviços
-      // Por enquanto, retorna uma resposta simulada
       return {
         status: 'success',
         data: {
@@ -135,9 +123,6 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  /**
-   * Retorna os barbeiros disponíveis
-   */
   getBarbers: async (args: { phone: string }): Promise<any> => {
     const { phone } = args
     const businessId = getBusinessIdForPhone(phone)
@@ -145,8 +130,6 @@ export const appointmentQueryFunctions = {
     logger.info({ businessId }, 'Consultando barbeiros disponíveis')
 
     try {
-      // TODO: Integrar com API de barbeiros
-      // Por enquanto, retorna uma resposta simulada
       return {
         status: 'success',
         data: {
