@@ -74,9 +74,6 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  /**
-   * Retorna os serviços disponíveis na barbearia
-   */
   getServices: async (args: { phone: string }): Promise<any> => {
     const { phone } = args
     const businessId = getBusinessIdForPhone(phone)

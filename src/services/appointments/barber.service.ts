@@ -112,7 +112,7 @@ export class BarberService {
 
     try {
       const params: Record<string, any> = {
-        days: 15, // Próximos 15 dias
+        days: 15,
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -141,10 +141,8 @@ export class BarberService {
         return []
       }
 
-      // Transformar em SelectionItem para compatibilidade com o select flow
       return data.availableDays
         .map((day: any) => {
-          // Garantir que day tem os campos esperados
           if (!day.date || !day.displayDate) {
             console.warn('[BarberService] Day object missing required fields:', day)
             return null

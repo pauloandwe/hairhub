@@ -290,7 +290,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const [year, month, day] = dateStr.split('-').map(Number)
     const [hours, minutes] = timeStr.split(':').map(Number)
 
-    // Cria data diretamente em UTC, evitando conversões de timezone
     const startDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
     const endDate = new Date(startDate.getTime() + SERVICE_DURATION_MINUTES * 60 * 1000)
 
