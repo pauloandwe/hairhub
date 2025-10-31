@@ -5,6 +5,7 @@ export enum FlowType {
   Selling = 'selling',
   Purchase = 'purchase',
   Appointment = 'appointment',
+  AppointmentReschedule = 'appointmentReschedule',
 }
 
 export enum FlowStep {
@@ -25,4 +26,5 @@ export enum FlowTypeTranslation {
   selling = 'Venda',
   purchase = 'Compra',
   appointment = 'Agendamento',
+  appointmentReschedule = 'Remarcação de Agendamento',
 }

@@ -120,4 +120,68 @@ export class DateFormatter {
 
     return formatted
   }
+
+  static formatToHourMinute(rawDate?: string | Date | null): string | null {
+    if (!rawDate) return null
+
+    let parsed: Date | null = null
+
+    if (rawDate instanceof Date) {
+      parsed = rawDate
+    } else if (typeof rawDate === 'string') {
+      const trimmed = rawDate.trim()
+      if (!trimmed) return null
+
+      const isoCandidate = parseISO(trimmed)
+      if (isValid(isoCandidate)) {
+        parsed = addMinutes(isoCandidate, isoCandidate.getTimezoneOffset())
+      } else {
+        const parsedGeneric = new Date(trimmed)
+        if (!Number.isNaN(parsedGeneric.getTime())) {
+          parsed = parsedGeneric
+        }
+      }
+    }
+
+    if (!parsed || !isValid(parsed)) return null
+
+    return format(parsed, 'HH:mm')
+  }
+
+  static formatToDayMonth(rawDate?: string | Date | null): string | null {
+    if (!rawDate) return null
+
+    let parsed: Date | null = null
+
+    if (rawDate instanceof Date) {
+      parsed = rawDate
+    } else if (typeof rawDate === 'string') {
+      const trimmed = rawDate.trim()
+      if (!trimmed) return null
+
+      const isoCandidate = parseISO(trimmed)
+      if (isValid(isoCandidate)) {
+        parsed = addMinutes(isoCandidate, isoCandidate.getTimezoneOffset())
+      } else {
+        const parsedGeneric = new Date(trimmed)
+        if (!Number.isNaN(parsedGeneric.getTime())) {
+          parsed = parsedGeneric
+        }
+      }
+    }
+
+    if (!parsed || !isValid(parsed)) return null
+
+    return format(parsed, 'dd/MM')
+  }
+
+  static formatToDateTimeLabel(rawDate?: string | Date | null): string | null {
+    const dayMonth = this.formatToDayMonth(rawDate)
+    if (!dayMonth) return null
+
+    const time = this.formatToHourMinute(rawDate)
+    if (!time) return dayMonth
+
+    return `${dayMonth} às ${time}`
+  }
 }

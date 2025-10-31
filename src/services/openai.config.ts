@@ -27,12 +27,23 @@ export const SILENT_FUNCTIONS = new Set<string>([
   'cancelSaleRegistration',
   'editSaleRecordField',
   'deleteSaleRegistration',
+  'startPurchaseRegistration',
+  'changePurchaseRegistrationField',
+  'confirmPurchaseRegistration',
+  'cancelPurchaseRegistration',
+  'editPurchaseRecordField',
+  'deletePurchaseRegistration',
   'changeAppointmentRegistrationField',
   'startAppointmentRegistration',
   'cancelAppointmentRegistration',
   'confirmAppointmentRegistration',
   'editAppointmentRecordField',
   'deleteAppointmentRegistration',
+  'startAppointmentReschedule',
+  'changeAppointmentRescheduleField',
+  'confirmAppointmentReschedule',
+  'editAppointmentRescheduleField',
+  'cancelAppointmentReschedule',
 ])
 
 export const CONTEXT_FUNCTIONS = new Set<string>(['listInstitutions', 'listFarms'])
@@ -84,6 +95,13 @@ export function resolveFlowConfig(type?: string): FlowConfig | undefined {
       changeFunction: 'changeAppointmentRegistrationField',
       editFunction: 'editAppointmentRecordField',
       cancelFunction: 'cancelAppointmentRegistration',
+    },
+    [FlowType.AppointmentReschedule]: {
+      allowedFunctions: ['startAppointmentReschedule', 'changeAppointmentRescheduleField', 'confirmAppointmentReschedule', 'cancelAppointmentReschedule', 'editAppointmentRescheduleField'],
+      startFunction: 'startAppointmentReschedule',
+      changeFunction: 'changeAppointmentRescheduleField',
+      editFunction: 'editAppointmentRescheduleField',
+      cancelFunction: 'cancelAppointmentReschedule',
     },
   }
 

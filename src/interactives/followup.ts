@@ -2,6 +2,7 @@ import { sendWhatsAppMessage } from '../api/meta.api'
 import { FlowType } from '../enums/generic.enum'
 import { getUserContext } from '../env.config'
 import { appointmentFunctions } from '../functions/appointments/appointment.functions'
+import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
 import { simplifiedExpenseFunctions } from '../functions/finances/simplifiedExpense/simplifiedExpense.functions'
 import { birthFunctions } from '../functions/livestocks/birth/birth.functions'
 import { deathFunctions } from '../functions/livestocks/death/death.functions'
@@ -16,6 +17,7 @@ const continuationStrategies: Readonly<Record<string, ContinuationFunction>> = {
   [FlowType.SimplifiedExpense]: continueSimplifiedExpenseRegistration,
   [FlowType.Selling]: continueSaleRegistration,
   [FlowType.Appointment]: continueAppointmentRegistration,
+  [FlowType.AppointmentReschedule]: continueAppointmentReschedule,
 } as const
 
 const cancellationStrategies: Readonly<Record<string, CancellationFunction>> = {
@@ -24,6 +26,7 @@ const cancellationStrategies: Readonly<Record<string, CancellationFunction>> = {
   [FlowType.SimplifiedExpense]: cancelSimplifiedExpenseRegistration,
   [FlowType.Selling]: cancelSaleRegistration,
   [FlowType.Appointment]: cancelAppointmentRegistration,
+  [FlowType.AppointmentReschedule]: cancelAppointmentReschedule,
 } as const
 
 export async function tryContinueRegistration(userId: string): Promise<void> {
@@ -106,4 +109,12 @@ async function cancelSaleRegistration(userId: string): Promise<void> {
 
 async function cancelAppointmentRegistration(userId: string): Promise<void> {
   await appointmentFunctions.cancelAppointmentRegistration({ phone: userId })
+}
+
+async function continueAppointmentReschedule(userId: string): Promise<void> {
+  await appointmentRescheduleFunctions.continueRegistration({ phone: userId })
+}
+
+async function cancelAppointmentReschedule(userId: string): Promise<void> {
+  await appointmentRescheduleFunctions.cancelAppointmentReschedule({ phone: userId })
 }

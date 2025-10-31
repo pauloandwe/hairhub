@@ -15,6 +15,7 @@ import { simplifiedExpenseFunctions } from './finances/simplifiedExpense/simplif
 import { unsupportedRegistrationFunctions } from './utils/unsupportedRegistration.functions'
 import { unsupportedQueryFunctions } from './utils/unsupportedQuery.functions'
 import { appointmentFunctions } from './appointments/appointment.functions'
+import { appointmentRescheduleFunctions } from './appointments/reschedule/appointment-reschedule.functions'
 import { appointmentQueryFunctions } from './appointments/appointment-queries.functions'
 
 export const allFunctions = {
@@ -33,6 +34,7 @@ export const allFunctions = {
   ...deathFunctions,
   ...simplifiedExpenseFunctions,
   ...appointmentFunctions,
+  ...appointmentRescheduleFunctions,
   ...appointmentQueryFunctions,
   ...unsupportedRegistrationFunctions,
   ...unsupportedQueryFunctions,
@@ -40,4 +42,5 @@ export const allFunctions = {
   editExpenseRecordField: simplifiedExpenseFunctions.editExpenseRecordField,
   editBirthRecordField: birthFunctions.editBirthRecordField,
   editAppointmentRecordField: appointmentFunctions.editAppointmentRecordField,
+  editAppointmentRescheduleField: appointmentRescheduleFunctions.editAppointmentRescheduleField,
 }

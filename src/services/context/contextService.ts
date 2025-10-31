@@ -10,6 +10,7 @@ import { DefaultContextService } from '../defaultContext'
 import { BirthContextService } from '../livestocks/Birth/birthService.context'
 import { SellingContextService } from '../livestocks/Selling/sellingService.context'
 import { AppointmentContextService } from '../appointments/appointmentService.context'
+import { AppointmentRescheduleContextService } from '../appointments/appointmentReschedule.context'
 
 export class ContextService {
   private static instance: ContextService
@@ -19,6 +20,7 @@ export class ContextService {
   private readonly birthContext = BirthContextService.getInstance()
   private readonly sellingContext = SellingContextService.getInstance()
   private readonly appointmentContext = AppointmentContextService.getInstance()
+  private readonly appointmentRescheduleContext = AppointmentRescheduleContextService.getInstance()
 
   private readonly contextMap = {
     [FlowType.SimplifiedExpense]: this.simplifiedExpenseContext,
@@ -26,6 +28,7 @@ export class ContextService {
     [FlowType.Birth]: this.birthContext,
     [FlowType.Selling]: this.sellingContext,
     [FlowType.Appointment]: this.appointmentContext,
+    [FlowType.AppointmentReschedule]: this.appointmentRescheduleContext,
   }
 
   static getInstance(): ContextService {
@@ -65,7 +68,7 @@ export class ContextService {
   }
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
-    let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService = this.defaultContext
+    let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService | AppointmentRescheduleContextService = this.defaultContext
     // const currentIntent = activeFlowType || 'default'
 
     // await trackIntentChange(userId, currentIntent)

@@ -68,6 +68,27 @@ export interface BusinessSettings {
   autoConfirmAppointments: boolean
 }
 
+export interface AppointmentRescheduleAppointment {
+  id: number
+  startDate: string
+  endDate?: string | null
+  status?: string | null
+  serviceId?: number | null
+  serviceName?: string | null
+  serviceDuration?: number | null
+  barberId?: number | null
+  barberName?: string | null
+  clientName?: string | null
+  clientPhone?: string | null
+}
+
+export interface AppointmentRescheduleState {
+  pendingAppointments?: AppointmentRescheduleAppointment[]
+  selectedAppointmentId?: number
+  selectedDate?: string
+  selectedTime?: string
+}
+
 export interface UserRuntimeContext {
   phone: string
   workingHours: BusinessWorkingHour[]
@@ -79,6 +100,7 @@ export interface UserRuntimeContext {
   businessName?: string
   businessType?: string
   userName?: string
+  appointmentReschedule?: AppointmentRescheduleState | null
   activeRegistration: {
     type?: string
     step?: string
