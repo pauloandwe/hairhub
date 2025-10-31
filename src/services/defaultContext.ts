@@ -18,14 +18,17 @@ import { appointmentFunctions } from '../functions/appointments/appointment.func
 import { appointmentTools } from '../tools/appointments/appointment.tools'
 import { appointmentQueryTools } from '../tools/appointments/appointment-queries.tools'
 import { appointmentQueryFunctions } from '../functions/appointments/appointment-queries.functions'
+import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
+import { appointmentRescheduleTools } from '../tools/appointments/appointment-reschedule.tools'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
   private serviceFunctions = {
     ...unsupportedRegistrationFunctions,
     ...appointmentQueryFunctions,
     startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
+    startAppointmentReschedule: appointmentRescheduleFunctions.startAppointmentReschedule,
   }
 
   isFunctionTool(tool: OpenAITool): tool is OpenAI.ChatCompletionFunctionTool {

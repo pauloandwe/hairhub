@@ -1,8 +1,9 @@
-import { AppointmentRescheduleAppointment } from '../../env.config'
+import { AppointmentRescheduleAppointment, getBusinessIdForPhone } from '../../env.config'
 import { GenericService } from '../generic/generic.service'
 import { DraftStatus, IBaseEntity, SelectionItem, SummarySections } from '../generic/generic.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { DateFormatter } from '../../utils/date'
+import { appointmentRescheduleService } from './appointment-reschedule.service'
 
 export enum RescheduleField {
   AppointmentId = 'appointmentId',
@@ -72,17 +73,67 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
       '/appointments/validate',
       VALID_EDITABLE_FIELDS,
       {
+        rawPayload: true,
         endpoints: {
-          patch: ({ businessId, recordId }) => `/${businessId}/appointments/${recordId}`,
+          create: ({ farmId }) => (farmId ? `/appointments/${farmId}/appointments` : '/appointments'),
+          update: ({ farmId }) => (farmId ? `/appointments/${farmId}/appointments` : '/appointments'),
+          patch: ({ farmId }) => (farmId ? `/appointments/${farmId}/appointments` : '/appointments'),
+          delete: ({ farmId }) => (farmId ? `/appointments/${farmId}/appointments` : '/appointments'),
         },
       },
       true,
     )
   }
 
+  create = async (phone: string, draft: RescheduleDraft, endpointOverride?: string): Promise<{ id: string }> => {
+    void endpointOverride
+
+    if (!draft.appointmentId) {
+      throw new Error('Selecione um agendamento para remarcar.')
+    }
+
+    const rawBusinessId = getBusinessIdForPhone(phone)
+    const businessId = rawBusinessId !== undefined && rawBusinessId !== null ? String(rawBusinessId).trim() : ''
+    if (!businessId) {
+      throw new Error('Não consegui identificar sua barbearia para remarcar o agendamento.')
+    }
+
+    const farmIdAsNumber = Number(businessId)
+    const apiPayload = this.transformToApiPayload(draft, { farmId: Number.isFinite(farmIdAsNumber) ? farmIdAsNumber : 0 })
+
+    const patchPayload: Partial<RescheduleCreationPayload> = {
+      startDate: apiPayload.startDate,
+      endDate: apiPayload.endDate,
+    }
+
+    const baseEndpoint = `/appointments/${businessId}/appointments`
+
+    return this._patchRecord(phone, String(draft.appointmentId), baseEndpoint, patchPayload)
+  }
+
+  hydrateSelectedAppointment = async (phone: string, draftOverride?: RescheduleDraft): Promise<RescheduleDraft> => {
+    const draft = draftOverride ?? (await this.loadDraft(phone))
+    const selectedAppointment = appointmentRescheduleService.getSelectedAppointment(phone)
+
+    if (selectedAppointment?.id && draft.appointmentId !== selectedAppointment.id) {
+      draft.appointmentId = selectedAppointment.id
+    }
+
+    draft.selectedAppointment = selectedAppointment ?? null
+
+    if (!draftOverride) {
+      await this.saveDraft(phone, draft)
+    }
+
+    return draft
+  }
+
   protected validateDraftArgsTypes = (args: Partial<UpsertRescheduleArgs>, currentDraft: RescheduleDraft): void => {
     if (args.appointmentId !== undefined) {
       currentDraft.appointmentId = args.appointmentId ?? null
+      if (!args.appointmentId) {
+        currentDraft.selectedAppointment = null
+      }
     }
 
     if (args.newDate !== undefined) {
@@ -127,7 +178,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     ]
   }
 
-  protected transformToApiPayload = (draft: RescheduleDraft): RescheduleCreationPayload => {
+  protected transformToApiPayload = (draft: RescheduleDraft, _context: { farmId: number }): RescheduleCreationPayload => {
     if (!draft.appointmentId || !draft.newDate || !draft.newTime) {
       throw new Error('Faltam dados para remarcar o agendamento.')
     }

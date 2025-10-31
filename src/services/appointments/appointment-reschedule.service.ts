@@ -118,7 +118,7 @@ class AppointmentRescheduleService {
         },
       })
 
-      const payload: unknown[] = Array.isArray(response?.data) ? response.data : Array.isArray(response?.data?.data) ? response.data.data : []
+      const payload: unknown[] = response?.data?.data?.data || []
 
       const appointments = payload.map(mapAppointment).filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
 

@@ -103,6 +103,7 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
   }
 
   protected async prepareDraftForConfirmation(phone: string, draft: RescheduleDraft): Promise<void> {
+    await appointmentRescheduleDraftService.hydrateSelectedAppointment(phone, draft)
     await appointmentRescheduleDraftService.saveDraft(phone, draft)
   }
 

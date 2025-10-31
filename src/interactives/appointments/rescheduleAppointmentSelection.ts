@@ -63,6 +63,7 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
       const appointmentId = Number(item.id)
       await appointmentRescheduleService.selectAppointment(userId, appointmentId)
       await appointmentRescheduleDraftService.updateDraftField(userId, 'appointmentId', appointmentId)
+      await appointmentRescheduleDraftService.hydrateSelectedAppointment(userId)
       await sendWhatsAppMessage(userId, `Agendamento '${item.name}' selecionado.`)
       await tryContinueRegistration(userId)
     } catch (error) {
