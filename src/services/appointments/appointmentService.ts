@@ -146,9 +146,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     if (value === undefined || value === null) {
       return null
     }
-    const digits = String(value)
-      .replace(/\D/g, '')
-      .trim()
+    const digits = String(value).replace(/\D/g, '').trim()
     return digits.length ? digits : null
   }
 
