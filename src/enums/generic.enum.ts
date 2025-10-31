@@ -3,6 +3,7 @@ export enum FlowType {
   Death = 'death',
   Birth = 'birth',
   Selling = 'selling',
+  Purchase = 'purchase',
   Appointment = 'appointment',
 }
 
@@ -22,5 +23,6 @@ export enum FlowTypeTranslation {
   death = 'Morte',
   birth = 'Nascimento',
   selling = 'Venda',
+  purchase = 'Compra',
   appointment = 'Agendamento',
 }

@@ -16,12 +16,15 @@ import { unsupportedRegistrationFunctions } from '../functions/utils/unsupported
 import { aiLogger, logOpenAIPrompt, logOpenAIResponse, logToolExecution } from '../utils/pino'
 import { appointmentFunctions } from '../functions/appointments/appointment.functions'
 import { appointmentTools } from '../tools/appointments/appointment.tools'
+import { appointmentQueryTools } from '../tools/appointments/appointment-queries.tools'
+import { appointmentQueryFunctions } from '../functions/appointments/appointment-queries.functions'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
   private serviceFunctions = {
     ...unsupportedRegistrationFunctions,
+    ...appointmentQueryFunctions,
     startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
   }
 

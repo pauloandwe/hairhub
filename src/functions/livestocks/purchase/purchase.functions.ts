@@ -17,7 +17,7 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
   constructor() {
     super({
       service: purchaseService,
-      flowType: FlowType.Appointment,
+      flowType: FlowType.Purchase,
       fieldEditors: purchaseFieldEditors,
       missingFieldHandlers,
       messages: {
@@ -191,8 +191,8 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
     return this.applyRecordUpdates(args)
   }
 
-  async deletePurchaseRegistration(args: { phone: string; confirmation?: boolean }): Promise<void> {
-    await this.deleteRecord({ phone: args.phone })
+  deletePurchaseRegistration = async (args: { phone: string; confirmation?: boolean }) => {
+    return this.deleteRecord({ phone: args.phone })
   }
 
   async clearSession(args: { phone: string; reason?: string }) {

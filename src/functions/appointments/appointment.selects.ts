@@ -7,7 +7,7 @@ import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
 import { FieldEditor } from '../functions.types'
 
-export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'notes'
+export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'notes' | 'clientName' | 'clientPhone'
 export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber'
 
 type ChangeResponse = { message: string; interactive: boolean }
@@ -48,12 +48,26 @@ const editNotes: FieldEditor = async (phone) => {
   return respond('Observações solicitadas', false)
 }
 
+const editClientName: FieldEditor = async (phone) => {
+  const message = 'Qual o nome completo do cliente?'
+  await askWithTitle(phone, message)
+  return respond('Nome do cliente solicitado', false)
+}
+
+const editClientPhone: FieldEditor = async (phone) => {
+  const message = 'Qual é o telefone do cliente? Informe com DDD, só números.'
+  await askWithTitle(phone, message)
+  return respond('Telefone do cliente solicitado', false)
+}
+
 export const appointmentFieldEditors: Record<AppointmentEditField, FieldEditor> = {
   appointmentDate: editDate,
   appointmentTime: editTime,
   service: editService,
   barber: editBarber,
   notes: editNotes,
+  clientName: editClientName,
+  clientPhone: editClientPhone,
 }
 
 type MissingFieldHandler = (phone: string, draft: IAppointmentValidationDraft) => Promise<{ message: string; interactive: boolean; draft: IAppointmentValidationDraft }>

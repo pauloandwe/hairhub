@@ -6,34 +6,6 @@ import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationD
 import { GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 
-/**
- * AppointmentFlowService - Gerenciador de fluxo de agendamentos
- *
- * Fluxo de Dados:
- * 1. Usuário inicia: startAppointmentRegistration()
- *    - Draft é criado vazio
- *    - Sistema pede dados um a um
- *
- * 2. Usuário preenche dados:
- *    - appointmentDate: "dd/MM/yyyy" (ex: "20/11/2024")
- *    - appointmentTime: "HH:mm" (ex: "14:30")
- *    - service: { id, name }
- *    - barber: { id, name }
- *    - clientName, clientPhone, notes
- *
- * 3. Confirmação: confirmAppointmentRegistration()
- *    - Draft é validado
- *    - appointmentService.transformToApiPayload() converte para ISO strings
- *    - Dados são enviados à API como:
- *      {
- *        businessId, serviceId, barberId,
- *        startDate: "2024-11-20T14:30:00.000Z",
- *        endDate: "2024-11-20T14:50:00.000Z",
- *        source: "whatsapp",
- *        clientPhone: "+5511999999999",
- *        clientName: "Fulano"
- *      }
- */
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
   private readonly editDeleteNamespace = 'APPOINTMENT_EDIT_DELETE'
@@ -74,14 +46,41 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     })
   }
 
+  private sanitizePhone(value: unknown): string | null {
+    if (value === undefined || value === null) {
+      return null
+    }
+    const digits = String(value).replace(/\D/g, '').trim()
+    return digits.length ? digits : null
+  }
+
   startAppointmentRegistration = async (args: { phone: string } & UpsertAppointmentArgs) => {
-    return super.startRegistration(args)
+    const { phone, ...rawUpdates } = args
+    const updates: UpsertAppointmentArgs = { ...rawUpdates }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'clientPhone')) {
+      updates.clientPhone = this.sanitizePhone(updates.clientPhone ?? null)
+    } else {
+      const fallbackPhone = this.sanitizePhone(phone)
+      if (fallbackPhone) {
+        updates.clientPhone = fallbackPhone
+      }
+    }
+
+    return super.startRegistration({
+      phone,
+      ...updates,
+    })
   }
 
   changeAppointmentRegistrationField = async (args: { phone: string; field: AppointmentEditField; value?: any }) => {
-    const logContext = args.value !== undefined ? `Campo ${args.field} atualizado com valor ${JSON.stringify(args.value)}` : undefined
+    const { phone, field, value } = args
+    const normalizedValue = field === 'clientPhone' && value !== undefined ? this.sanitizePhone(value) : value
+    const logContext = normalizedValue !== undefined ? `Campo ${field} atualizado com valor ${JSON.stringify(normalizedValue)}` : undefined
     return this.changeRegistrationWithValue({
-      ...args,
+      phone,
+      field,
+      value: normalizedValue,
       logContext,
     })
   }
@@ -103,11 +102,27 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
   }
 
   editAppointmentRecordField = async (args: { phone: string; field: AppointmentEditField; value?: any }) => {
-    return super.editRecordField(args)
+    const normalizedValue = args.field === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
+    return super.editRecordField({
+      ...args,
+      value: normalizedValue,
+    })
   }
 
   deleteAppointmentRegistration = async (args: { phone: string }) => {
-    await this.deleteRecord({ phone: args.phone })
+    return this.deleteRecord({ phone: args.phone })
+  }
+
+  applyAppointmentRecordUpdates = async (args: { phone: string; updates: Partial<UpsertAppointmentArgs>; successMessage?: string; logContext?: string }) => {
+    const sanitizedUpdates: Partial<UpsertAppointmentArgs> = { ...args.updates }
+    if (Object.prototype.hasOwnProperty.call(sanitizedUpdates, 'clientPhone')) {
+      sanitizedUpdates.clientPhone = this.sanitizePhone(sanitizedUpdates.clientPhone ?? null)
+    }
+
+    return this.applyRecordUpdates({
+      ...args,
+      updates: sanitizedUpdates,
+    })
   }
 
   protected async sendConfirmation(phone: string, draft: IAppointmentValidationDraft, summary: string): Promise<void> {
@@ -136,7 +151,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       userId: phone,
       message: 'O que você quer fazer?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
@@ -156,7 +171,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       userId: phone,
       message: 'O que você quer fazer agora?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,

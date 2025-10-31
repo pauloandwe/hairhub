@@ -50,6 +50,13 @@ export function resolveFlowConfig(type?: string): FlowConfig | undefined {
       editFunction: 'editDeathRecordField',
       cancelFunction: 'cancelAnimalDeathRegistration',
     },
+    [FlowType.Purchase]: {
+      allowedFunctions: ['startPurchaseRegistration', 'changePurchaseRegistrationField', 'confirmPurchaseRegistration', 'cancelPurchaseRegistration', 'editPurchaseRecordField', 'deletePurchaseRegistration'],
+      startFunction: 'startPurchaseRegistration',
+      changeFunction: 'changePurchaseRegistrationField',
+      editFunction: 'editPurchaseRecordField',
+      cancelFunction: 'cancelPurchaseRegistration',
+    },
     [FlowType.Birth]: {
       allowedFunctions: ['startAnimalBirthRegistration', 'changeAnimalBirthRegistrationField', 'confirmAnimalBirthRegistration', 'cancelAnimalBirthRegistration', 'editBirthRecordField'],
       startFunction: 'startAnimalBirthRegistration',
