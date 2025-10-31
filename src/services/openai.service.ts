@@ -14,13 +14,6 @@ export class OpenAiService {
     })
   }
 
-  /**
-   * Transcribes a audio file with the OpenAi API (Whisper)
-   * @param audioBuffer Audio file buffer
-   * @param model Model to use in the OpenAi API (default: whisper-1)
-   * @param language Language of the audio (default: pt)
-   * @returns Transcribed text
-   */
   async transcribe(audioBuffer: Buffer, model = 'whisper-1', language = 'pt'): Promise<string> {
     const tmpFilePath = await this.saveTempFile(audioBuffer)
 
