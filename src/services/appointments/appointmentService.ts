@@ -10,17 +10,11 @@ import { IdNameRef } from '../drafts/types'
 import { clearAllUserIntents } from '../intent-history.service'
 import { mergeIdNameRef } from '../drafts/ref.utils'
 
-const autoCompleteEndpoint = '/appointments/suggest'
+const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
+const SERVICE_DURATION_MINUTES = 20
+const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
 
-const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = [
-  'appointmentDate' as keyof UpsertAppointmentArgs,
-  'appointmentTime' as keyof UpsertAppointmentArgs,
-  'service' as keyof UpsertAppointmentArgs,
-  'barber' as keyof UpsertAppointmentArgs,
-  'clientName' as keyof UpsertAppointmentArgs,
-  'clientPhone' as keyof UpsertAppointmentArgs,
-  'notes' as keyof UpsertAppointmentArgs,
-]
+const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'barber', 'clientName', 'clientPhone', 'notes'] as const
 
 export class AppointmentService extends GenericService<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs> {
   getValidFieldsFormatted(): string {
@@ -37,19 +31,22 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return VALID_EDITABLE_FIELDS.map((field) => fieldLabels[field] || field).join(', ')
   }
   constructor() {
+    const buildEndpoint = ({ businessId }: { businessId?: string }): string =>
+      businessId ? `appointments/${businessId}/appointments` : '/appointments'
+
     super(
       'appointment',
       emptyAppointmentDraft,
       process.env.APPOINTMENTS_URL || '',
-      autoCompleteEndpoint,
+      AUTO_COMPLETE_ENDPOINT,
       VALID_EDITABLE_FIELDS,
       {
         rawPayload: true,
         endpoints: {
-          create: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
-          update: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
-          patch: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
-          delete: ({ businessId }) => (businessId ? `appointments/${businessId}/appointments` : '/appointments'),
+          create: buildEndpoint,
+          update: buildEndpoint,
+          patch: buildEndpoint,
+          delete: buildEndpoint,
         },
       },
       true,
@@ -87,11 +84,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
   private formatDraftTime = (rawTime?: string | null): string | null => {
     if (!rawTime) return null
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-    if (timeRegex.test(rawTime.trim())) {
-      return rawTime.trim()
-    }
-    return null
+    const trimmedTime = rawTime.trim()
+    return TIME_REGEX.test(trimmedTime) ? trimmedTime : null
   }
 
   private normalizeRefInput(value: unknown): IdNameRef | null | undefined {
@@ -99,11 +93,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     if (value === null) return null
 
     if (Array.isArray(value)) {
-      for (const option of value) {
-        const normalized = this.normalizeRefInput(option)
-        if (normalized !== undefined) return normalized
-      }
-      return undefined
+      return value.reduce<IdNameRef | null | undefined>((acc, option) => {
+        if (acc !== undefined) return acc
+        return this.normalizeRefInput(option)
+      }, undefined)
     }
 
     if (typeof value === 'string') {
@@ -116,22 +109,30 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     if (typeof value === 'object') {
-      const candidate = value as Record<string, unknown>
-      const rawId = candidate.id ?? candidate.value ?? candidate.code ?? candidate.externalId ?? candidate.uuid ?? null
-      const rawName = candidate.name ?? candidate.label ?? candidate.title ?? candidate.description ?? candidate.displayName ?? null
-
-      const id = rawId !== undefined && rawId !== null ? String(rawId).trim() || null : null
-      let name: string | null = null
-      if (typeof rawName === 'string') {
-        name = rawName.trim() || null
-      } else if (rawName !== undefined && rawName !== null) {
-        name = String(rawName)
-      }
-
-      return { id, name }
+      return this.normalizeObjectRef(value as Record<string, unknown>)
     }
 
     return undefined
+  }
+
+  private normalizeObjectRef(candidate: Record<string, unknown>): IdNameRef {
+    const rawId = candidate.id ?? candidate.value ?? candidate.code ?? candidate.externalId ?? candidate.uuid
+    const rawName = candidate.name ?? candidate.label ?? candidate.title ?? candidate.description ?? candidate.displayName
+
+    const id = this.extractStringValue(rawId)
+    const name = this.extractStringValue(rawName)
+
+    return { id, name }
+  }
+
+  private extractStringValue(value: unknown): string | null {
+    if (typeof value === 'string') {
+      return value.trim() || null
+    }
+    if (value !== undefined && value !== null) {
+      return String(value).trim() || null
+    }
+    return null
   }
 
   protected validateDraftArgsTypes = (args: Partial<UpsertAppointmentArgs>, currentDraft: IAppointmentValidationDraft): void => {
@@ -286,17 +287,20 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     ]
   }
 
+  private parseDateAndTime(dateStr: string, timeStr: string): { startDate: Date; endDate: Date } {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hours, minutes] = timeStr.split(':').map(Number)
+
+    // Cria data diretamente em UTC, evitando conversões de timezone
+    const startDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
+    const endDate = new Date(startDate.getTime() + SERVICE_DURATION_MINUTES * 60 * 1000)
+
+    return { startDate, endDate }
+  }
+
   protected transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
     const businessId = context.businessId || 0
-
-    const dateStr = draft.appointmentDate as string
-    const timeStr = draft.appointmentTime as string
-
-    const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
-
-    const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
-
-    const clientPhone = draft.clientPhone ?? context.phone ?? null
+    const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string)
 
     const finalPayload: IAppointmentCreationPayload = {
       businessId,
@@ -308,26 +312,34 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       notes: draft.notes ?? null,
     }
 
+    this.enrichPayloadWithClientInfo(finalPayload, draft, context)
+
+    return finalPayload
+  }
+
+  private enrichPayloadWithClientInfo(payload: IAppointmentCreationPayload, draft: IAppointmentValidationDraft, context: any): void {
     if (context.clientId) {
-      finalPayload.clientId = context.clientId
+      payload.clientId = context.clientId
     }
 
+    const clientPhone = draft.clientPhone ?? context.phone ?? null
     const sanitizedPhone = clientPhone?.replace(/\D/g, '') || null
 
     if (sanitizedPhone) {
-      finalPayload.clientPhone = sanitizedPhone
+      payload.clientPhone = sanitizedPhone
     }
 
     if (draft.clientName) {
-      finalPayload.clientName = draft.clientName.trim()
+      payload.clientName = draft.clientName.trim()
     }
 
-    if (!finalPayload.clientId && !finalPayload.clientPhone) {
+    if (!payload.clientId && !payload.clientPhone) {
       throw new Error('Cliente sem identificador: informe clientId ou clientPhone')
     }
 
-    console.log('n\\n\n\n\n[AppointmentService] Payload para API de Agendamentos', finalPayload)
-    return finalPayload
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[AppointmentService] Payload para API de Agendamentos', payload)
+    }
   }
 
   protected buildListParams = (listType: string, context: { phone: string }): Record<string, any> => {
@@ -390,34 +402,26 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const payload: Partial<IAppointmentCreationPayload> = {}
     const has = (field: keyof UpsertAppointmentArgs): boolean => Object.prototype.hasOwnProperty.call(updates, field)
 
-    const invalidFields = Object.keys(updates).filter((field) => !this.isFieldValid(field))
-    if (invalidFields.length > 0) {
-      console.warn(`[AppointmentService] Invalid fields for update ignored: ${invalidFields.join(', ')}`)
-    }
+    this.warnAboutInvalidFields(updates)
 
     if (has('appointmentDate') || has('appointmentTime')) {
-      const dateStr = draft.appointmentDate as string
-      const timeStr = draft.appointmentTime as string
+      const dateStr = draft.appointmentDate
+      const timeStr = draft.appointmentTime
       if (dateStr && timeStr) {
-        const startDate = parseISO(`${dateStr}T${timeStr}:00.000Z`)
-        const endDate = new Date(startDate.getTime() + 20 * 60 * 1000)
+        const { startDate, endDate } = this.parseDateAndTime(dateStr, timeStr)
         payload.startDate = startDate.toISOString()
         payload.endDate = endDate.toISOString()
       }
     }
 
     if (has('service')) {
-      const serviceId = Number(draft.service?.id)
-      if (Number.isFinite(serviceId) && serviceId > 0) {
-        payload.serviceId = serviceId
-      }
+      const serviceId = this.extractValidId(draft.service?.id)
+      if (serviceId) payload.serviceId = serviceId
     }
 
     if (has('barber')) {
-      const barberId = Number(draft.barber?.id)
-      if (Number.isFinite(barberId) && barberId > 0) {
-        payload.barberId = barberId
-      }
+      const barberId = this.extractValidId(draft.barber?.id)
+      if (barberId) payload.barberId = barberId
     }
 
     if (has('clientName')) {
@@ -436,17 +440,24 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return payload
   }
 
+  private warnAboutInvalidFields(updates: Partial<UpsertAppointmentArgs>): void {
+    const invalidFields = Object.keys(updates).filter((field) => !this.isFieldValid(field))
+    if (invalidFields.length > 0) {
+      console.warn(`[AppointmentService] Invalid fields for update ignored: ${invalidFields.join(', ')}`)
+    }
+  }
+
+  private extractValidId(id: unknown): number | undefined {
+    const numId = Number(id)
+    return Number.isFinite(numId) && numId > 0 ? numId : undefined
+  }
+
   create = async (phone: string, draft: IAppointmentValidationDraft): Promise<{ id: string }> => {
     const businessId = getBusinessIdForPhone(phone)
     const endpoint = `/appointments/${businessId}/appointments`
 
     try {
-      if (!draft.appointmentDate || !draft.appointmentTime) {
-        throw new Error('Data e horário do agendamento são obrigatórios')
-      }
-      if (!draft.service?.id || !draft.barber?.id) {
-        throw new Error('Serviço e barbeiro são obrigatórios')
-      }
+      this.validateAppointmentDraft(draft)
 
       const originalTransform = this.transformToApiPayload
       this.transformToApiPayload = (draft: IAppointmentValidationDraft, context: any): IAppointmentCreationPayload => {
@@ -463,6 +474,15 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     } catch (error) {
       console.error('[AppointmentService] Erro ao criar agendamento:', error)
       throw error
+    }
+  }
+
+  private validateAppointmentDraft(draft: IAppointmentValidationDraft): void {
+    if (!draft.appointmentDate || !draft.appointmentTime) {
+      throw new Error('Data e horário do agendamento são obrigatórios')
+    }
+    if (!draft.service?.id || !draft.barber?.id) {
+      throw new Error('Serviço e barbeiro são obrigatórios')
     }
   }
 }
