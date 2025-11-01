@@ -53,7 +53,7 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
     })
 
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
-      await appointmentService.updateDraftField(userId, AppointmentFields.TIME as keyof UpsertAppointmentArgs, item.id)
+      await appointmentService.updateDraftField(userId, AppointmentFields.APPOINTMENT_TIME as keyof UpsertAppointmentArgs, item.id)
     }
     await sendWhatsAppMessage(userId, `Horário '${item.name}' selecionado.`)
     await tryContinueRegistration(userId)

@@ -205,8 +205,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       assignRef('barber', normalizedBarber)
     }
 
-    const appointmentDateInput = extendedArgs.appointmentDate ?? extendedArgs.date
-    if (appointmentDateInput !== undefined) {
+    if (extendedArgs.appointmentDate !== undefined) {
+      const appointmentDateInput = extendedArgs.appointmentDate
       let nextDate: string | null = currentDraft.appointmentDate ?? null
       let hasNewValue = false
 
@@ -239,8 +239,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       }
     }
 
-    const appointmentTimeInput = extendedArgs.appointmentTime ?? extendedArgs.time
-    if (appointmentTimeInput !== undefined) {
+    if (extendedArgs.appointmentTime !== undefined) {
+      const appointmentTimeInput = extendedArgs.appointmentTime
       if (appointmentTimeInput === null) {
         currentDraft.appointmentTime = null
       } else {

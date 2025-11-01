@@ -21,6 +21,7 @@ Padronização completa do módulo **Agendamentos** para seguir o padrão genér
 ### 1. **Limpeza de `src/index.ts`** ✅
 
 #### Antes:
+
 ```typescript
 import api from './config/api.config'
 import { ApiError } from './errors/api-error'
@@ -36,6 +37,7 @@ app.patch('/appointments/:businessId/appointments/:appointmentId', async (req, r
 ```
 
 #### Depois:
+
 ```typescript
 import express from 'express'
 import { env } from './env.config'
@@ -55,6 +57,7 @@ app.listen(env.PORT, () => {
 ```
 
 **Benefícios:**
+
 - ✅ Arquivo 66% mais limpo (54 → 14 linhas)
 - ✅ Apenas responsabilidades webhook
 - ✅ Imports desnecessários removidos
@@ -73,12 +76,14 @@ class AppointmentUpdateProxyService {
 ```
 
 **Responsabilidades:**
+
 - Encapsular lógica de PATCH para agendamentos
 - Tratamento de headers (Authorization, refresh-token)
 - Error handling padronizado
 - Resposta consistente (success/error)
 
 **Interface:**
+
 ```typescript
 interface UpdateProxyRequest {
   businessId: string | number
@@ -100,12 +105,13 @@ interface UpdateProxyResponse {
 ```
 
 **Uso:**
+
 ```typescript
 const result = await appointmentUpdateProxyService.updateAppointment({
   businessId: '123',
   appointmentId: '456',
   payload: { clientName: 'João' },
-  headers: { Authorization: 'Bearer ...' }
+  headers: { Authorization: 'Bearer ...' },
 })
 ```
 
@@ -115,18 +121,18 @@ const result = await appointmentUpdateProxyService.updateAppointment({
 
 #### Estrutura de Agendamentos - Comparação
 
-| Aspecto | Padrão Base | Agendamentos | Status |
-|---------|-------------|--------------|--------|
-| **Class** | GenericCrudFlow | AppointmentFlowService | ✅ OK |
-| **Service** | GenericService | AppointmentService | ✅ OK |
-| **Field Editors** | appointmentFieldEditors | ✅ 7 campos | ✅ OK |
-| **Missing Handlers** | missingFieldHandlers | ✅ 4 campos | ✅ OK |
-| **Draft Factory** | emptyAppointmentDraft() | ✅ Implementado | ✅ OK |
-| **Types Completos** | Sim | ✅ IAppointmentValidationDraft, etc. | ✅ OK |
-| **Interactives Registrados** | Sim | ✅ registerAppointmentEditDeleteHandler | ✅ OK |
-| **Context Service** | Sim | ✅ AppointmentContextService | ✅ OK |
-| **Tools Exportadas** | Sim | ✅ appointmentTools | ✅ OK |
-| **Funções Exportadas** | Sim | ✅ functions/index.ts linha 36 | ✅ OK |
+| Aspecto                      | Padrão Base             | Agendamentos                            | Status |
+| ---------------------------- | ----------------------- | --------------------------------------- | ------ |
+| **Class**                    | GenericCrudFlow         | AppointmentFlowService                  | ✅ OK  |
+| **Service**                  | GenericService          | AppointmentService                      | ✅ OK  |
+| **Field Editors**            | appointmentFieldEditors | ✅ 7 campos                             | ✅ OK  |
+| **Missing Handlers**         | missingFieldHandlers    | ✅ 4 campos                             | ✅ OK  |
+| **Draft Factory**            | emptyAppointmentDraft() | ✅ Implementado                         | ✅ OK  |
+| **Types Completos**          | Sim                     | ✅ IAppointmentValidationDraft, etc.    | ✅ OK  |
+| **Interactives Registrados** | Sim                     | ✅ registerAppointmentEditDeleteHandler | ✅ OK  |
+| **Context Service**          | Sim                     | ✅ AppointmentContextService            | ✅ OK  |
+| **Tools Exportadas**         | Sim                     | ✅ appointmentTools                     | ✅ OK  |
+| **Funções Exportadas**       | Sim                     | ✅ functions/index.ts linha 36          | ✅ OK  |
 
 ---
 
@@ -174,6 +180,7 @@ src/
 ## 🔄 Fluxo de Funcionamento Padronizado
 
 ### Antes (Anti-padrão):
+
 ```
 HTTP PATCH /appointments/:businessId/:appointmentId
     ↓
@@ -185,6 +192,7 @@ JSON response
 ```
 
 ### Depois (Padrão):
+
 ```
 WhatsApp Webhook (/webhook)
     ↓
@@ -209,20 +217,21 @@ WhatsApp Response com botões
 
 ## 📊 Métricas de Melhoria
 
-| Métrica | Antes | Depois | Melhoria |
-|---------|-------|--------|----------|
-| Linhas em index.ts | 54 | 14 | -74% |
-| Imports desnecessários | 2 | 0 | -100% |
-| Services de Appointment | 6 | 7 | +1 novo |
-| Seguimento de padrão | ⚠️ Parcial | ✅ Completo | 100% |
-| Testes de tipo (TypeScript) | 0 erros | 0 erros | ✅ OK |
-| Duplicação de lógica | Sim | Não | Eliminada |
+| Métrica                     | Antes      | Depois      | Melhoria  |
+| --------------------------- | ---------- | ----------- | --------- |
+| Linhas em index.ts          | 54         | 14          | -74%      |
+| Imports desnecessários      | 2          | 0           | -100%     |
+| Services de Appointment     | 6          | 7           | +1 novo   |
+| Seguimento de padrão        | ⚠️ Parcial | ✅ Completo | 100%      |
+| Testes de tipo (TypeScript) | 0 erros    | 0 erros     | ✅ OK     |
+| Duplicação de lógica        | Sim        | Não         | Eliminada |
 
 ---
 
 ## 🧪 Validações Realizadas
 
 ### Build TypeScript
+
 ```bash
 $ npm run build
 > tsc
@@ -231,6 +240,7 @@ $ npm run build
 ```
 
 ### Verificação de Estrutura
+
 - ✅ `appointmentFunctions` exportado em `functions/index.ts:36`
 - ✅ `editAppointmentRecordField` exportado em `functions/index.ts:44`
 - ✅ `appointmentTools` exportado em `tools/index.ts`
@@ -243,6 +253,7 @@ $ npm run build
 ## 🎓 Comparação com Padrões Existentes
 
 ### Padrão de Despesa Simples
+
 ```
 ✅ Agendamentos segue exatamente o mesmo padrão:
 - GenericCrudFlow
@@ -253,6 +264,7 @@ $ npm run build
 ```
 
 ### Padrão de Morte
+
 ```
 ✅ Agendamentos segue exatamente o mesmo padrão:
 - Mesma estrutura de funções
@@ -268,12 +280,15 @@ $ npm run build
 Se desejar melhorias adicionais:
 
 1. **Criar Reschedule com mesmo padrão**
+
    - Extrair `appointmentRescheduleFunctions` para novo módulo
 
 2. **Adicionar validações específicas**
+
    - Criar `appointmentValidation.service.ts` para lógicas complexas
 
 3. **Implementar caching**
+
    - Cache de barbeiros/serviços em `appointmentCache.service.ts`
 
 4. **Adicionar testes**
@@ -284,15 +299,15 @@ Se desejar melhorias adicionais:
 
 ## 🚀 Benefícios da Padronização
 
-| Aspecto | Benefício |
-|---------|-----------|
-| **Manutenibilidade** | Novo dev entende a estrutura rapidamente |
-| **Escalabilidade** | Novo CRUD segue template exato |
-| **Testabilidade** | Services isolados e testáveis |
-| **Reutilização** | Code sharing com Despesa Simples/Morte |
-| **Debugging** | Padrão consistente facilita debug |
-| **Code Review** | Estrutura previsível = review mais rápido |
-| **Documentação** | Padrão = documentação automática |
+| Aspecto              | Benefício                                 |
+| -------------------- | ----------------------------------------- |
+| **Manutenibilidade** | Novo dev entende a estrutura rapidamente  |
+| **Escalabilidade**   | Novo CRUD segue template exato            |
+| **Testabilidade**    | Services isolados e testáveis             |
+| **Reutilização**     | Code sharing com Despesa Simples/Morte    |
+| **Debugging**        | Padrão consistente facilita debug         |
+| **Code Review**      | Estrutura previsível = review mais rápido |
+| **Documentação**     | Padrão = documentação automática          |
 
 ---
 

@@ -49,7 +49,7 @@ EXEMPLOS:
         properties: {
           field: {
             type: 'string',
-            enum: [AppointmentFields.DATE, AppointmentFields.TIME, AppointmentFields.SERVICE, AppointmentFields.BARBER, AppointmentFields.CLIENT_NAME, AppointmentFields.CLIENT_PHONE, AppointmentFields.NOTES],
+            enum: [AppointmentFields.APPOINTMENT_DATE, AppointmentFields.APPOINTMENT_TIME, AppointmentFields.SERVICE, AppointmentFields.BARBER, AppointmentFields.CLIENT_NAME, AppointmentFields.CLIENT_PHONE, AppointmentFields.NOTES],
             description: 'Campo que o usuário deseja alterar (Data, Horário, Serviço, Barbeiro, Nome, Telefone, Observações).',
           },
         },
@@ -104,7 +104,7 @@ NÃO USAR para rascunhos em andamento (use changeAppointmentRegistrationField)`,
         properties: {
           field: {
             type: 'string',
-            enum: [AppointmentFields.DATE, AppointmentFields.TIME, AppointmentFields.SERVICE, AppointmentFields.BARBER, AppointmentFields.CLIENT_NAME, AppointmentFields.CLIENT_PHONE, AppointmentFields.NOTES],
+            enum: [AppointmentFields.APPOINTMENT_DATE, AppointmentFields.APPOINTMENT_TIME, AppointmentFields.SERVICE, AppointmentFields.BARBER, AppointmentFields.CLIENT_NAME, AppointmentFields.CLIENT_PHONE, AppointmentFields.NOTES],
             description: 'Campo a ser editado no agendamento existente',
           },
           value: {

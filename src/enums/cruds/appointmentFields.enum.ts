@@ -1,6 +1,6 @@
 export enum AppointmentFields {
-  DATE = 'date',
-  TIME = 'time',
+  APPOINTMENT_DATE = 'appointmentDate',
+  APPOINTMENT_TIME = 'appointmentTime',
   SERVICE = 'service',
   BARBER = 'barber',
   CLIENT_NAME = 'clientName',
@@ -10,8 +10,8 @@ export enum AppointmentFields {
 }
 
 export enum AppointmentFieldsLabels {
-  DATE = 'Data do agendamento',
-  TIME = 'Horário',
+  APPOINTMENT_DATE = 'Data do agendamento',
+  APPOINTMENT_TIME = 'Horário do agendamento',
   SERVICE = 'Serviço',
   BARBER = 'Barbeiro',
   CLIENT_NAME = 'Nome do cliente',

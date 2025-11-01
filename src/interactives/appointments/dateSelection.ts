@@ -72,7 +72,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     })
 
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
-      await appointmentService.updateDraftField(userId, AppointmentFields.DATE as keyof UpsertAppointmentArgs, item.id)
+      await appointmentService.updateDraftField(userId, AppointmentFields.APPOINTMENT_DATE as keyof UpsertAppointmentArgs, item.id)
     }
     await sendWhatsAppMessage(userId, `Data '${item.name}' selecionada.`)
     await tryContinueRegistration(userId)
