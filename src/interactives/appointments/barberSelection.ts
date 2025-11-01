@@ -8,6 +8,7 @@ import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
 export const BARBER_NAMESPACE = 'BARBER_GROUP'
 
@@ -44,12 +45,16 @@ const barberFlow = createSelectionFlow<SelectionItem>({
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    const updates: Partial<UpsertAppointmentArgs> = {
-      barber: { id: item.id, name: item.name },
-    }
+    await setUserContext(userId, {
+      barberId: item.id,
+      barberName: item.name,
+    })
 
-    await appointmentService.updateDraft(userId, updates)
-    await sendWhatsAppMessage(userId, `Barbeiro alterado para '${item.name}'.`)
+    await appointmentFunctions.applyAppointmentRecordUpdates({
+      phone: userId,
+      updates: { barber: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
+      logContext: `Barbeiro atualizado para ${item.name}`,
+    })
   },
 })
 

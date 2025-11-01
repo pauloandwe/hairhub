@@ -1,12 +1,11 @@
 import express from 'express'
 import { env } from './env.config'
 import { WebhookService } from './services/webhook/webhookService'
-
 const app = express()
 app.use(express.json())
 const webhookService = WebhookService.getInstance()
-// setApiBearerToken(env.BEARER_TOKEN)
 
+// Webhook routes
 app.get('/webhook', webhookService.handleVerification)
 app.post('/webhook', webhookService.webhookInitiator)
 

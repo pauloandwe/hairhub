@@ -8,6 +8,7 @@ import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
 export const SERVICE_NAMESPACE = 'SERVICE_GROUP'
 
@@ -44,12 +45,16 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    const updates: Partial<UpsertAppointmentArgs> = {
-      service: { id: item.id, name: item.name },
-    }
+    await setUserContext(userId, {
+      serviceId: item.id,
+      serviceName: item.name,
+    })
 
-    await appointmentService.updateDraft(userId, updates)
-    await sendWhatsAppMessage(userId, `Serviço alterado para '${item.name}'.`)
+    await appointmentFunctions.applyAppointmentRecordUpdates({
+      phone: userId,
+      updates: { service: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
+      logContext: `Serviço atualizado para ${item.name}`,
+    })
   },
 })
 

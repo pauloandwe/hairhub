@@ -8,6 +8,7 @@ import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
 export const TIME_SLOT_NAMESPACE = 'TIME_SLOT_GROUP'
 
@@ -58,12 +59,15 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    const updates: Partial<UpsertAppointmentArgs> = {
-      appointmentTime: item.id,
-    }
+    await setUserContext(userId, {
+      timeSlot: item.id,
+    })
 
-    await appointmentService.updateDraft(userId, updates)
-    await sendWhatsAppMessage(userId, `Horário alterado para '${item.name}'.`)
+    await appointmentFunctions.applyAppointmentRecordUpdates({
+      phone: userId,
+      updates: { appointmentTime: item.id } as Partial<UpsertAppointmentArgs>,
+      logContext: `Horário atualizado para ${item.name}`,
+    })
   },
 })
 

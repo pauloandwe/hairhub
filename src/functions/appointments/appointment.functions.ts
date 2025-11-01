@@ -73,13 +73,19 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     })
   }
 
-  changeAppointmentRegistrationField = async (args: { phone: string; field: AppointmentEditField; value?: any }) => {
-    const { phone, field, value } = args
-    const normalizedValue = field === 'clientPhone' && value !== undefined ? this.sanitizePhone(value) : value
-    const logContext = normalizedValue !== undefined ? `Campo ${field} atualizado com valor ${JSON.stringify(normalizedValue)}` : undefined
+  changeAppointmentRegistrationField = async (args: { phone: string; field: AppointmentEditField | string; value?: any }) => {
+    const { phone, value } = args
+    const normalizedField = this.normalizeEditableField(args.field)
+    if (!normalizedField) {
+      await this.sendInvalidFieldMessage({ phone, field: String(args.field) })
+      return this.buildResponse(this.options.messages.invalidField, false)
+    }
+
+    const normalizedValue = normalizedField === 'clientPhone' && value !== undefined ? this.sanitizePhone(value) : value
+    const logContext = normalizedValue !== undefined ? `Campo ${normalizedField} atualizado com valor ${JSON.stringify(normalizedValue)}` : undefined
     return this.changeRegistrationWithValue({
       phone,
-      field,
+      field: normalizedField,
       value: normalizedValue,
       logContext,
     })
@@ -101,11 +107,19 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return super.enterEditMode(args)
   }
 
-  editAppointmentRecordField = async (args: { phone: string; field: AppointmentEditField; value?: any }) => {
-    const normalizedValue = args.field === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
+  editAppointmentRecordField = async (args: { phone: string; field: AppointmentEditField | string; value?: any }) => {
+    const normalizedField = this.normalizeEditableField(args.field)
+    if (!normalizedField) {
+      await this.sendInvalidFieldMessage({ phone: args.phone, field: String(args.field) })
+      return this.buildChangeResponse(this.options.messages.invalidField, false)
+    }
+
+    const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
     return super.editRecordField({
-      ...args,
+      phone: args.phone,
+      field: normalizedField,
       value: normalizedValue,
+      promptMessage: this.options.messages.editPromptFallback,
     })
   }
 
@@ -113,12 +127,11 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return this.deleteRecord({ phone: args.phone })
   }
 
-  applyAppointmentRecordUpdates = async (args: { phone: string; updates: Partial<UpsertAppointmentArgs>; successMessage?: string; logContext?: string }) => {
-    const sanitizedUpdates: Partial<UpsertAppointmentArgs> = { ...args.updates }
+  applyAppointmentRecordUpdates = async (args: { phone: string; updates: Partial<UpsertAppointmentArgs> | Record<string, any>; successMessage?: string; logContext?: string }) => {
+    const sanitizedUpdates = this.filterEditableUpdates(args.updates)
     if (Object.prototype.hasOwnProperty.call(sanitizedUpdates, 'clientPhone')) {
       sanitizedUpdates.clientPhone = this.sanitizePhone(sanitizedUpdates.clientPhone ?? null)
     }
-
     return this.applyRecordUpdates({
       ...args,
       updates: sanitizedUpdates,
@@ -149,18 +162,13 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     await sendEditDeleteButtons({
       namespace: this.editDeleteNamespace,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'Deseja editar alguma informação?',
       editLabel: 'Editar',
-      deleteLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
         await this.editAppointmentRegistration({ phone: userId })
-      },
-      onDelete: async (userId) => {
-        await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteAppointmentRegistration({ phone: userId })
       },
     })
   }
@@ -169,19 +177,14 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     await sendEditDeleteButtonsAfterError({
       namespace: `${this.editDeleteErrorNamespace}_${recordId}`,
       userId: phone,
-      message: 'O que você quer fazer agora?',
+      message: 'Quer tentar editar de novo?',
       editLabel: 'Editar',
-      deleteLabel: 'Cancelar',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
         await this.editAppointmentRegistration({ phone: userId })
-      },
-      onDelete: async (userId) => {
-        await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteAppointmentRegistration({ phone: userId })
       },
     })
   }
@@ -205,6 +208,35 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         await this.cancelAppointmentRegistration({ phone: userId })
       },
     })
+  }
+
+  private normalizeEditableField(field: AppointmentEditField | string | undefined): AppointmentEditField | null {
+    if (!field) return null
+    if (typeof field !== 'string') return field
+
+    const trimmedField = field.trim()
+    if (!trimmedField) return null
+
+    return this.isEditableFieldKey(trimmedField) ? (trimmedField as AppointmentEditField) : null
+  }
+
+  private isEditableFieldKey(field: string): field is AppointmentEditField {
+    return this.options.service.isFieldValid(field)
+  }
+
+  private filterEditableUpdates(updates: Partial<UpsertAppointmentArgs> | Record<string, any> | undefined): Partial<UpsertAppointmentArgs> {
+    if (!updates) return {}
+
+    return Object.entries(updates).reduce<Partial<UpsertAppointmentArgs>>((acc, [rawKey, value]) => {
+      const trimmedKey = rawKey.trim()
+      if (!this.isEditableFieldKey(trimmedKey)) {
+        return acc
+      }
+
+      const typedKey = trimmedKey as keyof UpsertAppointmentArgs
+      acc[typedKey] = value as any
+      return acc
+    }, {})
   }
 }
 

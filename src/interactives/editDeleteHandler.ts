@@ -4,7 +4,7 @@ import { sendWhatsAppMessage } from '../api/meta.api'
 
 export interface EditDeleteFunctions {
   edit: (args: { phone: string }) => Promise<any>
-  delete: (args: { phone: string }) => Promise<any>
+  delete?: (args: { phone: string }) => Promise<any>
 }
 
 export function registerEditDeleteHandler(namespace: string, functions: EditDeleteFunctions) {
@@ -22,6 +22,10 @@ export function registerEditDeleteHandler(namespace: string, functions: EditDele
 
     if (value === 'DELETE') {
       await appendUserTextAuto(userId, 'Excluir')
+      if (!functions.delete) {
+        await sendWhatsAppMessage(userId, 'Essa opção não está disponível.')
+        return
+      }
       await functions.delete({ phone: userId })
       return
     }

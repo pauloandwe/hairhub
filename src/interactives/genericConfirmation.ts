@@ -24,7 +24,7 @@ type EditDeleteOptions = {
   summaryText?: string
   header?: string
   onEdit: (userId: string) => Promise<void>
-  onDelete: (userId: string) => Promise<void>
+  onDelete?: (userId: string) => Promise<void>
 }
 
 export async function sendConfirmationButtons({ namespace, userId, message = 'Tudo pronto pra confirmar?', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onConfirm, onCancel, summaryText, loadDraft, maxRetries = 3 }: ConfirmationOptions & { maxRetries?: number }) {
@@ -115,22 +115,27 @@ export async function sendEditDeleteButtons({ namespace, userId, message = 'O qu
   const body = summaryText || 'Registro criado.'
   const footer = message
 
+  const buttons = [{ id: editId, title: editLabel }]
+  const pendingIds = ['EDIT']
+
+  if (onDelete) {
+    buttons.push({ id: deleteId, title: deleteLabel })
+    pendingIds.push('DELETE')
+  }
+
   await sendWhatsAppInteractiveButtons({
     to: userId,
     header: header,
     body: body,
     footer: footer,
-    buttons: [
-      { id: editId, title: editLabel },
-      { id: deleteId, title: deleteLabel },
-    ],
+    buttons,
   })
 
   registerPendingListInteraction({
     userId,
     type: 'editDeleteInteraction',
     namespace,
-    ids: ['EDIT', 'DELETE'],
+    ids: pendingIds,
   })
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
@@ -145,6 +150,10 @@ export async function sendEditDeleteButtons({ namespace, userId, message = 'O qu
     }
 
     if (value === 'DELETE') {
+      if (!onDelete) {
+        await sendWhatsAppMessage(userId, 'Essa opção não está disponível no momento.')
+        return
+      }
       await onDelete(userId)
       return
     }
@@ -170,22 +179,27 @@ export async function sendEditDeleteButtonsAfterError({ namespace, userId, messa
   const body = summaryText || 'Houve um problema ao atualizar.'
   const footer = message
 
+  const buttons = [{ id: editId, title: editLabel }]
+  const pendingIds = ['EDIT']
+
+  if (onDelete) {
+    buttons.push({ id: deleteId, title: deleteLabel })
+    pendingIds.push('DELETE')
+  }
+
   await sendWhatsAppInteractiveButtons({
     to: userId,
     header: errorMessage || header,
     body: body,
     footer: footer,
-    buttons: [
-      { id: editId, title: editLabel },
-      { id: deleteId, title: deleteLabel },
-    ],
+    buttons,
   })
 
   registerPendingListInteraction({
     userId,
     type: 'editDeleteInteraction',
     namespace,
-    ids: ['EDIT', 'DELETE'],
+    ids: pendingIds,
   })
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
@@ -200,6 +214,10 @@ export async function sendEditDeleteButtonsAfterError({ namespace, userId, messa
     }
 
     if (value === 'DELETE') {
+      if (!onDelete) {
+        await sendWhatsAppMessage(userId, 'Essa opção não está disponível no momento.')
+        return
+      }
       await onDelete(userId)
       return
     }

@@ -8,6 +8,7 @@ import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
 export const DATE_NAMESPACE = 'DATE_GROUP'
 
@@ -77,12 +78,15 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    const updates: Partial<UpsertAppointmentArgs> = {
+    await setUserContext(userId, {
       appointmentDate: item.id,
-    }
+    })
 
-    await appointmentService.updateDraft(userId, updates)
-    await sendWhatsAppMessage(userId, `Data alterada para '${item.name}'.`)
+    await appointmentFunctions.applyAppointmentRecordUpdates({
+      phone: userId,
+      updates: { appointmentDate: item.id } as Partial<UpsertAppointmentArgs>,
+      logContext: `Data atualizada para ${item.name}`,
+    })
   },
 })
 
