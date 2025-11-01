@@ -184,7 +184,7 @@ export class DefaultContextService {
     const intentHistory = await getIntentHistory(userId, 'default')
     const defaultFlowPrompt = this.buildBasePrompt(intentHistory, incomingMessage)
     logOpenAIPrompt('default_context', defaultFlowPrompt, { userId })
-
+    console.log('\n\n\n\n', defaultFlowPrompt, '\n\n\n\n', await this.getTools())
     contextLogger.info('Iniciando chamada à OpenAI')
     const openAiAgent = await this.openai.chat.completions.create({
       model: 'gpt-5-mini',

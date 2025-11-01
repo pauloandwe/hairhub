@@ -44,8 +44,6 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
         useNaturalLanguage: false,
       },
       accessControl: {
-        allowedPlanIds: [Plan.BASIC, Plan.ADVANCED],
-        notAllowedSubPlansIds: [SubPlan.INDIVIDUAL],
         deniedMessage: 'Esse plano ainda não tem essa funcionalidade.',
       },
     })
