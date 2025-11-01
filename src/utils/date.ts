@@ -16,6 +16,29 @@ export class DateFormatter {
     return date.toISOString().split('T')[0]
   }
 
+  /**
+   * @deprecated NUNCA use este método para APIs ou salvamento no banco!
+   * Este método retorna uma string SEM timezone explícito, causando interpretações incorretas.
+   * Para APIs: use toISOString() no Date object
+   * Para exibição: use formatToBrazilianDate() ou formatToHourMinute()
+   */
+  static toLocalDateTimeString(date: Date): string {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      throw new Error('Data inválida fornecida')
+    }
+
+    const pad = (value: number): string => value.toString().padStart(2, '0')
+
+    const year = date.getFullYear()
+    const month = pad(date.getMonth() + 1)
+    const day = pad(date.getDate())
+    const hours = pad(date.getHours())
+    const minutes = pad(date.getMinutes())
+    const seconds = pad(date.getSeconds())
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+  }
+
   static formatToBrazilianDate(rawDate?: string | Date | null): string | null {
     if (!rawDate) return null
 
@@ -35,7 +58,9 @@ export class DateFormatter {
       } else {
         const parsedByIso = parseISO(normalized)
         if (isValid(parsedByIso)) {
-          parsedDate = addMinutes(parsedByIso, parsedByIso.getTimezoneOffset())
+          // parseISO já retorna Date object correto
+          // date-fns format() já converte para timezone local automaticamente
+          parsedDate = parsedByIso
         }
       }
     }
@@ -134,7 +159,9 @@ export class DateFormatter {
 
       const isoCandidate = parseISO(trimmed)
       if (isValid(isoCandidate)) {
-        parsed = addMinutes(isoCandidate, isoCandidate.getTimezoneOffset())
+        // parseISO já retorna Date object correto
+        // date-fns format() já converte para timezone local automaticamente
+        parsed = isoCandidate
       } else {
         const parsedGeneric = new Date(trimmed)
         if (!Number.isNaN(parsedGeneric.getTime())) {
@@ -161,7 +188,9 @@ export class DateFormatter {
 
       const isoCandidate = parseISO(trimmed)
       if (isValid(isoCandidate)) {
-        parsed = addMinutes(isoCandidate, isoCandidate.getTimezoneOffset())
+        // parseISO já retorna Date object correto
+        // date-fns format() já converte para timezone local automaticamente
+        parsed = isoCandidate
       } else {
         const parsedGeneric = new Date(trimmed)
         if (!Number.isNaN(parsedGeneric.getTime())) {

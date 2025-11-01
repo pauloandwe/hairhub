@@ -58,8 +58,23 @@ const mapAppointment = (raw: any): AppointmentRescheduleAppointment | null => {
 }
 
 const combineDateAndTime = (date: string, time: string): Date => {
-  const normalizedTime = time.length === 5 ? `${time}:00` : time
-  const candidate = new Date(`${date}T${normalizedTime}`)
+  // Espera formato: date = "yyyy-MM-dd", time = "HH:mm" ou "HH:mm:ss"
+  const [year, month, day] = date.split('-').map(Number)
+  const [hours, minutes] = time.split(':').map(Number)
+
+  // O usuário está selecionando um horário em seu timezone local
+  // Precisa converter para UTC para salvar corretamente
+
+  // Criar um Date object no timezone local para obter o offset
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
+  const offsetMinutes = localDate.getTimezoneOffset()
+
+  // Criar a data em UTC e depois ajustar pelo offset
+  // getTimezoneOffset() é positivo para UTC- (como BRT = UTC-3 → offset = 180)
+  // Para converter de timezone local para UTC, adicionar o offset
+  const candidate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
+  candidate.setTime(candidate.getTime() + offsetMinutes * 60000)
+
   if (Number.isNaN(candidate.getTime())) {
     throw new Error('Data ou horário inválido para remarcar o agendamento.')
   }
@@ -229,6 +244,7 @@ class AppointmentRescheduleService {
 
     const url = `${env.APPOINTMENTS_URL}/appointments/${encodeURIComponent(normalizedBusinessId)}/appointments/${appointment.id}`
     const payload: Record<string, unknown> = {
+      // Usar toISOString() para enviar data em formato ISO com timezone (UTC)
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     }

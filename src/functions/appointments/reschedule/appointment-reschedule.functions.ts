@@ -3,7 +3,7 @@ import { FlowType } from '../../../enums/generic.enum'
 import { Plan, SubPlan } from '../../../enums/plans.enums'
 import { GenericCrudFlow } from '../../generic/generic.flow'
 import { RescheduleField, RescheduleDraft, RescheduleCreationPayload, RescheduleRecord, UpsertRescheduleArgs, appointmentRescheduleDraftService } from '../../../services/appointments/appointment-reschedule-draft.service'
-import { sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../../interactives/genericConfirmation'
+import { sendEditCancelButtonsAfterCreationError } from '../../../interactives/genericConfirmation'
 import { appendUserTextAuto, appendAssistantTextAuto } from '../../../services/history-router.service'
 import { rescheduleFieldEditors, missingFieldHandlers } from './appointment-reschedule.selects'
 import { sendWhatsAppMessage } from '../../../api/meta.api'
@@ -111,46 +111,16 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
   }
 
   protected async sendEditDeleteOptions(phone: string, _draft: RescheduleDraft, summary: string, _recordId: string): Promise<void> {
-    const namespace = 'APPOINTMENT_RESCHEDULE_EDIT_DELETE'
-
-    await sendEditDeleteButtons({
-      namespace,
-      userId: phone,
-      message: 'O que você quer fazer?',
-      editLabel: 'Editar',
-      deleteLabel: 'Deletar',
-      summaryText: summary,
-      header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
-      onEdit: async (userId) => {
-        await appendUserTextAuto(userId, 'Editar')
-        await this.editAppointmentReschedule({ phone: userId })
-      },
-      onDelete: async (userId) => {
-        await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteAppointmentReschedule({ phone: userId })
-      },
-    })
+    void _draft
+    void _recordId
+    await sendWhatsAppMessage(phone, summary)
   }
 
   protected async sendEditDeleteOptionsAfterError(phone: string, _draft: RescheduleDraft, summary: string, _recordId: string, errorMessage: string): Promise<void> {
-    await sendEditDeleteButtonsAfterError({
-      namespace: this.editDeleteErrorNamespace,
-      userId: phone,
-      message: 'O que você quer fazer?',
-      editLabel: 'Editar',
-      deleteLabel: 'Deletar',
-      summaryText: summary,
-      header: this.options.messages.buttonHeaderEdit || 'Ops!',
-      errorMessage,
-      onEdit: async (userId) => {
-        await appendUserTextAuto(userId, 'Editar')
-        await this.editAppointmentReschedule({ phone: userId })
-      },
-      onDelete: async (userId) => {
-        await appendUserTextAuto(userId, 'Excluir')
-        await this.deleteAppointmentReschedule({ phone: userId })
-      },
-    })
+    void _draft
+    void _recordId
+    await sendWhatsAppMessage(phone, errorMessage)
+    await sendWhatsAppMessage(phone, summary)
   }
 
   protected async sendEditCancelOptionsAfterCreationError(phone: string, _draft: RescheduleDraft, summary: string, errorMessage: string, recordId: string | null): Promise<void> {

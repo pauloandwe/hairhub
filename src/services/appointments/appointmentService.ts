@@ -308,7 +308,15 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const [year, month, day] = dateStr.split('-').map(Number)
     const [hours, minutes] = timeStr.split(':').map(Number)
 
+    // O usuário está selecionando um horário em seu timezone local
+    // Precisa converter para UTC para salvar corretamente
+    const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
+    const offsetMinutes = localDate.getTimezoneOffset()
+
+    // Criar a data em UTC e depois ajustar pelo offset
     const startDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
+    startDate.setTime(startDate.getTime() + offsetMinutes * 60000)
+
     const endDate = new Date(startDate.getTime() + SERVICE_DURATION_MINUTES * 60 * 1000)
 
     return { startDate, endDate }
