@@ -1,5 +1,6 @@
 import api from '../../config/api.config'
 import { FarmSelectionError } from './farm.errors'
+import { unwrapApiResponse } from '../../utils/http'
 
 export interface FarmSummary {
   id: string
@@ -19,9 +20,10 @@ export class FarmsService {
 
     try {
       const response = await api.get(this.servicePrefix + ``, { params })
+      const farms = unwrapApiResponse<any[]>(response)
 
-      if (response?.data?.data?.data) {
-        return response.data.data.data ?? []
+      if (Array.isArray(farms)) {
+        return farms
       }
 
       throw new FarmSelectionError('LIST_REQUEST_FAILED', 'Falha ao listar fazendas.')

@@ -3,6 +3,7 @@ import { usersService } from './users/users.service'
 import { env, setUserContext } from '../env.config'
 import { setApiBearerToken } from '../config/api.config'
 import { systemLogger } from '../utils/pino'
+import { unwrapApiResponse } from '../utils/http'
 
 let redisClient: ReturnType<typeof createClient> | null = null
 
@@ -35,7 +36,7 @@ interface CachedUserTokenData {
 export async function ensureUserApiToken(businessId: string, phone: string): Promise<CachedUserTokenData | null> {
   try {
     const responseBusiness = await usersService.getBusiness(businessId, phone)
-    const payload = responseBusiness?.data?.data?.data
+    const payload = unwrapApiResponse<any>(responseBusiness)
     if (!payload) return null
 
     const { workingHours, barbers, ...sanitizedData } = payload

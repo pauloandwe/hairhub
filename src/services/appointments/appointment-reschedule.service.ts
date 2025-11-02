@@ -1,5 +1,6 @@
 import api from '../../config/api.config'
 import { env, getBusinessIdForPhone, getUserContextSync, setUserContext, AppointmentRescheduleAppointment, AppointmentRescheduleState } from '../../env.config'
+import { unwrapApiResponse } from '../../utils/http'
 
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 
@@ -133,7 +134,7 @@ class AppointmentRescheduleService {
         },
       })
 
-      const payload: unknown[] = response?.data?.data?.data || []
+      const payload = unwrapApiResponse<unknown[]>(response) ?? []
 
       const appointments = payload.map(mapAppointment).filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
 

@@ -1,4 +1,5 @@
 import api from '../../config/api.config'
+import { unwrapApiResponse } from '../../utils/http'
 
 export interface InstitutionSummary {
   id: string
@@ -16,7 +17,7 @@ export class InstitutionService {
 
     const response = await api.get(`${this.servicePrefix}/consultants/wallets/`, { params })
 
-    const rawItems: any[] = response?.data?.data?.data ?? []
+    const rawItems = unwrapApiResponse<any[]>(response) ?? []
 
     const mapped = rawItems
       .map((it) => ({

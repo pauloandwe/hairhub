@@ -2,6 +2,7 @@ import { SelectionItem } from '../generic/generic.types'
 import { getBusinessIdForPhone, getBusinessPhoneForPhone } from '../../env.config'
 import api from '../../config/api.config'
 import { env } from '../../env.config'
+import { unwrapApiResponse } from '../../utils/http'
 
 export class BarberService {
   async getBarbers(phone: string): Promise<SelectionItem[]> {
@@ -21,8 +22,7 @@ export class BarberService {
       }
 
       const response = await api.get(url, { params })
-
-      const data = response?.data?.data?.data ?? response?.data?.data ?? []
+      const data = unwrapApiResponse<any[]>(response) ?? []
       if (!Array.isArray(data)) {
         console.error('[BarberService] Invalid response structure:', response)
         return []
@@ -79,8 +79,7 @@ export class BarberService {
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/barbers/${encodeURIComponent(resolvedBarberId)}/free-slots`
       const response = await api.get(url, { params })
-
-      const data = response?.data?.data?.data
+      const data = unwrapApiResponse<any>(response)
       if (!data || !data.barber || !Array.isArray(data.barber.slots)) {
         console.warn('[BarberService] Invalid slots structure:', response?.data)
         return []
@@ -124,8 +123,7 @@ export class BarberService {
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/barbers/${encodeURIComponent(resolvedBarberId)}/available-days`
       const response = await api.get(url, { params })
-
-      const data = response?.data?.data?.data
+      const data = unwrapApiResponse<any>(response)
       if (!data) {
         console.warn('[BarberService] Invalid response structure for available days:', response?.data)
         return []
