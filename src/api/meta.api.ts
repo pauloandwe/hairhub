@@ -63,10 +63,13 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
         context: 'WhatsApp',
         receiver: to,
         message: text,
+        responseStatus: error?.response?.status,
+        responseData: error?.response?.data,
         error: error,
       },
       'Failed to send message to WhatsApp receiver',
     )
+    throw error
   }
 }
 
@@ -185,10 +188,13 @@ export async function sendWhatsAppInteractiveList(params: {
     whatsappLogger.error(
       {
         receiver: to,
+        responseStatus: error?.response?.status,
+        responseData: error?.response?.data,
         error: error,
       },
       'Failed to send interactive list to WhatsApp receiver',
     )
+    throw error
   }
 }
 
@@ -241,10 +247,13 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
     whatsappLogger.error(
       {
         receiver: to,
+        responseStatus: error?.response?.status,
+        responseData: error?.response?.data,
         error: error,
       },
       'Failed to send interactive buttons to WhatsApp receiver',
     )
+    throw error
   }
 }
 
@@ -279,10 +288,13 @@ export async function markMessageAsRead(messageId: string): Promise<void> {
     whatsappLogger.error(
       {
         message: messageId,
+        responseStatus: error?.response?.status,
+        responseData: error?.response?.data,
         error: error,
       },
       'Failed to mark message as read',
     )
+    throw error
   }
 }
 

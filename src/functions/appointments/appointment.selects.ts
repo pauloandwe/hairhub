@@ -1,4 +1,4 @@
-import { sendWhatsAppMessageWithTitle } from '../../api/meta.api'
+import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendServiceSelectionList } from '../../interactives/appointments/serviceSelection'
 import { sendBarberSelectionList } from '../../interactives/appointments/barberSelection'
 import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
@@ -16,11 +16,6 @@ const respond = (message: string, interactive: boolean): ChangeResponse => ({
   message,
   interactive,
 })
-
-const askWithTitle = async (phone: string, message: string): Promise<void> => {
-  await appendAssistantTextAuto(phone, message)
-  await sendWhatsAppMessageWithTitle(phone, message)
-}
 
 const editDate: FieldEditor = async (phone) => {
   await sendDateSelectionList(phone, 'Qual data você prefere? 👇')
@@ -44,19 +39,22 @@ const editBarber: FieldEditor = async (phone) => {
 
 const editNotes: FieldEditor = async (phone) => {
   const message = 'Alguma observação ou preferência especial?'
-  await askWithTitle(phone, message)
+  await appendAssistantTextAuto(phone, message)
+  await sendWhatsAppMessage(phone, message)
   return respond('Observações solicitadas', false)
 }
 
 const editClientName: FieldEditor = async (phone) => {
   const message = 'Qual o nome completo do cliente?'
-  await askWithTitle(phone, message)
+  await appendAssistantTextAuto(phone, message)
+  await sendWhatsAppMessage(phone, message)
   return respond('Nome do cliente solicitado', false)
 }
 
 const editClientPhone: FieldEditor = async (phone) => {
   const message = 'Qual é o telefone do cliente? Informe com DDD, só números.'
-  await askWithTitle(phone, message)
+  await appendAssistantTextAuto(phone, message)
+  await sendWhatsAppMessage(phone, message)
   return respond('Telefone do cliente solicitado', false)
 }
 
