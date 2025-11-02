@@ -188,8 +188,6 @@ export class DateFormatter {
 
       const isoCandidate = parseISO(trimmed)
       if (isValid(isoCandidate)) {
-        // parseISO já retorna Date object correto
-        // date-fns format() já converte para timezone local automaticamente
         parsed = isoCandidate
       } else {
         const parsedGeneric = new Date(trimmed)
