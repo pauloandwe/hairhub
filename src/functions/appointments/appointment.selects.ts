@@ -1,6 +1,7 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendServiceSelectionList } from '../../interactives/appointments/serviceSelection'
-import { sendProfessionalSelectionList } from '../../interactives/appointments/professionalSelection';import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
+import { sendProfessionalSelectionList } from '../../interactives/appointments/professionalSelection'
+import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
 import { sendDateSelectionList } from '../../interactives/appointments/dateSelection'
 import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
