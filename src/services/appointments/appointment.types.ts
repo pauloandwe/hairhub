@@ -5,7 +5,7 @@ export interface IAppointmentValidationDraft {
   appointmentDate: string | null
   appointmentTime: string | null
   service: IdNameRef | null
-  barber: IdNameRef | null
+  professional: IdNameRef | null
   clientName: string | null
   clientPhone: string | null
   notes: string | null
@@ -16,7 +16,7 @@ export interface IAppointmentValidationDraft {
 export interface IAppointmentCreationPayload {
   businessId: number
   serviceId: number
-  barberId: number
+  professionalId: number
   startDate: string
   endDate: string
   source: string

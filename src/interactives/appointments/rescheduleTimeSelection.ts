@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from '../../api/meta.api'
 import { createSelectionFlow } from '../flows'
 import { appointmentRescheduleService } from '../../services/appointments/appointment-reschedule.service'
 import { appointmentRescheduleDraftService } from '../../services/appointments/appointment-reschedule-draft.service'
-import { barberService } from '../../services/appointments/barber.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { tryContinueRegistration } from '../followup'
 
@@ -15,7 +15,7 @@ const timeSelectionFlow = createSelectionFlow<SelectionItem>({
     const appointment = appointmentRescheduleService.getSelectedAppointment(phone)
     const date = appointmentRescheduleService.getSelectedDate(phone)
 
-    if (!appointment || !appointment.barberId || !appointment.serviceId) {
+    if (!appointment || !appointment.professionalId || !appointment.serviceId) {
       await sendWhatsAppMessage(phone, 'Não tenho os dados do agendamento para listar horários. Volte e selecione o agendamento novamente.')
       return []
     }
@@ -26,15 +26,15 @@ const timeSelectionFlow = createSelectionFlow<SelectionItem>({
     }
 
     try {
-      const slots = await barberService.getAvailableSlots({
+      const slots = await professionalService.getAvailableSlots({
         phone,
-        barberId: appointment.barberId,
+        professionalId: appointment.professionalId,
         serviceId: appointment.serviceId,
         date,
       })
 
       if (!slots.length) {
-        await sendWhatsAppMessage(phone, 'Esse dia não tem horários disponíveis com o barbeiro escolhido. Que tal tentar outra data?')
+        await sendWhatsAppMessage(phone, 'Esse dia não tem horários disponíveis com o professional escolhido. Que tal tentar outra data?')
       }
 
       return slots.map<SelectionItem>((slot) => ({

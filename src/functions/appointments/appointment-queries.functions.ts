@@ -8,7 +8,7 @@ interface AppointmentData {
   id: number
   startDate: string
   service?: { name: string; duration: number }
-  barber?: { name: string }
+  professional?: { name: string }
   status: string
   notes?: string
 }
@@ -18,7 +18,7 @@ interface FormattedAppointment {
   date: string
   time: string
   service: string
-  barber: string
+  professional: string
   status: string
   notes: string
   duration: number
@@ -45,7 +45,7 @@ const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:3001'
 const BACKEND_API_TOKEN = process.env.BACKEND_API_TOKEN
 
 const ERROR_MESSAGES = {
-  BUSINESS_NOT_FOUND: 'Não consegui identificar sua barbearia. Tenta de novo mais tarde.',
+  BUSINESS_NOT_FOUND: 'Não consegui identificar sua business. Tenta de novo mais tarde.',
   PHONE_NOT_PROVIDED: 'Número de telefone não informado.',
   API_FETCH_ERROR: 'Não consegui buscar seus agendamentos. Tenta de novo mais tarde.',
   GENERIC_ERROR: 'Desculpa, tive um problema. Tenta de novo mais tarde.',
@@ -55,7 +55,7 @@ const ERROR_MESSAGES = {
 const SUCCESS_MESSAGE = (count: number) => (count > 0 ? `Você tem ${count} agendamento(s).` : ERROR_MESSAGES.NO_APPOINTMENTS)
 
 const DEFAULT_SERVICE_NAME = 'Serviço não especificado'
-const DEFAULT_BARBER_NAME = 'Barbeiro não especificado'
+const DEFAULT_BARBER_NAME = 'Professional não especificado'
 
 const padTwoDigits = (value: number): string => value.toString().padStart(2, '0')
 
@@ -88,7 +88,7 @@ function formatAppointment(apt: AppointmentData): FormattedAppointment {
     date: formatDate(apt.startDate),
     time: formatTime(apt.startDate),
     service: apt.service?.name || DEFAULT_SERVICE_NAME,
-    barber: apt.barber?.name || DEFAULT_BARBER_NAME,
+    professional: apt.professional?.name || DEFAULT_BARBER_NAME,
     status: apt.status || 'pending',
     notes: apt.notes || '',
     duration: apt.service?.duration || 0,
@@ -268,11 +268,11 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  getAvailableTimeSlots: async (args: { phone: string; date?: string; barberId?: number }): Promise<any> => {
-    const { phone, date, barberId } = args
+  getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number }): Promise<any> => {
+    const { phone, date, professionalId } = args
     const businessId = getBusinessIdForPhone(phone)
 
-    logger.info({ businessId, date, barberId }, 'Consultando horários disponíveis')
+    logger.info({ businessId, date, professionalId }, 'Consultando horários disponíveis')
 
     try {
       return {
@@ -280,14 +280,14 @@ export const appointmentQueryFunctions = {
         data: {
           date: date || new Date().toISOString().split('T')[0],
           available_slots: [
-            { time: '09:00', barbier_id: barberId },
-            { time: '09:30', barbier_id: barberId },
-            { time: '10:00', barbier_id: barberId },
-            { time: '10:30', barbier_id: barberId },
-            { time: '14:00', barbier_id: barberId },
-            { time: '14:30', barbier_id: barberId },
-            { time: '15:00', barbier_id: barberId },
-            { time: '15:30', barbier_id: barberId },
+            { time: '09:00', barbier_id: professionalId },
+            { time: '09:30', barbier_id: professionalId },
+            { time: '10:00', barbier_id: professionalId },
+            { time: '10:30', barbier_id: professionalId },
+            { time: '14:00', barbier_id: professionalId },
+            { time: '14:30', barbier_id: professionalId },
+            { time: '15:00', barbier_id: professionalId },
+            { time: '15:30', barbier_id: professionalId },
           ],
         },
       }
@@ -321,7 +321,7 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  getBarbers: async (args: { phone: string }): Promise<any> => {
+  getProfessionals: async (args: { phone: string }): Promise<any> => {
     const { phone } = args
     const businessId = getBusinessIdForPhone(phone)
 
@@ -331,7 +331,7 @@ export const appointmentQueryFunctions = {
       return {
         status: 'success',
         data: {
-          barbers: [
+          professionals: [
             { id: 1, name: 'João', specialty: 'Cortes clássicos', available: true },
             { id: 2, name: 'Carlos', specialty: 'Design de barba', available: true },
             { id: 3, name: 'Pedro', specialty: 'Cortes modernos', available: true },

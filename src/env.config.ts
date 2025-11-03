@@ -53,7 +53,7 @@ export interface BusinessService {
   active: boolean
 }
 
-export interface BusinessBarber {
+export interface BusinessProfessional {
   id: string
   name: string
   specialties: string[]
@@ -78,8 +78,8 @@ export interface AppointmentRescheduleAppointment {
   serviceId?: number | null
   serviceName?: string | null
   serviceDuration?: number | null
-  barberId?: number | null
-  barberName?: string | null
+  professionalId?: number | null
+  professionalName?: string | null
   clientName?: string | null
   clientPhone?: string | null
 }
@@ -95,7 +95,7 @@ export interface UserRuntimeContext {
   phone: string
   workingHours: BusinessWorkingHour[]
   services: BusinessService[]
-  barbers: BusinessBarber[]
+  professionals: BusinessProfessional[]
   settings: BusinessSettings
   businessId?: string
   businessPhone?: string

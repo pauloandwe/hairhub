@@ -152,7 +152,7 @@ src/
 │   ├── appointmentUpdateProxy.service.ts (NOVO) ✅ Proxy para PATCH
 │   ├── appointmentService.context.ts   ✅ Context + registration
 │   ├── appointment.types.ts            ✅ Interfaces completas
-│   ├── barber.service.ts               ✅ Service auxiliar
+│   ├── professional.service.ts               ✅ Service auxiliar
 │   ├── service.service.ts              ✅ Service auxiliar
 │   └── availability.service.ts         ✅ Service auxiliar
 │

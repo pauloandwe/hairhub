@@ -12,7 +12,7 @@ export const unsupportedQueryTools: OpenAITool[] = [
   • Horários disponíveis para agendamento → getAvailableTimeSlots
   • Histórico de agendamentos/cortes → getAppointmentHistory
   • Serviços disponíveis → getServices
-  • Barbeiros disponíveis → getBarbers
+  • Barbeiros disponíveis → getProfessionals
 
 **CONSULTAS NÃO DISPONÍVEIS (USE esta função):**
   • Faturamento/receita

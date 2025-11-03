@@ -35,7 +35,7 @@ export class ServiceService {
       }))
     } catch (error) {
       console.error('[ServiceService] Error fetching services:', error)
-      throw new Error('Erro ao listar serviços da barbearia.')
+      throw new Error('Erro ao listar serviços da business.')
     }
   }
 }

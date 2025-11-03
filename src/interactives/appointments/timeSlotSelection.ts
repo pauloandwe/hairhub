@@ -3,7 +3,7 @@ import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { getUserContext, setUserContext, getUserContextSync, getBusinessPhoneForPhone } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
-import { barberService } from '../../services/appointments/barber.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
@@ -18,12 +18,12 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
   fetchItems: async (phone) => {
     const draft = await appointmentService.loadDraft(phone)
     const serviceId = draft.service?.id ? Number(draft.service.id) : null
-    const barberId = draft.barber?.id ? Number(draft.barber.id) : null
+    const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const date = draft.appointmentDate ?? null
 
-    const slots = await barberService.getAvailableSlots({
+    const slots = await professionalService.getAvailableSlots({
       phone,
-      barberId,
+      professionalId,
       date,
       serviceId,
     })

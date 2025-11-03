@@ -9,7 +9,7 @@ export const unsupportedRegistrationTools: OpenAITool[] = [
 - Use SEMPRE que o usuário mencionar cadastrar/lançar/registrar algo que NÃO está na lista de cadastros disponíveis.
 - Cadastros DISPONÍVEIS (NÃO use esta função para estes):
   * Agendamento de corte/serviço → usar startAppointmentRegistration
-  * Despesas/custos/gastos da barbearia → usar startExpenseRegistration
+  * Despesas/custos/gastos da business → usar startExpenseRegistration
 
 - Cadastros NÃO DISPONÍVEIS (USE esta função):
   * Cadastro de novos barbeiros
@@ -23,7 +23,7 @@ export const unsupportedRegistrationTools: OpenAITool[] = [
   * Qualquer outro tipo de cadastro não listado acima como disponível
 
 EXEMPLOS DE USO:
-- "Quero adicionar um novo barbeiro" → reportUnsupportedRegistration({ registrationType: "cadastro de novo barbeiro" })
+- "Quero adicionar um novo professional" → reportUnsupportedRegistration({ registrationType: "cadastro de novo professional" })
 - "Registrar um novo serviço" → reportUnsupportedRegistration({ registrationType: "cadastro de novo serviço" })
 - "Cadastrar um novo cliente" → reportUnsupportedRegistration({ registrationType: "cadastro de cliente" })
 

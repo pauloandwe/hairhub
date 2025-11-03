@@ -5,7 +5,7 @@
 Quando o usuário digitava **"Mudar Horário"** durante a edição de um agendamento já criado, recebia o erro:
 
 ```
-"O campo "time" não pode ser editado. Campos válidos: data do agendamento, horário do agendamento, serviço, barbeiro, nome do cliente, telefone do cliente, observações."
+"O campo "time" não pode ser editado. Campos válidos: data do agendamento, horário do agendamento, serviço, professional, nome do cliente, telefone do cliente, observações."
 ```
 
 ## Causa Raiz
@@ -67,7 +67,7 @@ export enum AppointmentFields {
   APPOINTMENT_DATE = 'appointmentDate', // ✅ Alinhado!
   APPOINTMENT_TIME = 'appointmentTime', // ✅ Alinhado!
   SERVICE = 'service',
-  BARBER = 'barber',
+  PROFESSIONAL = 'professional',
   CLIENT_NAME = 'clientName',
   CLIENT_PHONE = 'clientPhone',
   NOTES = 'notes',
@@ -199,7 +199,7 @@ deec195 refactor(appointments): standardize to GenericCrudFlow pattern
 ## Testes Recomendados
 
 ✅ Criar novo agendamento
-✅ Editar campo durante criação (ex: "Mudar Barbeiro")
+✅ Editar campo durante criação (ex: "Mudar Professional")
 ✅ Confirmar agendamento
 ✅ Clicar "Editar" nos botões pós-confirmação
 ✅ Enviar "Mudar Horário" ← **AGORA FUNCIONA!**

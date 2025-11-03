@@ -39,7 +39,7 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
     const payload = unwrapApiResponse<any>(responseBusiness)
     if (!payload) return null
 
-    const { workingHours, barbers, ...sanitizedData } = payload
+    const { workingHours, professionals, ...sanitizedData } = payload
     const token = sanitizedData?.token as string | undefined
     if (token) setApiBearerToken(token)
     console.log('[AuthToken] Token encontrado para businessId:', {

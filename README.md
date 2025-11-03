@@ -134,7 +134,7 @@ hairhub/
 
 ### Multi-Tenant
 
-O sistema identifica qual barbearia através do número de WhatsApp. Cada número pode ser configurado com:
+O sistema identifica qual business através do número de WhatsApp. Cada número pode ser configurado com:
 
 - Serviços oferecidos
 - Barbeiros disponíveis
@@ -145,13 +145,13 @@ O sistema identifica qual barbearia através do número de WhatsApp. Cada númer
 
 O sistema vem com 2 barbearias de exemplo:
 
-**Barbearia Alpha** (5511999999999)
+**Business Alpha** (5511999999999)
 
 - 3 barbeiros
 - 5 serviços
 - Seg-Sex 9h-18h, Sáb 9h-14h
 
-**Barbearia Beta** (5511888888888)
+**Business Beta** (5511888888888)
 
 - 2 barbeiros
 - 4 serviços

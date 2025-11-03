@@ -13,7 +13,7 @@ const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
 const SERVICE_DURATION_MINUTES = 20
 const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
 
-const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'barber', 'clientName', 'clientPhone', 'notes'] as const
+const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'professional', 'clientName', 'clientPhone', 'notes'] as const
 
 interface AppointmentPayloadContext {
   farmId?: number | string
@@ -28,7 +28,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       appointmentDate: 'data do agendamento',
       appointmentTime: 'horário do agendamento',
       service: 'serviço',
-      barber: 'barbeiro',
+      professional: 'profissional',
       clientName: 'nome do cliente',
       clientPhone: 'telefone do cliente',
       notes: 'observações',
@@ -155,7 +155,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       date?: unknown
       time?: unknown
       service?: unknown
-      barber?: unknown
+      professional?: unknown
     }
 
     const normalizeIdValue = (value: unknown): string | null => {
@@ -165,10 +165,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     const previousServiceId = normalizeIdValue(currentDraft.service?.id)
-    const previousBarberId = normalizeIdValue(currentDraft.barber?.id)
+    const previousProfessionalId = normalizeIdValue(currentDraft.professional?.id)
     const previousDate = currentDraft.appointmentDate ?? null
 
-    const assignRef = (field: keyof Pick<IAppointmentValidationDraft, 'service' | 'barber'>, incoming: IdNameRef | null | undefined) => {
+    const assignRef = (field: keyof Pick<IAppointmentValidationDraft, 'service' | 'professional'>, incoming: IdNameRef | null | undefined) => {
       if (incoming === undefined) return
       if (incoming === null) {
         currentDraft[field] = null
@@ -189,20 +189,20 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       const incomingServiceId = normalizeIdValue(normalizedService?.id)
       const hasServiceChanged = incomingServiceId !== previousServiceId
       if (hasServiceChanged) {
-        currentDraft.barber = null
+        currentDraft.professional = null
         currentDraft.appointmentTime = null
       }
       assignRef('service', normalizedService)
     }
 
-    const normalizedBarber = this.normalizeRefInput(extendedArgs.barber)
-    if (normalizedBarber !== undefined) {
-      const incomingBarberId = normalizeIdValue(normalizedBarber?.id)
-      const hasBarberChanged = incomingBarberId !== previousBarberId
-      if (hasBarberChanged) {
+    const normalizedProfessional = this.normalizeRefInput(extendedArgs.professional)
+    if (normalizedProfessional !== undefined) {
+      const incomingProfessionalId = normalizeIdValue(normalizedProfessional?.id)
+      const hasProfessionalChanged = incomingProfessionalId !== previousProfessionalId
+      if (hasProfessionalChanged) {
         currentDraft.appointmentTime = null
       }
-      assignRef('barber', normalizedBarber)
+      assignRef('professional', normalizedProfessional)
     }
 
     if (extendedArgs.appointmentDate !== undefined) {
@@ -269,7 +269,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   protected getRequiredFields = (): MissingRule<IAppointmentValidationDraft>[] => {
     return [
       { key: 'service' as keyof IAppointmentValidationDraft, kind: 'ref' },
-      { key: 'barber' as keyof IAppointmentValidationDraft, kind: 'ref' },
+      { key: 'professional' as keyof IAppointmentValidationDraft, kind: 'ref' },
       { key: 'appointmentDate' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'appointmentTime' as keyof IAppointmentValidationDraft, kind: 'string' },
     ]
@@ -290,8 +290,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         value: (draft: IAppointmentValidationDraft) => draft.service?.name ?? null,
       },
       {
-        label: 'Barbeiro',
-        value: (draft: IAppointmentValidationDraft) => draft.barber?.name ?? null,
+        label: 'Profissional',
+        value: (draft: IAppointmentValidationDraft) => draft.professional?.name ?? null,
       },
       {
         label: 'Nome do Cliente',
@@ -337,7 +337,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const finalPayload: IAppointmentCreationPayload = {
       businessId: businessIdNumber,
       serviceId: Number(draft.service?.id),
-      barberId: Number(draft.barber?.id),
+      professionalId: Number(draft.professional?.id),
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       source: 'whatsapp',
@@ -385,7 +385,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           businessId,
           filters: 'active:true',
         }
-      case AppointmentFields.BARBER:
+      case AppointmentFields.PROFESSIONAL:
         return {
           businessId,
           filters: 'active:true',
@@ -412,7 +412,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           id: item.id,
           name: item.name || item.description,
         }
-      case AppointmentFields.BARBER:
+      case AppointmentFields.PROFESSIONAL:
         return {
           id: item.id,
           name: item.name,
@@ -425,8 +425,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   protected getListErrorMessage = (listType: string): string => {
     switch (listType) {
       case AppointmentFields.SERVICE:
-        return 'Erro ao listar serviços da barbearia.'
-      case AppointmentFields.BARBER:
+        return 'Erro ao listar serviços da business.'
+      case AppointmentFields.PROFESSIONAL:
         return 'Erro ao listar barbeiros disponíveis.'
       default:
         return 'Não foi possível carregar a lista solicitada.'
@@ -454,9 +454,9 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       if (serviceId) payload.serviceId = serviceId
     }
 
-    if (has('barber')) {
-      const barberId = this.extractValidId(draft.barber?.id)
-      if (barberId) payload.barberId = barberId
+    if (has('professional')) {
+      const professionalId = this.extractValidId(draft.professional?.id)
+      if (professionalId) payload.professionalId = professionalId
     }
 
     if (has('clientName')) {
@@ -491,8 +491,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     if (!draft.appointmentDate || !draft.appointmentTime) {
       throw new Error('Data e horário do agendamento são obrigatórios')
     }
-    if (!draft.service?.id || !draft.barber?.id) {
-      throw new Error('Serviço e barbeiro são obrigatórios')
+    if (!draft.service?.id || !draft.professional?.id) {
+      throw new Error('Serviço e professional são obrigatórios')
     }
   }
 }

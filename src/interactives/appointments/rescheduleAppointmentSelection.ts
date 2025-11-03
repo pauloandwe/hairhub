@@ -12,22 +12,22 @@ const buildTitle = (startDate: string): string => {
   return time ? `${dayMonth} às ${time}` : dayMonth
 }
 
-const buildDescription = (item: SelectionItem, source?: { serviceName?: string | null; barberName?: string | null }): string | undefined => {
+const buildDescription = (item: SelectionItem, source?: { serviceName?: string | null; professionalName?: string | null }): string | undefined => {
   const service = source?.serviceName?.trim() ?? ''
-  const barber = source?.barberName?.trim() ?? ''
+  const professional = source?.professionalName?.trim() ?? ''
 
-  if (service && barber) {
-    return `${service} • ${barber}`
+  if (service && professional) {
+    return `${service} • ${professional}`
   }
 
   if (service) return service
-  if (barber) return barber
+  if (professional) return professional
   return item.description
 }
 
 export const RESCHEDULE_APPOINTMENT_NAMESPACE = 'RESCHEDULE_APPOINTMENT_SELECTION'
 
-const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceName?: string | null; barberName?: string | null }>({
+const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceName?: string | null; professionalName?: string | null }>({
   namespace: RESCHEDULE_APPOINTMENT_NAMESPACE,
   type: 'rescheduleAppointmentSelect',
   fetchItems: async (phone) => {
@@ -43,7 +43,7 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
       name: buildTitle(appointment.startDate),
       description: appointment.serviceName ?? undefined,
       serviceName: appointment.serviceName ?? undefined,
-      barberName: appointment.barberName ?? undefined,
+      professionalName: appointment.professionalName ?? undefined,
     }))
   },
   ui: {
@@ -57,7 +57,7 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
   emptyListMessage: 'Você não tem agendamentos pendentes para remarcar.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
-  descriptionBuilder: (item) => buildDescription(item, { serviceName: item.serviceName, barberName: item.barberName }),
+  descriptionBuilder: (item) => buildDescription(item, { serviceName: item.serviceName, professionalName: item.professionalName }),
   onSelected: async ({ userId, item }) => {
     try {
       const appointmentId = Number(item.id)

@@ -99,7 +99,7 @@ const askAppointmentId: MissingFieldHandler = async (phone, draft) => {
       }
     }
 
-    const description = draft.selectedAppointment ? `${draft.selectedAppointment.serviceName || ''} com ${draft.selectedAppointment.barberName || ''}` : ''
+    const description = draft.selectedAppointment ? `${draft.selectedAppointment.serviceName || ''} com ${draft.selectedAppointment.professionalName || ''}` : ''
 
     await sendWhatsAppMessage(phone, `Qual agendamento você quer remarcar? ${description}`)
     await sendPendingAppointmentSelectionList(phone)
@@ -115,7 +115,7 @@ const askAppointmentId: MissingFieldHandler = async (phone, draft) => {
 const askNewDate: MissingFieldHandler = async (phone, draft) => {
   try {
     const appointment = appointmentRescheduleService.getSelectedAppointment(phone)
-    if (!appointment || !appointment.barberId || !appointment.serviceId) {
+    if (!appointment || !appointment.professionalId || !appointment.serviceId) {
       const message = 'Selecione um agendamento válido primeiro.'
       await sendWhatsAppMessage(phone, message)
       return { message, interactive: false, draft }
@@ -138,7 +138,7 @@ const askNewTime: MissingFieldHandler = async (phone, draft) => {
     const appointment = appointmentRescheduleService.getSelectedAppointment(phone)
     const selectedDate = appointmentRescheduleService.getSelectedDate(phone)
 
-    if (!appointment || !appointment.barberId || !appointment.serviceId) {
+    if (!appointment || !appointment.professionalId || !appointment.serviceId) {
       const message = 'Selecione um agendamento válido primeiro.'
       await sendWhatsAppMessage(phone, message)
       return { message, interactive: false, draft }

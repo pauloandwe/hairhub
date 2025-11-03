@@ -27,7 +27,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         missingDataDuringConfirm: 'Faltam alguns dados. Bora preencher?',
         invalidField: 'Esse campo não dá pra alterar pelo menu. Me manda uma mensagem com o novo valor.',
         editModeIntro: 'Bora editar o agendamento. Me diz o que você quer mudar.',
-        editModeExamples: ['"Mudar data para 20/03/2024"', '"Alterar o horário"', '"Trocar de barbeiro"'],
+        editModeExamples: ['"Mudar data para 20/03/2024"', '"Alterar o horário"', '"Trocar de professional"'],
         editRecordNotFound: 'Não achei o agendamento pra editar.',
         editFieldUpdateError: 'Não consegui alterar esse campo.',
         editPromptFallback: 'Qual a informação nova?',

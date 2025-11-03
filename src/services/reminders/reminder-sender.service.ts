@@ -145,21 +145,14 @@ export class ReminderSenderService {
 
       return response.data?.messages?.[0]?.id || 'unknown'
     } catch (error: any) {
-      throw new Error(
-        `Falha ao enviar mensagem WhatsApp: ${error?.response?.data?.error?.message || error.message}`,
-      )
+      throw new Error(`Falha ao enviar mensagem WhatsApp: ${error?.response?.data?.error?.message || error.message}`)
     }
   }
 
   /**
    * Atualiza status do lembrete no backend
    */
-  static async updateReminderStatusInBackend(
-    logId: number,
-    status: string,
-    messageId?: string,
-    error?: string,
-  ): Promise<void> {
+  static async updateReminderStatusInBackend(logId: number, status: string, messageId?: string, error?: string): Promise<void> {
     const backendUrl = env.BACKEND_URL || 'http://localhost:3001'
 
     try {

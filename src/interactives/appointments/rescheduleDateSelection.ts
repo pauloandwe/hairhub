@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from '../../api/meta.api'
 import { createSelectionFlow } from '../flows'
 import { appointmentRescheduleService } from '../../services/appointments/appointment-reschedule.service'
 import { appointmentRescheduleDraftService } from '../../services/appointments/appointment-reschedule-draft.service'
-import { barberService } from '../../services/appointments/barber.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { tryContinueRegistration } from '../followup'
 
@@ -19,21 +19,21 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
       return []
     }
 
-    if (!appointment.barberId || !appointment.serviceId) {
-      console.warn('[RescheduleDateSelection] Missing barber/service for appointment:', appointment)
-      await sendWhatsAppMessage(phone, 'Esse agendamento não tem barbeiro ou serviço vinculados. Não consigo sugerir novas datas.')
+    if (!appointment.professionalId || !appointment.serviceId) {
+      console.warn('[RescheduleDateSelection] Missing professional/service for appointment:', appointment)
+      await sendWhatsAppMessage(phone, 'Esse agendamento não tem professional ou serviço vinculados. Não consigo sugerir novas datas.')
       return []
     }
 
     try {
-      const days = await barberService.getAvailableDays({
+      const days = await professionalService.getAvailableDays({
         phone,
-        barberId: appointment.barberId,
+        professionalId: appointment.professionalId,
         serviceId: appointment.serviceId,
       })
 
       if (!days.length) {
-        await sendWhatsAppMessage(phone, 'Não encontrei datas disponíveis para os próximos dias com esse barbeiro.')
+        await sendWhatsAppMessage(phone, 'Não encontrei datas disponíveis para os próximos dias com esse professional.')
       }
 
       return days

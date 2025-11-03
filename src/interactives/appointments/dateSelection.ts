@@ -3,7 +3,7 @@ import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
-import { barberService } from '../../services/appointments/barber.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
@@ -17,12 +17,12 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
   type: 'selectDate',
   fetchItems: async (phone) => {
     const draft = await appointmentService.loadDraft(phone)
-    const barberId = draft.barber?.id ? Number(draft.barber.id) : null
+    const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const serviceId = draft.service?.id ? Number(draft.service.id) : null
 
-    if (!barberId) {
-      console.warn('[dateSelectionFlow] Barbeiro não selecionado para buscar dias disponíveis', { phone })
-      await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um barbeiro antes de escolher a data.')
+    if (!professionalId) {
+      console.warn('[dateSelectionFlow] Professional não selecionado para buscar dias disponíveis', { phone })
+      await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um professional antes de escolher a data.')
       return []
     }
 
@@ -33,15 +33,15 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     }
 
     try {
-      const days = await barberService.getAvailableDays({
+      const days = await professionalService.getAvailableDays({
         phone,
-        barberId,
+        professionalId,
         serviceId,
       })
 
       if (!days || days.length === 0) {
-        console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, barberId, serviceId })
-        await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias com o barbeiro selecionado. Tente novamente mais tarde ou escolha outro barbeiro.')
+        console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, professionalId, serviceId })
+        await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias com o professional selecionado. Tente novamente mais tarde ou escolha outro professional.')
         return []
       }
 

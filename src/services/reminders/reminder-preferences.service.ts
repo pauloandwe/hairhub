@@ -49,12 +49,9 @@ export class ReminderPreferencesService {
     }
 
     try {
-      const response = await axios.get(
-        `${BACKEND_URL}/client-preferences/phone/${clientPhone}`,
-        {
-          timeout: 5000,
-        },
-      )
+      const response = await axios.get(`${BACKEND_URL}/client-preferences/phone/${clientPhone}`, {
+        timeout: 5000,
+      })
 
       const preferences = {
         clientPhone,
@@ -64,10 +61,7 @@ export class ReminderPreferencesService {
 
       // Armazena em cache
       this.preferencesCache.set(clientPhone, preferences)
-      setTimeout(
-        () => this.preferencesCache.delete(clientPhone),
-        this.CACHE_TTL,
-      )
+      setTimeout(() => this.preferencesCache.delete(clientPhone), this.CACHE_TTL)
 
       return preferences
     } catch (error: any) {

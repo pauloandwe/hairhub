@@ -14,13 +14,13 @@ QUANDO USAR:
 
 EXEMPLOS:
 - "Quais horários estão livres amanhã?" → getAvailableTimeSlots({ date: "<YYYY-MM-DD de amanhã>" })
-- "Tem horário com o João disponível?" → getAvailableTimeSlots({ barberId: 1 })
+- "Tem horário com o João disponível?" → getAvailableTimeSlots({ professionalId: 1 })
 - "Me mostra os horários para 20/11/2024" → getAvailableTimeSlots({ date: "2024-11-20" })`,
       parameters: {
         type: 'object',
         properties: {
           date: { type: 'string', format: 'date', description: 'Data para consultar horários (YYYY-MM-DD)' },
-          barberId: { type: 'integer', description: 'ID do barbeiro (opcional)' },
+          professionalId: { type: 'integer', description: 'ID do professional (opcional)' },
         },
         required: [],
         additionalProperties: false,
@@ -56,7 +56,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'getServices',
-      description: `Retorna os serviços disponíveis na barbearia.
+      description: `Retorna os serviços disponíveis na business.
 
 QUANDO USAR:
 - Quando o usuário pergunta "Quais serviços vocês oferecem?"
@@ -78,18 +78,18 @@ EXEMPLOS:
   {
     type: 'function',
     function: {
-      name: 'getBarbers',
-      description: `Retorna os barbeiros disponíveis na barbearia.
+      name: 'getProfessionals',
+      description: `Retorna os barbeiros disponíveis na business.
 
 QUANDO USAR:
 - Quando o usuário pergunta "Quem são os barbeiros?"
-- Quando o usuário quer escolher um barbeiro específico
-- Para mostrar especialidades de cada barbeiro
+- Quando o usuário quer escolher um professional específico
+- Para mostrar especialidades de cada professional
 
 EXEMPLOS:
-- "Quem atende?" → getBarbers({})
-- "Qual barbeiro é melhor para corte moderno?" → getBarbers({})
-- "O João trabalha hoje?" → getBarbers({})`,
+- "Quem atende?" → getProfessionals({})
+- "Qual professional é melhor para corte moderno?" → getProfessionals({})
+- "O João trabalha hoje?" → getProfessionals({})`,
       parameters: {
         type: 'object',
         properties: {},

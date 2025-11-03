@@ -17,15 +17,15 @@ export function buildAssistantTitle(farmName: string, flowType?: string, flowSte
   }
 
   if (farmName) {
-    return `*Assistente de Barbearia - ${farmName}*`
+    return `*Assistente de Business - ${farmName}*`
   }
 
-  return '*Assistente de Barbearia*'
+  return '*Assistente de Business*'
 }
 
 export function stripAssistantTitle(text: string): string {
   if (!text) return text
-  return text.replace(/^(\*?(?:Assistente de Barbearia|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
+  return text.replace(/^(\*?(?:Assistente de Business|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
 }
 
 export function sanitizeOutgoingText(text: string): string {

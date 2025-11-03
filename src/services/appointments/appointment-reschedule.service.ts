@@ -35,8 +35,8 @@ const mapAppointment = (raw: any): AppointmentRescheduleAppointment | null => {
   const serviceName = isNonEmptyString(raw?.service?.name) ? raw.service.name : isNonEmptyString(raw?.serviceName) ? raw.serviceName : null
   const serviceDuration = toNumberOrNull(raw?.service?.duration)
 
-  const barberId = toNumberOrNull(raw?.barberId ?? raw?.barber?.id)
-  const barberName = isNonEmptyString(raw?.barber?.name) ? raw.barber.name : isNonEmptyString(raw?.barberName) ? raw.barberName : null
+  const professionalId = toNumberOrNull(raw?.professionalId ?? raw?.professional?.id)
+  const professionalName = isNonEmptyString(raw?.professional?.name) ? raw.professional.name : isNonEmptyString(raw?.professionalName) ? raw.professionalName : null
 
   const clientName = isNonEmptyString(raw?.clientContact?.name) ? raw.clientContact.name : isNonEmptyString(raw?.client?.name) ? raw.client.name : null
   const clientPhone = isNonEmptyString(raw?.clientContact?.phone) ? raw.clientContact.phone : null
@@ -51,8 +51,8 @@ const mapAppointment = (raw: any): AppointmentRescheduleAppointment | null => {
     serviceId,
     serviceName,
     serviceDuration,
-    barberId,
-    barberName,
+    professionalId,
+    professionalName,
     clientName,
     clientPhone,
   }
@@ -118,7 +118,7 @@ class AppointmentRescheduleService {
     const sanitizedPhone = sanitizePhone(phone)
 
     if (!normalizedBusinessId) {
-      throw new Error('Não consegui identificar sua barbearia para buscar os agendamentos.')
+      throw new Error('Não consegui identificar sua business para buscar os agendamentos.')
     }
 
     if (!sanitizedPhone) {
@@ -236,7 +236,7 @@ class AppointmentRescheduleService {
     const normalizedBusinessId = businessId ? String(businessId).trim() : ''
 
     if (!normalizedBusinessId) {
-      throw new Error('Não consegui identificar sua barbearia para remarcar o agendamento.')
+      throw new Error('Não consegui identificar sua business para remarcar o agendamento.')
     }
 
     const startDate = combineDateAndTime(state.selectedDate, state.selectedTime)

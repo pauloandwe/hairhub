@@ -1,14 +1,13 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendServiceSelectionList } from '../../interactives/appointments/serviceSelection'
-import { sendBarberSelectionList } from '../../interactives/appointments/barberSelection'
-import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
+import { sendProfessionalSelectionList } from '../../interactives/appointments/professionalSelection';import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
 import { sendDateSelectionList } from '../../interactives/appointments/dateSelection'
 import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
 import { FieldEditor } from '../functions.types'
 
-export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber' | 'notes' | 'clientName' | 'clientPhone'
-export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'barber'
+export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'professional' | 'notes' | 'clientName' | 'clientPhone'
+export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'professional'
 
 type ChangeResponse = { message: string; interactive: boolean }
 
@@ -32,8 +31,8 @@ const editService: FieldEditor = async (phone) => {
   return respond('Menu de serviços enviado', true)
 }
 
-const editBarber: FieldEditor = async (phone) => {
-  await sendBarberSelectionList(phone, 'Qual barbeiro você prefere? 👇')
+const editProfessional: FieldEditor = async (phone) => {
+  await sendProfessionalSelectionList(phone, 'Qual professional você prefere? 👇')
   return respond('Menu de barbeiros enviado', true)
 }
 
@@ -62,7 +61,7 @@ export const appointmentFieldEditors: Record<AppointmentEditField, FieldEditor> 
   appointmentDate: editDate,
   appointmentTime: editTime,
   service: editService,
-  barber: editBarber,
+  professional: editProfessional,
   notes: editNotes,
   clientName: editClientName,
   clientPhone: editClientPhone,
@@ -85,8 +84,8 @@ const askService: MissingFieldHandler = async (phone, draft) => {
   return { message: 'Menu de serviços enviado', interactive: true, draft }
 }
 
-const askBarber: MissingFieldHandler = async (phone, draft) => {
-  await sendBarberSelectionList(phone, 'Qual barbeiro você prefere? 👇')
+const askProfessional: MissingFieldHandler = async (phone, draft) => {
+  await sendProfessionalSelectionList(phone, 'Qual professional você prefere? 👇')
   return { message: 'Menu de barbeiros enviado', interactive: true, draft }
 }
 
@@ -94,5 +93,5 @@ export const missingFieldHandlers: Record<AppointmentMissingField, MissingFieldH
   appointmentDate: askDate,
   appointmentTime: askTime,
   service: askService,
-  barber: askBarber,
+  professional: askProfessional,
 }

@@ -157,7 +157,7 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
   }
 
   protected async onAfterCreateSuccess(phone: string, draft: RescheduleDraft, summary: string): Promise<void> {
-    const description = draft.selectedAppointment ? `${draft.selectedAppointment.serviceName || ''} com ${draft.selectedAppointment.barberName || ''}` : 'agendamento'
+    const description = draft.selectedAppointment ? `${draft.selectedAppointment.serviceName || ''} com ${draft.selectedAppointment.professionalName || ''}` : 'agendamento'
 
     const when = draft.newDate && draft.newTime ? DateFormatter.formatToDateTimeLabel(`${draft.newDate}T${draft.newTime}`) : ''
 

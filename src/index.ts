@@ -17,7 +17,7 @@ app.use(reminderRouter)
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    service: 'barber-hub-whatsapp',
+    service: 'professional-hub-whatsapp',
     timestamp: new Date().toISOString(),
   })
 })

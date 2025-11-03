@@ -3,61 +3,61 @@ import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
-import { barberService } from '../../services/appointments/barber.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
-export const BARBER_NAMESPACE = 'BARBER_GROUP'
+export const PROFESSIONAL_NAMESPACE = 'BARBER_GROUP'
 
-const barberFlow = createSelectionFlow<SelectionItem>({
-  namespace: BARBER_NAMESPACE,
-  type: 'selectBarber',
+const professionalFlow = createSelectionFlow<SelectionItem>({
+  namespace: PROFESSIONAL_NAMESPACE,
+  type: 'selectProfessional',
   fetchItems: async (phone) => {
-    return barberService.getBarbers(phone)
+    return professionalService.getProfessionals(phone)
   },
   ui: {
-    header: 'Escolha o Barbeiro',
+    header: 'Escolha o Professional',
     sectionTitle: 'Barbeiros',
     footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Qual barbeiro você prefere?',
+  defaultBody: 'Qual professional você prefere?',
   invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum barbeiro encontrado',
+  emptyListMessage: 'Nenhum professional encontrado',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este barbeiro',
+  descriptionBuilder: () => 'Selecionar este professional',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
     await setUserContext(userId, {
-      barberId: item.id,
-      barberName: item.name,
+      professionalId: item.id,
+      professionalName: item.name,
     })
 
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
-      await appointmentService.updateDraftField(userId, AppointmentFields.BARBER as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
+      await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Barbeiro '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, `Professional '${item.name}' selecionado.`)
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
     await setUserContext(userId, {
-      barberId: item.id,
-      barberName: item.name,
+      professionalId: item.id,
+      professionalName: item.name,
     })
 
     await appointmentFunctions.applyAppointmentRecordUpdates({
       phone: userId,
-      updates: { barber: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
-      logContext: `Barbeiro atualizado para ${item.name}`,
+      updates: { professional: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
+      logContext: `Professional atualizado para ${item.name}`,
     })
   },
 })
 
-export async function sendBarberSelectionList(userId: string, bodyMsg = 'Qual barbeiro você prefere?', offset = 0) {
-  await barberFlow.sendList(userId, bodyMsg, offset)
+export async function sendProfessionalSelectionList(userId: string, bodyMsg = 'Qual professional você prefere?', offset = 0) {
+  await professionalFlow.sendList(userId, bodyMsg, offset)
 }
