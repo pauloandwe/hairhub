@@ -66,7 +66,6 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
       'Recebido pedido para enviar lembrete',
     )
 
-    // Verifica preferências do cliente
     const shouldSend = await ReminderPreferencesService.shouldSendReminder(payload.clientPhone)
 
     if (!shouldSend) {
@@ -86,7 +85,6 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
       })
     }
 
-    // Envia lembrete com retry automático
     const result: ReminderSendResponse = await ReminderSenderService.sendReminder(payload)
 
     whatsappLogger.info(
@@ -96,7 +94,6 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
       result.success ? 'Lembrete enviado com sucesso' : 'Falha ao enviar lembrete',
     )
 
-    // Retorna resposta imediatamente (o backend vai trackear o status posteriormente)
     res.status(result.success ? 200 : 500).json(result)
   } catch (error: any) {
     whatsappLogger.error(
@@ -114,10 +111,6 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
   }
 })
 
-/**
- * POST /api/reminders/opt-out
- * Processa comando de opt-out via WhatsApp
- */
 router.post('/api/reminders/opt-out', async (req: Request, res: Response) => {
   try {
     const { clientPhone } = req.body
@@ -150,10 +143,6 @@ router.post('/api/reminders/opt-out', async (req: Request, res: Response) => {
   }
 })
 
-/**
- * POST /api/reminders/opt-in
- * Processa comando de opt-in via WhatsApp
- */
 router.post('/api/reminders/opt-in', async (req: Request, res: Response) => {
   try {
     const { clientPhone } = req.body
@@ -186,10 +175,6 @@ router.post('/api/reminders/opt-in', async (req: Request, res: Response) => {
   }
 })
 
-/**
- * GET /api/reminders/health
- * Health check do serviço de lembretes
- */
 router.get('/api/reminders/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',

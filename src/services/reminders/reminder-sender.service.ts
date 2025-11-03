@@ -7,7 +7,7 @@ export interface SendReminderPayload {
   clientPhone: string
   message: string
   appointmentId: number
-  type: string // CONFIRMATION, PRE_APPOINTMENT, POST_APPOINTMENT, RESCHEDULING
+  type: string
 }
 
 export interface ReminderSendResponse {
@@ -21,12 +21,9 @@ export interface ReminderSendResponse {
 }
 
 const MAX_RETRIES = 3
-const RETRY_DELAY = 2000 // 2 seconds
+const RETRY_DELAY = 2000
 
 export class ReminderSenderService {
-  /**
-   * Envia um lembrete via WhatsApp com retry automático
-   */
   static async sendReminder(payload: SendReminderPayload): Promise<ReminderSendResponse> {
     const { businessPhone, clientPhone, message, appointmentId, type } = payload
     let lastError: any
@@ -79,15 +76,13 @@ export class ReminderSenderService {
           `Falha ao enviar lembrete - Tentativa ${attempt}/${MAX_RETRIES}`,
         )
 
-        // Se não é a última tentativa, aguarda antes de tentar novamente
         if (attempt < MAX_RETRIES) {
-          const delay = RETRY_DELAY * Math.pow(2, attempt - 1) // Exponential backoff
+          const delay = RETRY_DELAY * Math.pow(2, attempt - 1)
           await new Promise((resolve) => setTimeout(resolve, delay))
         }
       }
     }
 
-    // Se chegou aqui, todas as tentativas falharam
     whatsappLogger.error(
       {
         appointmentId,
@@ -111,9 +106,6 @@ export class ReminderSenderService {
     }
   }
 
-  /**
-   * Envia mensagem via Meta WhatsApp API
-   */
   private static async sendMessageViaMetaAPI(to: string, text: string): Promise<string> {
     const PHONE_NUMBER_ID = env.PHONE_NUMBER_ID
     const META_ACCESS_TOKEN = env.META_ACCESS_TOKEN
@@ -139,7 +131,7 @@ export class ReminderSenderService {
             Authorization: `Bearer ${META_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000, // 10 segundos timeout
+          timeout: 10000,
         },
       )
 
@@ -149,9 +141,6 @@ export class ReminderSenderService {
     }
   }
 
-  /**
-   * Atualiza status do lembrete no backend
-   */
   static async updateReminderStatusInBackend(logId: number, status: string, messageId?: string, error?: string): Promise<void> {
     const backendUrl = env.BACKEND_URL || 'http://localhost:3001'
 
@@ -176,7 +165,6 @@ export class ReminderSenderService {
         },
         'Falha ao atualizar status do lembrete no backend',
       )
-      // Não lança erro, pois a mensagem já foi enviada
     }
   }
 }

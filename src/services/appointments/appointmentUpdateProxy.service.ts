@@ -22,11 +22,6 @@ interface UpdateProxyResponse {
 }
 
 class AppointmentUpdateProxyService {
-  /**
-   * Proxy request to update appointment via external API
-   * Encapsulates the logic of forwarding PATCH requests to the Appointments service
-   * with proper authorization and error handling
-   */
   async updateAppointment(request: UpdateProxyRequest): Promise<UpdateProxyResponse> {
     try {
       const sanitizedBaseUrl = env.APPOINTMENTS_URL.replace(/\/+$/, '')

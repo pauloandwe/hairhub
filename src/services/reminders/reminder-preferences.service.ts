@@ -10,17 +10,10 @@ export interface ClientPreference {
 
 const BACKEND_URL = env.BACKEND_URL || 'http://localhost:3001'
 
-/**
- * Serviço para gerenciar preferências de lembretes de clientes
- * Usa cache em memória para melhor performance
- */
 export class ReminderPreferencesService {
   private static preferencesCache: Map<string, ClientPreference> = new Map()
-  private static readonly CACHE_TTL = 1000 * 60 * 60 // 1 hora
+  private static readonly CACHE_TTL = 1000 * 60 * 60 
 
-  /**
-   * Verifica se um cliente prefere receber lembretes
-   */
   static async shouldSendReminder(clientPhone: string): Promise<boolean> {
     try {
       const preferences = await this.getClientPreferences(clientPhone)
@@ -33,16 +26,13 @@ export class ReminderPreferencesService {
         },
         'Erro ao verificar preferências de lembrete, permitindo envio por padrão',
       )
-      // Por segurança, permite envio se não conseguir verificar
+      
       return true
     }
   }
 
-  /**
-   * Obtém preferências de um cliente
-   */
   private static async getClientPreferences(clientPhone: string): Promise<ClientPreference> {
-    // Verifica cache primeiro
+    
     const cached = this.preferencesCache.get(clientPhone)
     if (cached) {
       return cached
@@ -59,7 +49,6 @@ export class ReminderPreferencesService {
         optOutDate: response.data?.optOutDate,
       }
 
-      // Armazena em cache
       this.preferencesCache.set(clientPhone, preferences)
       setTimeout(() => this.preferencesCache.delete(clientPhone), this.CACHE_TTL)
 
@@ -77,9 +66,6 @@ export class ReminderPreferencesService {
     }
   }
 
-  /**
-   * Registra opt-out de um cliente
-   */
   static async optOut(clientPhone: string): Promise<void> {
     try {
       await axios.put(
@@ -92,7 +78,6 @@ export class ReminderPreferencesService {
         },
       )
 
-      // Atualiza cache local
       this.preferencesCache.set(clientPhone, {
         clientPhone,
         remindersEnabled: false,
@@ -117,9 +102,6 @@ export class ReminderPreferencesService {
     }
   }
 
-  /**
-   * Registra opt-in de um cliente
-   */
   static async optIn(clientPhone: string): Promise<void> {
     try {
       await axios.put(
@@ -132,7 +114,6 @@ export class ReminderPreferencesService {
         },
       )
 
-      // Atualiza cache local
       this.preferencesCache.set(clientPhone, {
         clientPhone,
         remindersEnabled: true,
@@ -156,9 +137,6 @@ export class ReminderPreferencesService {
     }
   }
 
-  /**
-   * Limpa cache manualmente
-   */
   static clearCache(): void {
     this.preferencesCache.clear()
     whatsappLogger.info('Cache de preferências de lembretes limpo')

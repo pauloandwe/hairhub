@@ -6,14 +6,11 @@ const app = express()
 app.use(express.json())
 const webhookService = WebhookService.getInstance()
 
-// Webhook routes
 app.get('/webhook', webhookService.handleVerification)
 app.post('/webhook', webhookService.webhookInitiator)
 
-// Reminder routes
 app.use(reminderRouter)
 
-// Health check geral
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',

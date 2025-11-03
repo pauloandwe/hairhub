@@ -16,12 +16,6 @@ export class DateFormatter {
     return date.toISOString().split('T')[0]
   }
 
-  /**
-   * @deprecated NUNCA use este método para APIs ou salvamento no banco!
-   * Este método retorna uma string SEM timezone explícito, causando interpretações incorretas.
-   * Para APIs: use toISOString() no Date object
-   * Para exibição: use formatToBrazilianDate() ou formatToHourMinute()
-   */
   static toLocalDateTimeString(date: Date): string {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       throw new Error('Data inválida fornecida')
@@ -58,8 +52,6 @@ export class DateFormatter {
       } else {
         const parsedByIso = parseISO(normalized)
         if (isValid(parsedByIso)) {
-          // parseISO já retorna Date object correto
-          // date-fns format() já converte para timezone local automaticamente
           parsedDate = parsedByIso
         }
       }
@@ -159,8 +151,6 @@ export class DateFormatter {
 
       const isoCandidate = parseISO(trimmed)
       if (isValid(isoCandidate)) {
-        // parseISO já retorna Date object correto
-        // date-fns format() já converte para timezone local automaticamente
         parsed = isoCandidate
       } else {
         const parsedGeneric = new Date(trimmed)

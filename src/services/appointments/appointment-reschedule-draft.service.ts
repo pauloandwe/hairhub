@@ -52,18 +52,12 @@ function emptyRescheduleDraft(): RescheduleDraft {
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 
 const combineDateAndTime = (date: string, time: string): Date => {
-  // Espera formato: date = "yyyy-MM-dd", time = "HH:mm" ou "HH:mm:ss"
   const [year, month, day] = date.split('-').map(Number)
   const [hours, minutes] = time.split(':').map(Number)
 
-  // O usuário está selecionando um horário em seu timezone local
-  // Precisa converter para UTC para salvar corretamente
-
-  // Criar um Date object no timezone local para obter o offset
   const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
   const offsetMinutes = localDate.getTimezoneOffset()
 
-  // Criar a data em UTC e depois ajustar pelo offset
   const candidate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
   candidate.setTime(candidate.getTime() + offsetMinutes * 60000)
 
@@ -202,7 +196,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
 
     return {
       appointmentId: draft.appointmentId,
-      // Usar toISOString() para enviar data em formato ISO com timezone (UTC)
+
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     }
@@ -239,7 +233,6 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
         const durationMinutes = draft.selectedAppointment?.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
         const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 
-        // Usar toISOString() para enviar data em formato ISO com timezone (UTC)
         payload.startDate = startDate.toISOString()
         payload.endDate = endDate.toISOString()
       }

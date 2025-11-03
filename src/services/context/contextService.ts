@@ -69,9 +69,6 @@ export class ContextService {
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
     let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService | AppointmentRescheduleContextService = this.defaultContext
-    // const currentIntent = activeFlowType || 'default'
-
-    // await trackIntentChange(userId, currentIntent)
 
     if (activeFlowType) {
       context = this.contextMap[activeFlowType as keyof typeof this.contextMap]
@@ -109,8 +106,6 @@ export class ContextService {
       if (!hasClearance) {
         return await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
       }
-
-      // Adicionar validação para salvar o nome do cliente
 
       await this.handleFlow(activeFlowType, userId, incomingMessage)
     } catch (error) {

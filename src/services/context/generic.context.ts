@@ -384,11 +384,9 @@ export abstract class GenericContextService<TDraft> {
 
     const defaultFlowPrompt = await this.buildBasePrompt(draft, history, incomingMessage, businessName, userId)
 
-    //-------------LOG
     console.log('\n\n')
     console.log('[OpenAI] Prompt base:\n', defaultFlowPrompt)
     console.log('\n\n')
-    //-------------
 
     const openAiAgent = await this.openai.chat.completions.create({
       model: 'gpt-5-mini',
