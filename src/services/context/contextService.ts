@@ -1,4 +1,4 @@
-import { downloadMedia, sendWhatsAppMessage } from '../../api/meta.api'
+import { downloadMedia, sendWhatsAppMessage, sendWhatsAppMessageWithTitle } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
 import { getUserContext, setUserContext } from '../../env.config'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
@@ -167,7 +167,7 @@ export class ContextService {
       const resolvedClientName = runtimeContext?.clientName ?? hasClearance.clientName ?? null
 
       if (resolvedClientName === null && !runtimeContext?.awaitingClientName) {
-        await sendWhatsAppMessage(userId, 'Para continuar, por favor informe seu nome:')
+        await sendWhatsAppMessageWithTitle(userId, 'Antes de continuar, por favor informe seu nome para o atendimento:')
         await setUserContext(userId, { awaitingClientName: true })
         return
       }
