@@ -102,6 +102,8 @@ export interface UserRuntimeContext {
   businessName?: string
   businessType?: string
   userName?: string
+  clientName?: string | null
+  awaitingClientName?: boolean
   appointmentReschedule?: AppointmentRescheduleState | null
   activeRegistration: {
     type?: string
@@ -166,6 +168,10 @@ export function getBusinessTypeForPhone(phone: string): string {
 
 export function getUserNameForPhone(phone: string): string {
   return userContexts[phone]?.userName || ''
+}
+
+export function getClientNameForPhone(phone: string): string | null {
+  return userContexts[phone]?.clientName || null
 }
 
 export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string, businessPhone?: string) {

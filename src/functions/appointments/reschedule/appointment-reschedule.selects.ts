@@ -99,9 +99,6 @@ const askAppointmentId: MissingFieldHandler = async (phone, draft) => {
       }
     }
 
-    const description = draft.selectedAppointment ? `${draft.selectedAppointment.serviceName || ''} com ${draft.selectedAppointment.professionalName || ''}` : ''
-
-    await sendWhatsAppMessage(phone, `Qual agendamento você quer remarcar? ${description}`)
     await sendPendingAppointmentSelectionList(phone)
     return { message: 'Menu de agendamentos enviado', interactive: true, draft }
   } catch (error) {
@@ -121,8 +118,6 @@ const askNewDate: MissingFieldHandler = async (phone, draft) => {
       return { message, interactive: false, draft }
     }
 
-    const message = 'Qual nova data você prefere?'
-    await sendWhatsAppMessage(phone, message)
     await sendRescheduleDateSelectionList(phone)
     return { message: 'Menu de datas enviado', interactive: true, draft }
   } catch (error) {
@@ -151,9 +146,6 @@ const askNewTime: MissingFieldHandler = async (phone, draft) => {
       return { message: 'Menu de datas reenviado', interactive: true, draft }
     }
 
-    const dateLabel = DateFormatter.formatToDayMonth(selectedDate)
-    const message = `Qual horário você prefere para ${dateLabel}?`
-    await sendWhatsAppMessage(phone, message)
     await sendRescheduleTimeSelectionList(phone)
     return { message: 'Menu de horários enviado', interactive: true, draft }
   } catch (error) {

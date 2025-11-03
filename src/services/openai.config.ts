@@ -44,6 +44,9 @@ export const SILENT_FUNCTIONS = new Set<string>([
   'confirmAppointmentReschedule',
   'editAppointmentRescheduleField',
   'cancelAppointmentReschedule',
+  'applyRescheduleRecordUpdates',
+  'editAppointmentReschedule',
+  'deleteAppointmentReschedule',
 ])
 
 export const CONTEXT_FUNCTIONS = new Set<string>(['listInstitutions', 'listFarms'])

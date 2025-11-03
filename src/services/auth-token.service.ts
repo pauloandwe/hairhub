@@ -30,6 +30,7 @@ interface CachedUserTokenData {
   farmId?: string
   farmName?: string
   userName?: string
+  clientName?: string | null
   [key: string]: any
 }
 
@@ -42,11 +43,15 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
     const { workingHours, professionals, ...sanitizedData } = payload
     const token = sanitizedData?.token as string | undefined
     if (token) setApiBearerToken(token)
+
+    const clientName = sanitizedData?.clientName || null
+
     console.log('[AuthToken] Token encontrado para businessId:', {
       id: sanitizedData?.id,
       name: sanitizedData?.name,
       phone: sanitizedData?.phone,
       type: sanitizedData?.type,
+      clientName,
     })
     await setUserContext(phone, {
       token,
@@ -55,6 +60,7 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
       businessPhone: sanitizedData.phone,
       businessName: sanitizedData.name,
       businessType: sanitizedData.type,
+      clientName,
     })
 
     systemLogger.info(
@@ -63,12 +69,13 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
         phone,
         businessId,
         token: sanitizedData?.token,
+        clientName,
         payload: sanitizedData,
       },
       'User authenticated successfully with token.',
     )
 
-    return sanitizedData as CachedUserTokenData
+    return { ...sanitizedData, clientName } as CachedUserTokenData
   } catch (remoteErr) {
     console.error('[AuthToken] Erro ao buscar token remoto:', remoteErr)
     throw remoteErr

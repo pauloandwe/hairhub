@@ -1,8 +1,9 @@
 import { downloadMedia, sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { getUserContext } from '../../env.config'
+import { getUserContext, setUserContext } from '../../env.config'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
 import { ensureUserApiToken } from '../auth-token.service'
+import { clientsService } from '../clients/clients.service'
 import { transcribeAudio } from '../openai.service'
 import { SimplifiedExpenseContextService } from '../finances/simplifiedExpense/simplifiedExpense.context'
 import { DeathContextService } from '../livestocks/Death/death.context'
@@ -67,6 +68,56 @@ export class ContextService {
     return await ensureUserApiToken(businessId, userId)
   }
 
+  private handleClientNameCollection = async (businessId: string, userId: string, incomingMessage: string, skipClearanceCheck = false): Promise<boolean> => {
+    const currentContext = await getUserContext(userId)
+    const awaitingClientName = currentContext?.awaitingClientName
+
+    if (awaitingClientName) {
+      try {
+        const clientName = incomingMessage.trim()
+        if (clientName.length < 2) {
+          await sendWhatsAppMessage(userId, 'Por favor, informe um nome válido com pelo menos 2 caracteres.')
+          return false
+        }
+
+        const resolvedBusinessId = currentContext?.businessId ?? businessId
+        if (!resolvedBusinessId) {
+          console.error('[ContextService] Missing business identifier when saving client name.', {
+            businessId,
+            contextBusinessId: currentContext?.businessId,
+          })
+          await sendWhatsAppMessage(userId, 'Desculpe, não consegui identificar o estabelecimento. Tente novamente em instantes.')
+          return false
+        }
+
+        if (!skipClearanceCheck) {
+          const clearance = await this.verifyUserClearance(String(resolvedBusinessId), userId)
+          if (!clearance) {
+            await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
+            return false
+          }
+        }
+
+        const savedClient = await clientsService.createOrUpdateClientName(String(resolvedBusinessId), userId, clientName)
+
+        await setUserContext(userId, {
+          clientName: savedClient.name,
+          awaitingClientName: false,
+        })
+
+        await sendWhatsAppMessage(userId, `Ótimo, ${clientName}! Seu nome foi registrado com sucesso.`)
+
+        return true
+      } catch (error) {
+        console.error('[ContextService] Error saving client name:', error)
+        await sendWhatsAppMessage(userId, 'Desculpe, ocorreu um erro ao registrar seu nome. Tente novamente em instantes.')
+        return false
+      }
+    }
+
+    return true
+  }
+
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
     let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService | AppointmentRescheduleContextService = this.defaultContext
 
@@ -86,10 +137,8 @@ export class ContextService {
   handleIncomingMessage = async (messageData: any, businessId?: string) => {
     const { from: userId } = messageData
 
-    await getUserContext(userId)
-
-    const currentContext = await getUserContext(userId)
-    const activeRegistration = currentContext?.activeRegistration
+    let runtimeContext = await getUserContext(userId)
+    const activeRegistration = runtimeContext?.activeRegistration
     const isRegistrationCompleted = activeRegistration?.status === 'completed'
     const activeFlowType = isRegistrationCompleted ? undefined : (activeRegistration?.type as FlowType | undefined)
     try {
@@ -105,6 +154,22 @@ export class ContextService {
 
       if (!hasClearance) {
         return await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
+      }
+
+      runtimeContext = await getUserContext(userId)
+
+      if (runtimeContext?.awaitingClientName) {
+        const nameCollected = await this.handleClientNameCollection(businessId, userId, incomingMessage, true)
+        if (!nameCollected) return
+        runtimeContext = await getUserContext(userId)
+      }
+
+      const resolvedClientName = runtimeContext?.clientName ?? hasClearance.clientName ?? null
+
+      if (resolvedClientName === null && !runtimeContext?.awaitingClientName) {
+        await sendWhatsAppMessage(userId, 'Para continuar, por favor informe seu nome:')
+        await setUserContext(userId, { awaitingClientName: true })
+        return
       }
 
       await this.handleFlow(activeFlowType, userId, incomingMessage)
