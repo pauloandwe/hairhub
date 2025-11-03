@@ -12,7 +12,7 @@ const BACKEND_URL = env.BACKEND_URL || 'http://localhost:3001'
 
 export class ReminderPreferencesService {
   private static preferencesCache: Map<string, ClientPreference> = new Map()
-  private static readonly CACHE_TTL = 1000 * 60 * 60 
+  private static readonly CACHE_TTL = 1000 * 60 * 60
 
   static async shouldSendReminder(clientPhone: string): Promise<boolean> {
     try {
@@ -26,13 +26,12 @@ export class ReminderPreferencesService {
         },
         'Erro ao verificar preferências de lembrete, permitindo envio por padrão',
       )
-      
+
       return true
     }
   }
 
   private static async getClientPreferences(clientPhone: string): Promise<ClientPreference> {
-    
     const cached = this.preferencesCache.get(clientPhone)
     if (cached) {
       return cached
