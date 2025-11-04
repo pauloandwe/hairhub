@@ -132,34 +132,54 @@ export async function sendWhatsAppInteractiveList(params: {
     throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
   }
 
+  const formatOptional = (value: string | undefined, maxLength: number): string | undefined => {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength)
+  }
+
+  const formatRequired = (value: string, maxLength: number): string => {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength)
+  }
+
+  const sanitizeRows = (listRows: ListRow[]) =>
+    listRows.map((r) => ({
+      id: r?.id,
+      title: formatRequired(r?.title ?? '', 24),
+      description: formatOptional(r?.description, 72),
+    }))
+
+  const sanitizedButtonLabel = formatOptional(buttonLabel, 20) ?? 'Selecionar'
+  const sanitizedHeader = formatOptional(header, 60)
+  const sanitizedFooter = formatOptional(footer, 60)
+  const sanitizedBody = formatRequired(body, 1024) || body
+  const sanitizedSectionTitle = formatOptional(sectionTitle, 24) ?? 'Itens'
+  const sanitizedRows = sanitizeRows(rows)
+  const sanitizedExtraSections = (extraSections || []).map((s) => ({
+    title: formatOptional(s.title, 24),
+    rows: sanitizeRows(s.rows),
+  }))
+
   const payload: any = {
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
     interactive: {
       type: 'list',
-      header: header ? { type: 'text', text: header } : undefined,
-      body: { text: body },
-      footer: footer ? { text: footer } : undefined,
+      header: sanitizedHeader ? { type: 'text', text: sanitizedHeader } : undefined,
+      body: { text: sanitizedBody },
+      footer: sanitizedFooter ? { text: sanitizedFooter } : undefined,
       action: {
-        button: buttonLabel,
+        button: sanitizedButtonLabel,
         sections: [
           {
-            title: sectionTitle,
-            rows: rows.map((r) => ({
-              id: r?.id,
-              title: r?.title,
-              description: r?.description,
-            })),
+            title: sanitizedSectionTitle,
+            rows: sanitizedRows,
           },
-          ...(extraSections || []).map((s) => ({
-            title: s.title,
-            rows: s.rows.map((r) => ({
-              id: r?.id,
-              title: r?.title,
-              description: r?.description,
-            })),
-          })),
+          ...sanitizedExtraSections,
         ],
       },
     },
@@ -169,9 +189,9 @@ export async function sendWhatsAppInteractiveList(params: {
     whatsappLogger.info(
       {
         receiver: to,
-        message: body,
-        button: buttonLabel,
-        rows: rows.map((r) => ({
+        message: sanitizedBody,
+        button: sanitizedButtonLabel,
+        rows: sanitizedRows.map((r) => ({
           id: r?.id,
           title: r?.title,
         })),

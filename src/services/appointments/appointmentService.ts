@@ -189,7 +189,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       const incomingServiceId = normalizeIdValue(normalizedService?.id)
       const hasServiceChanged = incomingServiceId !== previousServiceId
       if (hasServiceChanged) {
-        currentDraft.professional = null
+        currentDraft.professional = { id: null, name: null }
         currentDraft.appointmentTime = null
       }
       assignRef('service', normalizedService)
@@ -269,7 +269,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   protected getRequiredFields = (): MissingRule<IAppointmentValidationDraft>[] => {
     return [
       { key: 'service' as keyof IAppointmentValidationDraft, kind: 'ref' },
-      { key: 'professional' as keyof IAppointmentValidationDraft, kind: 'ref' },
+      {
+        key: 'professional' as keyof IAppointmentValidationDraft,
+        kind: 'custom',
+        validate: (value: unknown) => {
+          // null é válido (opção "Nenhum específico")
+          if (!value) return true
+          // Objeto com id preenchido é válido (profissional específico)
+          const ref = value as IdNameRef | null | undefined
+          return Boolean(ref && ref.id)
+        },
+      },
       { key: 'appointmentDate' as keyof IAppointmentValidationDraft, kind: 'string' },
       { key: 'appointmentTime' as keyof IAppointmentValidationDraft, kind: 'string' },
     ]
@@ -331,13 +341,19 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string)
 
+    // If professional is null (user selected "Nenhum específico"), use least_appointments strategy
+    // Otherwise, use manual strategy
+    const assignmentStrategy = draft.professional?.id ? 'manual' : 'least_appointments'
+    const professionalId = draft.professional?.id ? Number(draft.professional.id) : undefined
+
     const finalPayload: IAppointmentCreationPayload = {
       businessId: businessIdNumber,
       serviceId: Number(draft.service?.id),
-      professionalId: Number(draft.professional?.id),
+      ...(professionalId !== undefined && { professionalId }),
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       source: 'whatsapp',
+      assignmentStrategy,
       notes: draft.notes ?? null,
     }
 
@@ -488,9 +504,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     if (!draft.appointmentDate || !draft.appointmentTime) {
       throw new Error('Data e horário do agendamento são obrigatórios')
     }
-    if (!draft.service?.id || !draft.professional?.id) {
-      throw new Error('Serviço e professional são obrigatórios')
+    if (!draft.service?.id) {
+      throw new Error('Serviço é obrigatório')
     }
+    // Professional can be null (when using "Nenhum específico" option with least_appointments strategy)
   }
 }
 

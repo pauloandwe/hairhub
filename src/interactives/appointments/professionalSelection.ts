@@ -16,11 +16,14 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   namespace: PROFESSIONAL_NAMESPACE,
   type: 'selectProfessional',
   fetchItems: async (phone) => {
-    return professionalService.getProfessionals(phone)
+    const professionals = await professionalService.getProfessionals(phone)
+
+    // Add "Any professional" option at the beginning
+    return [{ id: 'ANY', name: 'Nenhum específico' }, ...professionals]
   },
   ui: {
     header: 'Escolha o Professional',
-    sectionTitle: 'Barbeiros',
+    sectionTitle: 'Profissionais Disponíveis',
     footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
@@ -28,33 +31,70 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
   emptyListMessage: 'Nenhum professional encontrado',
   pageLimit: 10,
-  titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este professional',
+  titleBuilder: (c, idx, base) => {
+    // Special handling for "ANY" option
+    if (c.id === 'ANY') {
+      return `${c.name}`
+    }
+    return `${base + idx}. ${c.name}`
+  },
+  descriptionBuilder: (c) => {
+    if (c.id === 'ANY') return 'Sistema escolherá o melhor profissional'
+    return 'Toque para selecionar'
+  },
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
-    await setUserContext(userId, {
-      professionalId: item.id,
-      professionalName: item.name,
-    })
+    if (item.id === 'ANY') {
+      // No specific professional selected
+      await setUserContext(userId, {
+        professionalId: null,
+        professionalName: 'Qualquer profissional',
+      })
 
-    if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
-      await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
+      if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
+        await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, null)
+      }
+      await sendWhatsAppMessage(userId, `✅ Profissional será atribuído automaticamente com base na disponibilidade!`)
+    } else {
+      // Specific professional selected
+      await setUserContext(userId, {
+        professionalId: item.id,
+        professionalName: item.name,
+      })
+
+      if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
+        await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
+      }
+      await sendWhatsAppMessage(userId, `✅ Professional '${item.name}' selecionado com sucesso!`)
     }
-    await sendWhatsAppMessage(userId, `Professional '${item.name}' selecionado.`)
+
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
-    await setUserContext(userId, {
-      professionalId: item.id,
-      professionalName: item.name,
-    })
+    if (item.id === 'ANY') {
+      await setUserContext(userId, {
+        professionalId: null,
+        professionalName: 'Qualquer profissional',
+      })
 
-    await appointmentFunctions.applyAppointmentRecordUpdates({
-      phone: userId,
-      updates: { professional: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
-      logContext: `Professional atualizado para ${item.name}`,
-    })
+      await appointmentFunctions.applyAppointmentRecordUpdates({
+        phone: userId,
+        updates: { professional: null } as Partial<UpsertAppointmentArgs>,
+        logContext: 'Professional atualizado para: qualquer profissional',
+      })
+    } else {
+      await setUserContext(userId, {
+        professionalId: item.id,
+        professionalName: item.name,
+      })
+
+      await appointmentFunctions.applyAppointmentRecordUpdates({
+        phone: userId,
+        updates: { professional: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
+        logContext: `Professional atualizado para ${item.name}`,
+      })
+    }
   },
 })
 

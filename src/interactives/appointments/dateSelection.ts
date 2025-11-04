@@ -20,12 +20,6 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const serviceId = draft.service?.id ? Number(draft.service.id) : null
 
-    if (!professionalId) {
-      console.warn('[dateSelectionFlow] Professional não selecionado para buscar dias disponíveis', { phone })
-      await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um professional antes de escolher a data.')
-      return []
-    }
-
     if (!serviceId) {
       console.warn('[dateSelectionFlow] Serviço não selecionado para buscar dias disponíveis', { phone })
       await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um serviço antes de escolher a data.')
@@ -33,6 +27,24 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     }
 
     try {
+      // If professional is null (user selected "Nenhum específico"), get aggregated days from all professionals
+      if (professionalId === null) {
+        console.info('[dateSelectionFlow] Buscando dias agregados (profissional não específico)', { phone, serviceId })
+        const days = await professionalService.getAvailableDaysAggregated({
+          phone,
+          serviceId,
+        })
+
+        if (!days || days.length === 0) {
+          console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado (agregado)', { phone, serviceId })
+          await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias. Tente novamente mais tarde.')
+          return []
+        }
+
+        return days
+      }
+
+      // Otherwise, get days for the specific professional
       const days = await professionalService.getAvailableDays({
         phone,
         professionalId,

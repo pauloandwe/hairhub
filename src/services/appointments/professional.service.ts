@@ -140,7 +140,7 @@ export class ProfessionalService {
       }
 
       return data.availableDays
-        .map((day: any) => {
+        .map((day: any): SelectionItem | null => {
           if (!day.date || !day.displayDate) {
             console.warn('[ProfessionalService] Day object missing required fields:', day)
             return null
@@ -152,10 +152,126 @@ export class ProfessionalService {
             description: `${day.slotsCount || 0} horários disponíveis`,
           }
         })
-        .filter((item: any) => item !== null)
+        .filter((item: SelectionItem | null): item is SelectionItem => item !== null)
     } catch (error) {
       console.error('[ProfessionalService] Error fetching available days:', error)
       throw new Error('Erro ao buscar dias disponíveis.')
+    }
+  }
+
+  async getAvailableDaysAggregated(args: { phone: string; serviceId?: string | number }): Promise<SelectionItem[]> {
+    const { phone, serviceId } = args
+    const businessPhone = getBusinessPhoneForPhone(phone)
+    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+
+    if (!normalizedBusinessPhone) {
+      console.warn('[ProfessionalService] business phone not found for phone:', phone)
+      return []
+    }
+
+    try {
+      const params: Record<string, any> = {
+        days: 15,
+      }
+
+      if (serviceId !== undefined && serviceId !== null) {
+        const numericServiceId = Number(serviceId)
+        if (Number.isFinite(numericServiceId)) {
+          params.serviceId = numericServiceId
+        }
+      }
+
+      const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/available-days-aggregated`
+      const response = await api.get(url, { params })
+      const data = unwrapApiResponse<any>(response)
+      if (!data) {
+        console.warn('[ProfessionalService] Invalid response structure for aggregated available days:', response?.data)
+        return []
+      }
+
+      if (!Array.isArray(data)) {
+        console.warn('[ProfessionalService] aggregated availableDays is not an array:', data)
+        return []
+      }
+
+      if (data.length === 0) {
+        console.info('[ProfessionalService] No available days found (aggregated)')
+        return []
+      }
+
+      return data
+        .map((day: any): SelectionItem | null => {
+          if (!day.date || !day.displayDate) {
+            console.warn('[ProfessionalService] Day object missing required fields:', day)
+            return null
+          }
+
+          return {
+            id: day.date,
+            name: day.displayDate,
+            description: `${day.slotsCount || 0} horários disponíveis`,
+          }
+        })
+        .filter((item: SelectionItem | null): item is SelectionItem => item !== null)
+    } catch (error) {
+      console.error('[ProfessionalService] Error fetching aggregated available days:', error)
+      throw new Error('Erro ao buscar dias disponíveis.')
+    }
+  }
+
+  async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number }): Promise<string[]> {
+    const { phone, date, serviceId } = args
+    const businessPhone = getBusinessPhoneForPhone(phone)
+    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+
+    if (!normalizedBusinessPhone) {
+      console.warn('[ProfessionalService] business phone not found for phone:', phone)
+      return []
+    }
+
+    if (!date) {
+      console.warn('[ProfessionalService] date not provided while fetching aggregated slots.', { phone })
+      return []
+    }
+
+    try {
+      const params: Record<string, any> = {
+        date,
+      }
+
+      if (serviceId !== undefined && serviceId !== null) {
+        const numericServiceId = Number(serviceId)
+        if (Number.isFinite(numericServiceId)) {
+          params.serviceId = numericServiceId
+        }
+      }
+
+      const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/free-slots`
+      const response = await api.get(url, { params })
+      const data = unwrapApiResponse<any>(response)
+      if (!data || !data.professionals || !Array.isArray(data.professionals)) {
+        console.warn('[ProfessionalService] Invalid slots structure for aggregated:', response?.data)
+        return []
+      }
+
+      // Aggregate slots from all professionals (union of all slots)
+      const slotsSet = new Set<string>()
+      data.professionals.forEach((professional: any) => {
+        if (Array.isArray(professional.slots)) {
+          professional.slots.forEach((slot: any) => {
+            if (slot.start) {
+              slotsSet.add(slot.start)
+            }
+          })
+        }
+      })
+
+      // Convert to sorted array
+      const slots = Array.from(slotsSet).sort()
+      return slots
+    } catch (error) {
+      console.error('[ProfessionalService] Error fetching aggregated available slots:', error)
+      throw new Error('Erro ao buscar horários disponíveis.')
     }
   }
 }

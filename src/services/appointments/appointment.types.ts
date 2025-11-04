@@ -16,10 +16,11 @@ export interface IAppointmentValidationDraft {
 export interface IAppointmentCreationPayload {
   businessId: number
   serviceId: number
-  professionalId: number
+  professionalId?: number
   startDate: string
   endDate: string
   source: string
+  assignmentStrategy: 'manual' | 'least_appointments'
   clientId?: number
   clientName?: string | null
   clientPhone?: string | null

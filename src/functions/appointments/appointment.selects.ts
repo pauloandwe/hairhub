@@ -33,7 +33,7 @@ const editService: FieldEditor = async (phone) => {
 }
 
 const editProfessional: FieldEditor = async (phone) => {
-  await sendProfessionalSelectionList(phone, 'Qual professional você prefere? 👇')
+  await sendProfessionalSelectionList(phone, 'Qual professional você prefere?')
   return respond('Menu de barbeiros enviado', true)
 }
 
@@ -86,7 +86,7 @@ const askService: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askProfessional: MissingFieldHandler = async (phone, draft) => {
-  await sendProfessionalSelectionList(phone, 'Qual professional você prefere? 👇')
+  await sendProfessionalSelectionList(phone, 'Qual professional você prefere?')
   return { message: 'Menu de barbeiros enviado', interactive: true, draft }
 }
 

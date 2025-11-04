@@ -21,12 +21,30 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const date = draft.appointmentDate ?? null
 
-    const slots = await professionalService.getAvailableSlots({
-      phone,
-      professionalId,
-      date,
-      serviceId,
-    })
+    let slots: string[] = []
+
+    // If professional is null (user selected "Nenhum específico"), get aggregated slots from all professionals
+    if (professionalId === null) {
+      console.info('[timeSlotFlow] Buscando horários agregados (profissional não específico)', { phone, date, serviceId })
+      if (!date) {
+        console.warn('[timeSlotFlow] Data não definida ao buscar horários agregados.', { phone })
+        return []
+      }
+
+      slots = await professionalService.getAvailableSlotsAggregated({
+        phone,
+        date,
+        ...(serviceId !== null ? { serviceId } : {}),
+      })
+    } else {
+      // Otherwise, get slots for the specific professional
+      slots = await professionalService.getAvailableSlots({
+        phone,
+        professionalId,
+        date,
+        serviceId,
+      })
+    }
 
     return slots.map((slot) => ({
       id: slot,
