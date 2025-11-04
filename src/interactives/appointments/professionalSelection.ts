@@ -18,7 +18,6 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   fetchItems: async (phone) => {
     const professionals = await professionalService.getProfessionals(phone)
 
-    // Add "Any professional" option at the beginning
     return [{ id: 'ANY', name: 'Nenhum específico' }, ...professionals]
   },
   ui: {
@@ -32,7 +31,6 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   emptyListMessage: 'Nenhum professional encontrado',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => {
-    // Special handling for "ANY" option
     if (c.id === 'ANY') {
       return `${c.name}`
     }
@@ -46,10 +44,11 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
     await getUserContext(userId)
 
     if (item.id === 'ANY') {
-      // No specific professional selected
       await setUserContext(userId, {
         professionalId: null,
         professionalName: 'Qualquer profissional',
+        autoAssignedProfessional: false,
+        availableProfessionalIdsForSlot: null,
       })
 
       if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
@@ -57,10 +56,11 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
       }
       await sendWhatsAppMessage(userId, `✅ Profissional será atribuído automaticamente com base na disponibilidade!`)
     } else {
-      // Specific professional selected
       await setUserContext(userId, {
         professionalId: item.id,
         professionalName: item.name,
+        autoAssignedProfessional: false,
+        availableProfessionalIdsForSlot: null,
       })
 
       if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
@@ -76,6 +76,8 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
       await setUserContext(userId, {
         professionalId: null,
         professionalName: 'Qualquer profissional',
+        autoAssignedProfessional: false,
+        availableProfessionalIdsForSlot: null,
       })
 
       await appointmentFunctions.applyAppointmentRecordUpdates({
@@ -87,6 +89,8 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
       await setUserContext(userId, {
         professionalId: item.id,
         professionalName: item.name,
+        autoAssignedProfessional: false,
+        availableProfessionalIdsForSlot: null,
       })
 
       await appointmentFunctions.applyAppointmentRecordUpdates({

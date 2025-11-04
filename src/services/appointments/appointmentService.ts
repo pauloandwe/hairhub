@@ -10,7 +10,7 @@ import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
 
 const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
-const SERVICE_DURATION_MINUTES = 20
+const DEFAULT_SERVICE_DURATION_MINUTES = 30
 const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
 
 const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'professional', 'clientName', 'clientPhone', 'notes'] as const
@@ -116,20 +116,31 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     if (typeof value === 'object') {
-      return this.normalizeObjectRef(value as Record<string, unknown>)
+      return this.normalizeObjectRef(value as Record<string, unknown>) as IdNameRef | null | undefined
     }
 
     return undefined
   }
 
-  private normalizeObjectRef(candidate: Record<string, unknown>): IdNameRef {
+  private normalizeObjectRef(candidate: Record<string, unknown>): any {
     const rawId = candidate.id ?? candidate.value ?? candidate.code ?? candidate.externalId ?? candidate.uuid
     const rawName = candidate.name ?? candidate.label ?? candidate.title ?? candidate.description ?? candidate.displayName
+    const rawDuration = candidate.duration
 
     const id = this.extractStringValue(rawId)
     const name = this.extractStringValue(rawName)
 
-    return { id, name }
+    const result: any = { id, name }
+
+    // Extrair e validar duration se presente
+    if (rawDuration !== undefined && rawDuration !== null) {
+      const durationNumber = typeof rawDuration === 'number' ? rawDuration : typeof rawDuration === 'string' ? Number(rawDuration) : null
+      if (durationNumber !== null && !isNaN(durationNumber) && durationNumber > 0) {
+        result.duration = durationNumber
+      }
+    }
+
+    return result
   }
 
   private extractStringValue(value: unknown): string | null {
@@ -177,7 +188,11 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
       const target = currentDraft[field]
       if (!target) {
-        currentDraft[field] = { id: incoming.id ?? null, name: incoming.name ?? null }
+        const newRef: any = { id: incoming.id ?? null, name: incoming.name ?? null }
+        if ('duration' in incoming && incoming.duration !== undefined) {
+          newRef.duration = incoming.duration ?? null
+        }
+        currentDraft[field] = newRef
         return
       }
 
@@ -185,6 +200,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     const normalizedService = this.normalizeRefInput(extendedArgs.service)
+
     if (normalizedService !== undefined) {
       const incomingServiceId = normalizeIdValue(normalizedService?.id)
       const hasServiceChanged = incomingServiceId !== previousServiceId
@@ -273,9 +289,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         key: 'professional' as keyof IAppointmentValidationDraft,
         kind: 'custom',
         validate: (value: unknown) => {
-          // null é válido (opção "Nenhum específico")
           if (!value) return true
-          // Objeto com id preenchido é válido (profissional específico)
           const ref = value as IdNameRef | null | undefined
           return Boolean(ref && ref.id)
         },
@@ -314,7 +328,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     ]
   }
 
-  private parseDateAndTime(dateStr: string, timeStr: string): { startDate: Date; endDate: Date } {
+  private parseDateAndTime(dateStr: string, timeStr: string, durationMinutes?: number | null): { startDate: Date; endDate: Date } {
     const [year, month, day] = dateStr.split('-').map(Number)
     const [hours, minutes] = timeStr.split(':').map(Number)
 
@@ -324,7 +338,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const startDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
     startDate.setTime(startDate.getTime() + offsetMinutes * 60000)
 
-    const endDate = new Date(startDate.getTime() + SERVICE_DURATION_MINUTES * 60 * 1000)
+    const duration = durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES
+    const endDate = new Date(startDate.getTime() + duration * 60 * 1000)
 
     return { startDate, endDate }
   }
@@ -339,10 +354,9 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       throw new Error('Não foi possível identificar o negócio para salvar o agendamento.')
     }
 
-    const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string)
+    const serviceDuration = draft.service?.duration ?? null
+    const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string, serviceDuration)
 
-    // If professional is null (user selected "Nenhum específico"), use least_appointments strategy
-    // Otherwise, use manual strategy
     const assignmentStrategy = draft.professional?.id ? 'manual' : 'least_appointments'
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : undefined
 
@@ -424,6 +438,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         return {
           id: item.id,
           name: item.name || item.description,
+          duration: item.duration || null,
         }
       case AppointmentFields.PROFESSIONAL:
         return {
@@ -456,7 +471,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       const dateStr = draft.appointmentDate
       const timeStr = draft.appointmentTime
       if (dateStr && timeStr) {
-        const { startDate, endDate } = this.parseDateAndTime(dateStr, timeStr)
+        const serviceDuration = draft.service?.duration ?? null
+        const { startDate, endDate } = this.parseDateAndTime(dateStr, timeStr, serviceDuration)
         payload.startDate = startDate.toISOString()
         payload.endDate = endDate.toISOString()
       }

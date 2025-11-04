@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
-import { getUserContext, setUserContext, getUserContextSync, getBusinessPhoneForPhone } from '../../env.config'
+import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
@@ -12,7 +12,10 @@ import { appointmentFunctions } from '../../functions/appointments/appointment.f
 
 export const TIME_SLOT_NAMESPACE = 'TIME_SLOT_GROUP'
 
-const timeSlotFlow = createSelectionFlow<SelectionItem>({
+type SlotProfessional = { id: string; name?: string | null }
+type TimeSlotSelectionItem = SelectionItem & { availableProfessionals?: SlotProfessional[] }
+
+const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
   namespace: TIME_SLOT_NAMESPACE,
   type: 'selectTimeSlot',
   fetchItems: async (phone) => {
@@ -21,7 +24,7 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const date = draft.appointmentDate ?? null
 
-    let slots: string[] = []
+    let slots: TimeSlotSelectionItem[] = []
 
     // If professional is null (user selected "Nenhum específico"), get aggregated slots from all professionals
     if (professionalId === null) {
@@ -31,25 +34,44 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
         return []
       }
 
-      slots = await professionalService.getAvailableSlotsAggregated({
+      const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
         phone,
         date,
         ...(serviceId !== null ? { serviceId } : {}),
       })
+
+      if (!aggregatedSlots.length) {
+        console.info('[timeSlotFlow] Nenhum horário disponível (agregado).', { phone, date, serviceId })
+        return []
+      }
+
+      slots = aggregatedSlots.map((slot) => ({
+        id: slot.start,
+        name: slot.start,
+        availableProfessionals: slot.professionals,
+      }))
     } else {
       // Otherwise, get slots for the specific professional
-      slots = await professionalService.getAvailableSlots({
+      const professionalSlots = await professionalService.getAvailableSlots({
         phone,
         professionalId,
         date,
         serviceId,
       })
+
+      slots = professionalSlots.map((slot) => ({
+        id: slot,
+        name: slot,
+        availableProfessionals: [
+          {
+            id: String(professionalId),
+            name: draft.professional?.name ?? String(professionalId),
+          },
+        ],
+      }))
     }
 
-    return slots.map((slot) => ({
-      id: slot,
-      name: slot,
-    }))
+    return slots
   },
   ui: {
     header: 'Escolha o Horário',
@@ -66,11 +88,66 @@ const timeSlotFlow = createSelectionFlow<SelectionItem>({
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
-    await setUserContext(userId, {
-      timeSlot: item.id,
-    })
+    const context = getUserContextSync(userId)
+    const inAppointmentFlow = context?.activeRegistration?.type === FlowType.Appointment
+    const hasUserDefinedProfessional = Boolean(context?.professionalId) && !context?.autoAssignedProfessional
+    const hadAutoAssignedPreviously = Boolean(context?.autoAssignedProfessional)
 
-    if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
+    const availableProfessionalsRaw = Array.isArray(item.availableProfessionals) ? item.availableProfessionals : []
+    const availableProfessionals = availableProfessionalsRaw.filter(
+      (pro): pro is SlotProfessional => Boolean(pro && pro.id && String(pro.id).trim()),
+    )
+
+    if (Array.isArray(item.availableProfessionals) && availableProfessionals.length === 0) {
+      console.warn('[timeSlotFlow] Horário selecionado sem profissionais disponíveis.', { userId, slot: item.id })
+      await sendWhatsAppMessage(userId, 'Esse horário não está mais disponível. Vou enviar a lista atualizada.')
+      await sendTimeSlotSelectionList(userId)
+      return
+    }
+
+    let autoAssignedProfessional: SlotProfessional | null = null
+    let clearedAutoAssignment = false
+
+    if (!hasUserDefinedProfessional && availableProfessionals.length === 1 && inAppointmentFlow) {
+      const singleProfessional = availableProfessionals[0]
+      autoAssignedProfessional = singleProfessional
+      await appointmentService.updateDraftField(
+        userId,
+        AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs,
+        {
+          id: singleProfessional.id,
+          name: singleProfessional.name ?? null,
+        } as unknown as UpsertAppointmentArgs[keyof UpsertAppointmentArgs],
+      )
+    } else if (hadAutoAssignedPreviously && availableProfessionals.length !== 1 && inAppointmentFlow) {
+      await appointmentService.updateDraftField(
+        userId,
+        AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs,
+        null as unknown as UpsertAppointmentArgs[keyof UpsertAppointmentArgs],
+      )
+      clearedAutoAssignment = true
+    }
+
+    const contextUpdates: Record<string, any> = {
+      timeSlot: item.id,
+      availableProfessionalIdsForSlot: availableProfessionals.length > 1 ? availableProfessionals.map((pro) => String(pro.id)) : null,
+    }
+
+    if (autoAssignedProfessional) {
+      contextUpdates.professionalId = String(autoAssignedProfessional.id)
+      contextUpdates.professionalName = autoAssignedProfessional.name ?? 'Profissional disponível'
+      contextUpdates.autoAssignedProfessional = true
+    } else if (clearedAutoAssignment) {
+      contextUpdates.professionalId = null
+      contextUpdates.professionalName = 'Qualquer profissional'
+      contextUpdates.autoAssignedProfessional = false
+    } else if (!hasUserDefinedProfessional && !availableProfessionals.length) {
+      contextUpdates.autoAssignedProfessional = false
+    }
+
+    await setUserContext(userId, contextUpdates)
+
+    if (inAppointmentFlow) {
       await appointmentService.updateDraftField(userId, AppointmentFields.APPOINTMENT_TIME as keyof UpsertAppointmentArgs, item.id)
     }
     await sendWhatsAppMessage(userId, `Horário '${item.name}' selecionado.`)

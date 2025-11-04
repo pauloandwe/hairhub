@@ -28,7 +28,20 @@ export class ProfessionalService {
         return []
       }
 
-      return data.map((item) => ({
+      const activeProfessionals = data.filter((item) => {
+        if (!item || typeof item !== 'object') return false
+        if (item.active === false) return false
+        return item.id !== undefined && item.id !== null
+      })
+
+      if (activeProfessionals.length !== data.length) {
+        console.info('[ProfessionalService] Filtered inactive professionals from listing.', {
+          total: data.length,
+          active: activeProfessionals.length,
+        })
+      }
+
+      return activeProfessionals.map((item) => ({
         id: String(item.id),
         name: item.name || '',
       }))
@@ -219,7 +232,17 @@ export class ProfessionalService {
     }
   }
 
-  async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number }): Promise<string[]> {
+  private normalizeString(value: unknown): string | null {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      return trimmed.length ? trimmed : null
+    }
+    if (value === undefined || value === null) return null
+    const converted = String(value).trim()
+    return converted.length ? converted : null
+  }
+
+  async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
     const { phone, date, serviceId } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
@@ -254,21 +277,44 @@ export class ProfessionalService {
         return []
       }
 
-      // Aggregate slots from all professionals (union of all slots)
-      const slotsSet = new Set<string>()
-      data.professionals.forEach((professional: any) => {
-        if (Array.isArray(professional.slots)) {
-          professional.slots.forEach((slot: any) => {
-            if (slot.start) {
-              slotsSet.add(slot.start)
-            }
-          })
+      const slotMap = new Map<string, Map<string, { id: string; name: string }>>()
+
+      data.professionals.forEach((professionalEntry: any) => {
+        const professionalData = professionalEntry?.professional ?? professionalEntry
+        const rawId = professionalData?.id ?? professionalEntry?.id ?? professionalEntry?.professionalId
+        const rawName = professionalData?.name ?? professionalEntry?.name ?? ''
+
+        const id = this.normalizeString(rawId)
+        if (!id) return
+        const name = this.normalizeString(rawName) ?? id
+
+        const slotsSource = Array.isArray(professionalEntry?.slots) ? professionalEntry.slots : Array.isArray(professionalData?.slots) ? professionalData.slots : []
+
+        if (!Array.isArray(slotsSource) || slotsSource.length === 0) {
+          return
         }
+
+        slotsSource.forEach((slot: any) => {
+          const start = this.normalizeString(slot?.start ?? slot?.startTime ?? slot)
+          if (!start) return
+
+          const professionalMap = slotMap.get(start) ?? new Map<string, { id: string; name: string }>()
+          if (!professionalMap.has(id)) {
+            professionalMap.set(id, { id, name })
+          }
+          slotMap.set(start, professionalMap)
+        })
       })
 
-      // Convert to sorted array
-      const slots = Array.from(slotsSet).sort()
-      return slots
+      const aggregatedSlots = Array.from(slotMap.entries())
+        .map(([start, professionalsMap]) => ({
+          start,
+          professionals: Array.from(professionalsMap.values()),
+        }))
+        .filter((entry) => entry.professionals.length > 0)
+        .sort((a, b) => a.start.localeCompare(b.start))
+
+      return aggregatedSlots
     } catch (error) {
       console.error('[ProfessionalService] Error fetching aggregated available slots:', error)
       throw new Error('Erro ao buscar horários disponíveis.')

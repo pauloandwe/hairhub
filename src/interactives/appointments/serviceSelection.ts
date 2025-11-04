@@ -39,7 +39,7 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
     })
 
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
-      await appointmentService.updateDraftField(userId, AppointmentFields.SERVICE as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
+      await appointmentService.updateDraftField(userId, AppointmentFields.SERVICE as keyof UpsertAppointmentArgs, { id: item.id, name: item.name, duration: item.duration })
     }
     await sendWhatsAppMessage(userId, `Serviço '${item.name}' selecionado.`)
     await tryContinueRegistration(userId)
@@ -52,7 +52,7 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
 
     await appointmentFunctions.applyAppointmentRecordUpdates({
       phone: userId,
-      updates: { service: { id: item.id, name: item.name } } as Partial<UpsertAppointmentArgs>,
+      updates: { service: { id: item.id, name: item.name, duration: item.duration } } as Partial<UpsertAppointmentArgs>,
       logContext: `Serviço atualizado para ${item.name}`,
     })
   },

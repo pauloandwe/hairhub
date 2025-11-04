@@ -5,6 +5,10 @@ export interface IdNameRef {
   name: string | null
 }
 
+export interface IdNameDurationRef extends IdNameRef {
+  duration?: number | null
+}
+
 export type PartialIdNameRef = Partial<IdNameRef> | null | undefined
 
 export type ChatDraftType = string

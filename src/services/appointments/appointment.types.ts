@@ -1,10 +1,10 @@
-import { IdNameRef } from '../drafts/types'
+import { IdNameRef, IdNameDurationRef } from '../drafts/types'
 import { DraftStatus } from '../generic/generic.types'
 
 export interface IAppointmentValidationDraft {
   appointmentDate: string | null
   appointmentTime: string | null
-  service: IdNameRef | null
+  service: IdNameDurationRef | null
   professional: IdNameRef | null
   clientName: string | null
   clientPhone: string | null

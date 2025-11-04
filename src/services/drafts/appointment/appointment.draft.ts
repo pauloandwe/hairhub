@@ -4,7 +4,7 @@ export function emptyAppointmentDraft(): IAppointmentValidationDraft {
   return {
     appointmentDate: null,
     appointmentTime: null,
-    service: { id: null, name: null },
+    service: { id: null, name: null, duration: null },
     professional: { id: null, name: null },
     clientName: null,
     clientPhone: null,

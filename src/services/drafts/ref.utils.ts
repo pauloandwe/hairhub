@@ -19,6 +19,7 @@ export function mergeIdNameRef(dst: IdNameRef, name?: string | PartialIdNameRef)
   if (typeof name === 'object') {
     if (name?.id !== undefined) dst.id = name.id ?? null
     if (name?.name !== undefined) dst.name = name.name ?? null
+    if ('duration' in name && name?.duration !== undefined) (dst as any).duration = name.duration ?? null
   }
 }
 
