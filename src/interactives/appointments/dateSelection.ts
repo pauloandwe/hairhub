@@ -27,7 +27,6 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     }
 
     try {
-      // If professional is null (user selected "Nenhum específico"), get aggregated days from all professionals
       if (professionalId === null) {
         console.info('[dateSelectionFlow] Buscando dias agregados (profissional não específico)', { phone, serviceId })
         const days = await professionalService.getAvailableDaysAggregated({
@@ -44,7 +43,6 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
         return days
       }
 
-      // Otherwise, get days for the specific professional
       const days = await professionalService.getAvailableDays({
         phone,
         professionalId,

@@ -26,7 +26,6 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
 
     let slots: TimeSlotSelectionItem[] = []
 
-    // If professional is null (user selected "Nenhum específico"), get aggregated slots from all professionals
     if (professionalId === null) {
       console.info('[timeSlotFlow] Buscando horários agregados (profissional não específico)', { phone, date, serviceId })
       if (!date) {
@@ -51,7 +50,6 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
         availableProfessionals: slot.professionals,
       }))
     } else {
-      // Otherwise, get slots for the specific professional
       const professionalSlots = await professionalService.getAvailableSlots({
         phone,
         professionalId,
@@ -94,9 +92,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
     const hadAutoAssignedPreviously = Boolean(context?.autoAssignedProfessional)
 
     const availableProfessionalsRaw = Array.isArray(item.availableProfessionals) ? item.availableProfessionals : []
-    const availableProfessionals = availableProfessionalsRaw.filter(
-      (pro): pro is SlotProfessional => Boolean(pro && pro.id && String(pro.id).trim()),
-    )
+    const availableProfessionals = availableProfessionalsRaw.filter((pro): pro is SlotProfessional => Boolean(pro && pro.id && String(pro.id).trim()))
 
     if (Array.isArray(item.availableProfessionals) && availableProfessionals.length === 0) {
       console.warn('[timeSlotFlow] Horário selecionado sem profissionais disponíveis.', { userId, slot: item.id })
@@ -120,11 +116,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
         } as unknown as UpsertAppointmentArgs[keyof UpsertAppointmentArgs],
       )
     } else if (hadAutoAssignedPreviously && availableProfessionals.length !== 1 && inAppointmentFlow) {
-      await appointmentService.updateDraftField(
-        userId,
-        AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs,
-        null as unknown as UpsertAppointmentArgs[keyof UpsertAppointmentArgs],
-      )
+      await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, null as unknown as UpsertAppointmentArgs[keyof UpsertAppointmentArgs])
       clearedAutoAssignment = true
     }
 
