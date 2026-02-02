@@ -1,5 +1,6 @@
 import { getBusinessIdForPhone, getUserContextSync } from '../../env.config'
 import { ensureUserApiToken } from '../../services/auth-token.service'
+import { professionalService } from '../../services/appointments/professional.service'
 import { aiLogger } from '../../utils/pino'
 
 const logger = aiLogger.child({ module: 'appointment-queries' })
@@ -328,14 +329,25 @@ export const appointmentQueryFunctions = {
     logger.info({ businessId }, 'Consultando barbeiros disponíveis')
 
     try {
+      const professionals = await professionalService.getProfessionals(phone)
+      const normalizedProfessionals = professionals.map((item) => {
+        const specialtyCandidates = [Array.isArray((item as any)?.specialties) ? (item as any).specialties.join(', ') : undefined, typeof (item as any)?.specialty === 'string' ? (item as any).specialty : undefined, typeof item.description === 'string' ? item.description : undefined]
+
+        const specialty = specialtyCandidates.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)
+
+        return {
+          id: item.id,
+          name: item.name,
+          ...(specialty ? { specialty } : {}),
+          ...(typeof (item as any)?.available === 'boolean' ? { available: (item as any).available } : {}),
+        }
+      })
+
       return {
         status: 'success',
         data: {
-          professionals: [
-            { id: 1, name: 'João', specialty: 'Cortes clássicos', available: true },
-            { id: 2, name: 'Carlos', specialty: 'Design de barba', available: true },
-            { id: 3, name: 'Pedro', specialty: 'Cortes modernos', available: true },
-          ],
+          professionals: normalizedProfessionals,
+          message: normalizedProfessionals.length > 0 ? 'Profissionais disponíveis.' : 'Nenhum profissional cadastrado.',
         },
       }
     } catch (error) {
