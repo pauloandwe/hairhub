@@ -5,6 +5,7 @@ import { handleIncomingInteractiveList } from '../../interactives/registry'
 import { ensureUserApiToken } from '../auth-token.service'
 import { clientsService } from '../clients/clients.service'
 import { transcribeAudio } from '../openai.service'
+import { getOutreachContext, clearOutreachContext } from '../outreach/outreach-context.service'
 import { SimplifiedExpenseContextService } from '../finances/simplifiedExpense/simplifiedExpense.context'
 import { DeathContextService } from '../livestocks/Death/death.context'
 import { DefaultContextService } from '../defaultContext'
@@ -157,6 +158,27 @@ export class ContextService {
       }
 
       runtimeContext = await getUserContext(userId)
+
+      const outreachContext = await getOutreachContext(userId)
+      if (outreachContext) {
+        await clearOutreachContext(userId)
+
+        await setUserContext(userId, {
+          outreachReply: {
+            type: outreachContext.type,
+            businessName: outreachContext.businessName,
+            clientName: outreachContext.clientName,
+            sentAt: outreachContext.sentAt,
+            message: outreachContext.message,
+            metadata: outreachContext.metadata,
+          },
+          businessId: outreachContext.businessId,
+          businessPhone: outreachContext.businessPhone,
+          businessName: outreachContext.businessName,
+        })
+
+        runtimeContext = await getUserContext(userId)
+      }
 
       if (runtimeContext?.awaitingClientName) {
         const nameCollected = await this.handleClientNameCollection(businessId, userId, incomingMessage, true)

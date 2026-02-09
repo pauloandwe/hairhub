@@ -31,6 +31,11 @@ interface CachedUserTokenData {
   farmName?: string
   userName?: string
   clientName?: string | null
+  clientNickname?: string | null
+  clientBirthDate?: string | null
+  clientServicePreferences?: string | null
+  clientRestrictions?: string | null
+  clientAiContext?: string | null
   [key: string]: any
 }
 
@@ -45,6 +50,11 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
     if (token) setApiBearerToken(token)
 
     const clientName = sanitizedData?.clientName || null
+    const clientNickname = sanitizedData?.clientNickname || null
+    const clientBirthDate = sanitizedData?.clientBirthDate || null
+    const clientServicePreferences = sanitizedData?.clientServicePreferences || null
+    const clientRestrictions = sanitizedData?.clientRestrictions || null
+    const clientAiContext = sanitizedData?.clientAiContext || null
 
     console.log('[AuthToken] Token encontrado para businessId:', {
       id: sanitizedData?.id,
@@ -52,6 +62,8 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
       phone: sanitizedData?.phone,
       type: sanitizedData?.type,
       clientName,
+      clientNickname,
+      clientBirthDate,
     })
     await setUserContext(phone, {
       token,
@@ -61,6 +73,11 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
       businessName: sanitizedData.name,
       businessType: sanitizedData.type,
       clientName,
+      clientNickname,
+      clientBirthDate,
+      clientServicePreferences,
+      clientRestrictions,
+      clientAiContext,
     })
 
     systemLogger.info(
@@ -70,12 +87,25 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
         businessId,
         token: sanitizedData?.token,
         clientName,
+        clientNickname,
+        clientBirthDate,
+        clientServicePreferences,
+        clientRestrictions,
+        clientAiContext,
         payload: sanitizedData,
       },
       'User authenticated successfully with token.',
     )
 
-    return { ...sanitizedData, clientName } as CachedUserTokenData
+    return {
+      ...sanitizedData,
+      clientName,
+      clientNickname,
+      clientBirthDate,
+      clientServicePreferences,
+      clientRestrictions,
+      clientAiContext,
+    } as CachedUserTokenData
   } catch (remoteErr) {
     console.error('[AuthToken] Erro ao buscar token remoto:', remoteErr)
     throw remoteErr

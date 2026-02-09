@@ -6,6 +6,11 @@ export interface ClientData {
   businessId: number
   phone: string
   name: string | null
+  nickname: string | null
+  birthDate: string | null
+  servicePreferences: string | null
+  restrictions: string | null
+  aiContext: string | null
   createdAt: Date
   updatedAt: Date
 }

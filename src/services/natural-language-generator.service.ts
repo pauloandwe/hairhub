@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import { env } from 'process'
 import { buildNaturalLanguagePrompt } from '../utils/systemPrompts'
-import { getUserNameForPhone, getBusinessNameForPhone } from '../env.config'
+import { getUserNameForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone } from '../env.config'
 import { aiLogger } from '../utils/pino'
 
 export interface GenerateNaturalTextOptions {
@@ -9,6 +9,7 @@ export interface GenerateNaturalTextOptions {
   purpose: string
   userName?: string
   farmName?: string
+  clientPersonalizationContext?: string
   additionalInstructions?: string
   maxLength?: 'short' | 'medium' | 'long'
   maxTokens?: number
@@ -38,7 +39,7 @@ export class NaturalLanguageGeneratorService {
   })
 
   async generateNaturalText(options: GenerateNaturalTextOptions): Promise<string> {
-    const { context, purpose, userName, farmName, additionalInstructions, maxLength = 'medium', maxTokens } = options
+    const { context, purpose, userName, farmName, clientPersonalizationContext, additionalInstructions, maxLength = 'medium', maxTokens } = options
 
     const lengthInstructions = {
       short: 'IMPORTANTE: Seja EXTREMAMENTE conciso. Máximo de 1-2 frases curtas (cerca de 50 caracteres total). Vá direto ao ponto.',
@@ -58,6 +59,7 @@ export class NaturalLanguageGeneratorService {
     const systemPrompt = buildNaturalLanguagePrompt({
       userName,
       farmName,
+      clientPersonalizationContext,
       purpose,
       context,
       additionalInstructions: finalInstructions,
@@ -68,6 +70,7 @@ export class NaturalLanguageGeneratorService {
       purpose,
       userName,
       farmName,
+      clientPersonalizationContext,
       maxLength,
     })
 
@@ -113,12 +116,14 @@ export class NaturalLanguageGeneratorService {
 
     const userName = getUserNameForPhone(phone)
     const farmName = getBusinessNameForPhone(phone)
+    const clientPersonalizationContext = getClientPersonalizationContextForPhone(phone)
 
     return this.generateNaturalText({
       context,
       purpose,
       userName,
       farmName,
+      clientPersonalizationContext,
       additionalInstructions,
       maxLength,
       maxTokens,

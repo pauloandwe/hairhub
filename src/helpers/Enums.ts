@@ -1,6 +1,7 @@
 export enum CacheKeys {
   CHAT_DRAFT = 'CHAT_DRAFT',
   USER_CONTEXT = 'USER_CONTEXT',
+  OUTREACH_CONTEXT = 'OUTREACH_CONTEXT',
 }
 
 export enum EnvKeys {

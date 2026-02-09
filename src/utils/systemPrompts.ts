@@ -98,12 +98,13 @@ ${formattedFunctions}
 type NaturalLanguagePromptArgs = {
   userName?: string
   farmName?: string
+  clientPersonalizationContext?: string
   purpose: string
   context: string
   additionalInstructions?: string
 }
 
-export const buildNaturalLanguagePrompt = ({ userName, farmName, purpose, context, additionalInstructions }: NaturalLanguagePromptArgs): string => {
+export const buildNaturalLanguagePrompt = ({ userName, farmName, clientPersonalizationContext, purpose, context, additionalInstructions }: NaturalLanguagePromptArgs): string => {
   const firstName = userName ? userName.split(' ')[0] : undefined
 
   return `
@@ -120,6 +121,8 @@ ${purpose}
 
 ## INFORMAÇÕES FORNECIDAS
 ${context}
+
+${clientPersonalizationContext ? `## PERSONALIZAÇÃO DISCRETA DO CLIENTE (CONTEXTO INTERNO)\n${clientPersonalizationContext}` : ''}
 
 ## REGRAS DE GERAÇÃO
 1. **Tom amigável e natural:** Use uma linguagem conversacional e informal, como se estivesse conversando diretamente com um amigo.
@@ -141,6 +144,7 @@ ${context}
    - NUNCA use formato de lista, bullet points, tópicos ou numeração
    - NUNCA repita o nome em cada frase
    - NUNCA comece com "Oi", "Olá" em confirmações de ações completadas
+9. **Uso discreto de personalização do cliente:** Se houver dados pessoais no contexto interno, use-os para calibrar tom e priorização. Não exponha dados sensíveis sem solicitação explícita do usuário.
 
 ${additionalInstructions ? `## INSTRUÇÕES ADICIONAIS\n${additionalInstructions}` : ''}
 

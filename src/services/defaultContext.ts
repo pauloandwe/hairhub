@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import { env } from 'process'
 import { ChatMessage } from './drafts/types'
 import { appendIntentHistory, clearIntentHistory, getIntentHistory } from './intent-history.service'
-import { getBusinessIdForPhone, getBusinessNameForPhone, resetActiveRegistration, getUserContextSync } from '../env.config'
+import { getBusinessIdForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone, resetActiveRegistration, getUserContextSync, setUserContext } from '../env.config'
 import { formatAssistantReply } from '../utils/message'
 import { sendWhatsAppMessage } from '../api/meta.api'
 
@@ -53,7 +53,50 @@ export class DefaultContextService {
     await appendIntentHistory(userId, 'default', history)
   }
 
-  protected buildBasePrompt(history: ChatMessage[], incomingMessage: string): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  private buildOutreachSection(userId: string): string {
+    const userCtx = getUserContextSync(userId)
+    const outreachReply = userCtx?.outreachReply
+
+    if (!outreachReply) return ''
+
+    const typeLabels: Record<string, string> = {
+      scheduling: 'agendamento de horário',
+      promotion: 'promoção',
+      birthday: 'felicitação de aniversário',
+      feedback: 'feedback',
+    }
+    const label = typeLabels[outreachReply.type] || outreachReply.type
+
+    return `
+          **CONTEXTO IMPORTANTE - Resposta a mensagem proativa:**
+          Esta mensagem é uma RESPOSTA do cliente a uma mensagem proativa que enviamos sobre ${label}.
+          A mensagem original enviada foi: "${outreachReply.message}"
+
+          - O estabelecimento "${outreachReply.businessName}" enviou essa mensagem convidando o cliente.
+          - O cliente está respondendo a esse convite.
+          - Trate com prioridade e de forma acolhedora.
+          - Se demonstrar interesse em agendar, inicie imediatamente com startAppointmentRegistration.
+          - Se recusar, agradeça educadamente e finalize.
+          - NÃO pergunte novamente se quer agendar — o cliente já está respondendo ao convite.
+        `
+  }
+
+  protected buildBasePrompt(history: ChatMessage[], incomingMessage: string, userId: string): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+    const clientPersonalization = getClientPersonalizationContextForPhone(userId)
+    const personalizationSection = clientPersonalization
+      ? `
+          **Personalização discreta do cliente (somente para contexto interno):**
+          ${clientPersonalization}
+
+          **Regras para uso desse contexto:**
+          - Use para ajustar tom e priorização da resposta.
+          - Não exponha dados sensíveis espontaneamente.
+          - Só mencione esses dados se o usuário pedir explicitamente ou se for estritamente necessário para resolver a solicitação.
+        `
+      : ''
+
+    const outreachSection = this.buildOutreachSection(userId)
+
     const array: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -92,6 +135,10 @@ export class DefaultContextService {
           - Para confirmar ou cancelar, siga as mesmas regras dos fluxos ativos (sim = confirmar, não = cancelar).
           - Nunca avance em agendamentos sem que o usuário tenha iniciado o fluxo correspondente.
           - Faça apenas **uma pergunta por vez**.
+
+          ${personalizationSection}
+
+          ${outreachSection}
         `,
       },
       ...history,
@@ -182,7 +229,7 @@ export class DefaultContextService {
     const requestId = userId
     const contextLogger = aiLogger.child({ userId, requestId })
     const intentHistory = await getIntentHistory(userId, 'default')
-    const defaultFlowPrompt = this.buildBasePrompt(intentHistory, incomingMessage)
+    const defaultFlowPrompt = this.buildBasePrompt(intentHistory, incomingMessage, userId)
     logOpenAIPrompt('default_context', defaultFlowPrompt, { userId })
     console.log('\n\n\n\n', defaultFlowPrompt, '\n\n\n\n', await this.getTools())
     contextLogger.info('Iniciando chamada à OpenAI')
@@ -300,6 +347,10 @@ export class DefaultContextService {
       const userContext = getUserContextSync(userId)
       const flowType = userContext?.activeRegistration?.type
       const flowStep = userContext?.activeRegistration?.step
+
+      if (userContext?.outreachReply) {
+        await setUserContext(userId, { outreachReply: null })
+      }
 
       const { display, history: historyContent } = formatAssistantReply(responseText, farmName || undefined, flowType, flowStep)
 

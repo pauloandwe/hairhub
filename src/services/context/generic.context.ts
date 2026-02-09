@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { sendWhatsAppMessage } from '../../api/meta.api'
-import { env, getBusinessIdForPhone, getBusinessNameForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
+import { env, getBusinessIdForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
 import { formatAssistantReply } from '../../utils/message'
 import { appendIntentHistory, clearIntentHistory, ChatMessage } from '../intent-history.service'
 import { draftHistoryService } from '../drafts/draft-history'
@@ -22,7 +22,25 @@ export abstract class GenericContextService<TDraft> {
     }
   }
 
+  private buildClientPersonalizationGuidance(userId?: string): string {
+    if (!userId) return ''
+    const context = getClientPersonalizationContextForPhone(userId)
+    if (!context) return ''
+
+    return `
+            **Personalização discreta do cliente (somente para contexto interno):**
+            ${context}
+
+            **Regras para uso desse contexto:**
+            - Use para ajustar tom e priorização da resposta.
+            - Não exponha dados sensíveis espontaneamente.
+            - Só mencione esses dados se o usuário pedir explicitamente ou se for estritamente necessário para resolver a solicitação.
+          `
+  }
+
   protected async buildBasePrompt(draft: any, history: ChatMessage[], incomingMessage: string, businessName?: string, userId?: string, awaitingField?: string, isEditingExistingRecord?: boolean): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
+    const personalizationSection = this.buildClientPersonalizationGuidance(userId)
+
     if (awaitingField) {
       if (isEditingExistingRecord) {
         return [
@@ -55,7 +73,8 @@ export abstract class GenericContextService<TDraft> {
             - Números sem símbolos especiais
             - Não faça perguntas, apenas extraia e execute
 
-            ${businessName ? `Business: ${businessName}` : ''}`,
+            ${businessName ? `Business: ${businessName}` : ''}
+            ${personalizationSection}`,
           },
           { role: 'user', content: incomingMessage },
         ]
@@ -89,7 +108,8 @@ export abstract class GenericContextService<TDraft> {
           - Datas devem estar em formato YYYY-MM-DD
           - Não faça perguntas, apenas extraia e execute
 
-          ${businessName ? `Business: ${businessName}` : ''}`,
+          ${businessName ? `Business: ${businessName}` : ''}
+          ${personalizationSection}`,
         },
         { role: 'user', content: incomingMessage },
       ]
@@ -122,6 +142,7 @@ export abstract class GenericContextService<TDraft> {
         - Valores monetários: remova "R$" e converta para número
 
         ${businessName ? `Business: ${businessName}` : ''}
+        ${personalizationSection}
 
         Não explique, não pergunte. Apenas extraia e chame a ferramenta.`,
       },

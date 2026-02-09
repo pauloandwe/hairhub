@@ -91,6 +91,24 @@ export interface AppointmentRescheduleState {
   selectedTime?: string
 }
 
+export interface ClientPersonalizationProfile {
+  clientName?: string | null
+  clientNickname?: string | null
+  clientBirthDate?: string | null
+  clientServicePreferences?: string | null
+  clientRestrictions?: string | null
+  clientAiContext?: string | null
+}
+
+export interface OutreachReplyContext {
+  type: string
+  businessName: string
+  clientName: string | null
+  sentAt: string
+  message: string
+  metadata: Record<string, any>
+}
+
 export interface UserRuntimeContext {
   phone: string
   workingHours: BusinessWorkingHour[]
@@ -103,8 +121,14 @@ export interface UserRuntimeContext {
   businessType?: string
   userName?: string
   clientName?: string | null
+  clientNickname?: string | null
+  clientBirthDate?: string | null
+  clientServicePreferences?: string | null
+  clientRestrictions?: string | null
+  clientAiContext?: string | null
   awaitingClientName?: boolean
   appointmentReschedule?: AppointmentRescheduleState | null
+  outreachReply?: OutreachReplyContext | null
   activeRegistration: {
     type?: string
     step?: string
@@ -172,6 +196,45 @@ export function getUserNameForPhone(phone: string): string {
 
 export function getClientNameForPhone(phone: string): string | null {
   return userContexts[phone]?.clientName || null
+}
+
+export function getClientPersonalizationForPhone(phone: string): ClientPersonalizationProfile {
+  const context = userContexts[phone]
+  return {
+    clientName: context?.clientName ?? null,
+    clientNickname: context?.clientNickname ?? null,
+    clientBirthDate: context?.clientBirthDate ?? null,
+    clientServicePreferences: context?.clientServicePreferences ?? null,
+    clientRestrictions: context?.clientRestrictions ?? null,
+    clientAiContext: context?.clientAiContext ?? null,
+  }
+}
+
+export function getClientPersonalizationContextForPhone(phone: string): string {
+  const profile = getClientPersonalizationForPhone(phone)
+  const chunks: string[] = []
+
+  if (profile.clientNickname) {
+    chunks.push(`Apelido preferido: ${profile.clientNickname}`)
+  }
+  if (profile.clientBirthDate) {
+    chunks.push(`Data de aniversário: ${profile.clientBirthDate}`)
+  }
+  if (profile.clientServicePreferences) {
+    chunks.push(`Preferências de atendimento: ${profile.clientServicePreferences}`)
+  }
+  if (profile.clientRestrictions) {
+    chunks.push(`Restrições/sensibilidades: ${profile.clientRestrictions}`)
+  }
+  if (profile.clientAiContext) {
+    chunks.push(`Contexto adicional de personalização: ${profile.clientAiContext}`)
+  }
+
+  if (chunks.length === 0) {
+    return ''
+  }
+
+  return chunks.join('\n')
 }
 
 export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string, businessPhone?: string) {
