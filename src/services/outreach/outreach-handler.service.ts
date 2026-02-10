@@ -55,10 +55,7 @@ router.post('/api/outreach/send', async (req: Request, res: Response) => {
 
     const alreadySent = await hasActiveOutreach(payload.clientPhone)
     if (alreadySent) {
-      whatsappLogger.info(
-        { clientPhone: payload.clientPhone },
-        'Outreach bloqueado por cooldown - mensagem já enviada nas últimas 24h',
-      )
+      whatsappLogger.info({ clientPhone: payload.clientPhone }, 'Outreach bloqueado por cooldown - mensagem já enviada nas últimas 24h')
       return res.status(429).json({
         error: 'Cooldown active',
         message: 'Já foi enviada uma mensagem para este cliente nas últimas 24 horas',
@@ -83,10 +80,7 @@ router.post('/api/outreach/send', async (req: Request, res: Response) => {
     })
 
     if (!result.success) {
-      whatsappLogger.error(
-        { clientPhone: payload.clientPhone, error: result.error },
-        'Falha ao enviar mensagem de outreach',
-      )
+      whatsappLogger.error({ clientPhone: payload.clientPhone, error: result.error }, 'Falha ao enviar mensagem de outreach')
       return res.status(500).json({
         success: false,
         error: result.error || 'Falha ao enviar mensagem',
@@ -120,10 +114,7 @@ router.post('/api/outreach/send', async (req: Request, res: Response) => {
       type: payload.type,
     })
   } catch (error: any) {
-    whatsappLogger.error(
-      { error: error?.message, stack: error?.stack },
-      'Erro ao processar requisição de outreach',
-    )
+    whatsappLogger.error({ error: error?.message, stack: error?.stack }, 'Erro ao processar requisição de outreach')
     res.status(500).json({
       error: 'Internal server error',
       message: error?.message || 'Erro ao processar requisição de outreach',
