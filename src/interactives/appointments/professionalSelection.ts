@@ -17,6 +17,9 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   type: 'selectProfessional',
   fetchItems: async (phone) => {
     const professionals = await professionalService.getProfessionals(phone)
+    if (professionals.length === 0) {
+      return []
+    }
 
     return [{ id: 'ANY', name: 'Nenhum específico' }, ...professionals]
   },
@@ -28,7 +31,7 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   },
   defaultBody: 'Qual professional você prefere?',
   invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum professional encontrado',
+  emptyListMessage: 'Nenhum profissional com horários configurados. Configure os dias e horários na tela de Profissionais.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => {
     if (c.id === 'ANY') {

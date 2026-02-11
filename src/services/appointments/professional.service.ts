@@ -20,6 +20,7 @@ export class ProfessionalService {
       if (normalizedBusinessId) {
         params.businessId = normalizedBusinessId
       }
+      params.onlyWithConfiguredSchedule = 'true'
 
       const response = await api.get(url, { params })
       const data = unwrapApiResponse<any[]>(response) ?? []

@@ -347,7 +347,7 @@ export const appointmentQueryFunctions = {
         status: 'success',
         data: {
           professionals: normalizedProfessionals,
-          message: normalizedProfessionals.length > 0 ? 'Profissionais disponíveis.' : 'Nenhum profissional cadastrado.',
+          message: normalizedProfessionals.length > 0 ? 'Profissionais disponíveis.' : 'Nenhum profissional com horários configurados.',
         },
       }
     } catch (error) {

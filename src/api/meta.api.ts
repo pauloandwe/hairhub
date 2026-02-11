@@ -227,17 +227,38 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
     throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
   }
 
+  const formatOptional = (value: string | undefined, maxLength: number): string | undefined => {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength)
+  }
+
+  const formatRequired = (value: string, maxLength: number): string => {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    return trimmed.length <= maxLength ? trimmed : trimmed.slice(0, maxLength)
+  }
+
+  const sanitizedHeader = formatOptional(header, 60)
+  const sanitizedBody = formatRequired(body, 1024) || body
+  const sanitizedFooter = formatOptional(footer, 60)
+  const sanitizedButtons = buttons.map((b) => ({
+    id: b.id,
+    title: formatRequired(b.title, 20),
+  }))
+
   const payload: any = {
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
     interactive: {
       type: 'button',
-      header: header ? { type: 'text', text: header } : undefined,
-      body: { text: body },
-      footer: footer ? { text: footer } : undefined,
+      header: sanitizedHeader ? { type: 'text', text: sanitizedHeader } : undefined,
+      body: { text: sanitizedBody },
+      footer: sanitizedFooter ? { text: sanitizedFooter } : undefined,
       action: {
-        buttons: buttons.map((b) => ({
+        buttons: sanitizedButtons.map((b) => ({
           type: 'reply',
           reply: { id: b.id, title: b.title },
         })),
@@ -249,8 +270,8 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
     whatsappLogger.info(
       {
         receiver: to,
-        message: body,
-        buttons: buttons.map((b) => ({
+        message: sanitizedBody,
+        buttons: sanitizedButtons.map((b) => ({
           id: b.id,
           title: b.title,
         })),
