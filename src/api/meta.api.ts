@@ -13,11 +13,7 @@ const metaApi = axios.create({
   baseURL: `https://graph.facebook.com/${WHATSAPP_API_VERSION}`,
 })
 
-export function sendWhatsAppMessageWithTitle(
-  to: string,
-  text: string,
-  options?: SendWhatsAppMessageOptions,
-): Promise<string> {
+export function sendWhatsAppMessageWithTitle(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
   const message = withAssistantTitlePhone(text, to)
 
   return sendWhatsAppMessage(to, message, options)
@@ -31,11 +27,7 @@ export interface SendWhatsAppMessageOptions {
   suppressConversationEvent?: boolean
 }
 
-export async function sendWhatsAppMessage(
-  to: string,
-  text: string,
-  options?: SendWhatsAppMessageOptions,
-): Promise<string> {
+export async function sendWhatsAppMessage(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
   cancelTypingIndicatorForUser(to)
 
   if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {

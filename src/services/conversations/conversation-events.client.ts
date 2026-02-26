@@ -79,11 +79,7 @@ export class ConversationEventsClient {
     )
   }
 
-  static async emitInboundFromWebhook(params: {
-    messageData: any
-    businessPhone?: string
-    rawPayload?: Record<string, any> | null
-  }): Promise<void> {
+  static async emitInboundFromWebhook(params: { messageData: any; businessPhone?: string; rawPayload?: Record<string, any> | null }): Promise<void> {
     const { messageData, businessPhone, rawPayload } = params
     if (!messageData?.id || !messageData?.from) return
 
@@ -107,11 +103,7 @@ export class ConversationEventsClient {
     })
   }
 
-  static async emitStatusFromWebhook(params: {
-    statusData: any
-    businessPhone?: string
-    rawPayload?: Record<string, any> | null
-  }): Promise<void> {
+  static async emitStatusFromWebhook(params: { statusData: any; businessPhone?: string; rawPayload?: Record<string, any> | null }): Promise<void> {
     const { statusData, businessPhone, rawPayload } = params
     if (!statusData?.id) return
 
@@ -134,11 +126,7 @@ export class ConversationEventsClient {
   }
 
   static async emitOutboundMessage(input: OutboundMessageEventInput): Promise<void> {
-    const resolved = await this.resolveBusinessContext(
-      input.clientPhone,
-      input.businessId ?? undefined,
-      input.businessPhone ?? undefined,
-    )
+    const resolved = await this.resolveBusinessContext(input.clientPhone, input.businessId ?? undefined, input.businessPhone ?? undefined)
 
     if (!resolved.businessId && !resolved.businessPhone) {
       whatsappLogger.debug(
@@ -189,13 +177,8 @@ export class ConversationEventsClient {
     return sanitized
   }
 
-  private static async resolveBusinessContext(
-    clientPhone: string,
-    businessId?: string | number,
-    businessPhone?: string,
-  ): Promise<{ businessId?: string; businessPhone?: string }> {
-    const normalizedBusinessId =
-      businessId !== undefined && businessId !== null ? String(businessId).trim() : ''
+  private static async resolveBusinessContext(clientPhone: string, businessId?: string | number, businessPhone?: string): Promise<{ businessId?: string; businessPhone?: string }> {
+    const normalizedBusinessId = businessId !== undefined && businessId !== null ? String(businessId).trim() : ''
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
 
     if (normalizedBusinessId || normalizedBusinessPhone) {
