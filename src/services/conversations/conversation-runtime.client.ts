@@ -25,11 +25,7 @@ const DEFAULT_RESULT: RuntimeAiModeResult = {
 }
 
 export class ConversationRuntimeClient {
-  static async getAiMode(params: {
-    clientPhone: string
-    businessPhone?: string
-    businessId?: string | number
-  }): Promise<RuntimeAiModeResult> {
+  static async getAiMode(params: { clientPhone: string; businessPhone?: string; businessId?: string | number }): Promise<RuntimeAiModeResult> {
     if (!params.clientPhone?.trim()) {
       return DEFAULT_RESULT
     }
