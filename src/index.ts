@@ -3,6 +3,7 @@ import { env } from './env.config'
 import { WebhookService } from './services/webhook/webhookService'
 import { reminderRouter } from './services/reminders/reminder-handler.service'
 import { outreachRouter } from './services/outreach/outreach-handler.service'
+import { panelMessagesRouter } from './services/conversations/panel-message-handler.service'
 const app = express()
 app.use(express.json())
 const webhookService = WebhookService.getInstance()
@@ -12,6 +13,7 @@ app.post('/webhook', webhookService.webhookInitiator)
 
 app.use(reminderRouter)
 app.use(outreachRouter)
+app.use(panelMessagesRouter)
 
 app.get('/health', (req, res) => {
   res.json({

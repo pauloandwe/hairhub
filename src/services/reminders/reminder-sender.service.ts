@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { whatsappLogger } from '../../utils/pino'
 import { env } from '../../env.config'
+import { ConversationEventsClient } from '../conversations/conversation-events.client'
 
 export interface SendReminderPayload {
   businessPhone: string
@@ -8,6 +9,9 @@ export interface SendReminderPayload {
   message: string
   appointmentId: number
   type: string
+  businessId?: string | number
+  source?: 'REMINDER' | 'OUTREACH' | 'HUMAN_PANEL' | 'BOT' | 'SYSTEM'
+  metadata?: Record<string, any>
 }
 
 export interface ReminderSendResponse {
@@ -42,6 +46,34 @@ export class ReminderSenderService {
         )
 
         const messageId = await this.sendMessageViaMetaAPI(clientPhone, message)
+
+        try {
+          await ConversationEventsClient.emitOutboundMessage({
+            clientPhone,
+            text: message,
+            source: payload.source || this.mapTypeToSource(type),
+            businessId: payload.businessId,
+            businessPhone,
+            providerMessageId: messageId,
+            providerStatus: 'SENT',
+            metadata: {
+              appointmentId,
+              reminderType: type,
+              ...(payload.metadata || {}),
+            },
+          })
+        } catch (emitError: any) {
+          whatsappLogger.warn(
+            {
+              appointmentId,
+              clientPhone,
+              type,
+              messageId,
+              error: emitError?.message,
+            },
+            'Falha ao emitir evento outbound de conversa para lembrete/outreach',
+          )
+        }
 
         whatsappLogger.info(
           {
@@ -104,6 +136,13 @@ export class ReminderSenderService {
       error: lastError?.message || 'Falha desconhecida ao enviar lembrete',
       timestamp: new Date(),
     }
+  }
+
+  private static mapTypeToSource(type: string): 'REMINDER' | 'OUTREACH' | 'BOT' {
+    const normalized = String(type || '').toLowerCase()
+    if (normalized.startsWith('outreach')) return 'OUTREACH'
+    if (normalized.includes('reminder')) return 'REMINDER'
+    return 'BOT'
   }
 
   private static async sendMessageViaMetaAPI(to: string, text: string): Promise<string> {

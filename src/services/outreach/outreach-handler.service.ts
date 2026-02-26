@@ -77,6 +77,13 @@ router.post('/api/outreach/send', async (req: Request, res: Response) => {
       message: payload.message,
       appointmentId: 0,
       type: `outreach-${payload.type}`,
+      businessId: payload.businessId,
+      source: 'OUTREACH',
+      metadata: {
+        outreachType: payload.type,
+        businessName: payload.businessName,
+        clientName: payload.clientName,
+      },
     })
 
     if (!result.success) {

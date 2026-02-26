@@ -4,6 +4,7 @@ import type { ListRow } from '../utils/interactive'
 import { withAssistantTitlePhone } from '../utils/message'
 import { whatsappLogger } from '../utils/pino'
 import { cancelTypingIndicatorForUser } from '../utils/typingIndicatorManager'
+import { ConversationEventsClient } from '../services/conversations/conversation-events.client'
 
 const WHATSAPP_API_VERSION = env.WHATSAPP_API_VERSION
 const PHONE_NUMBER_ID = env.PHONE_NUMBER_ID
@@ -12,13 +13,29 @@ const metaApi = axios.create({
   baseURL: `https://graph.facebook.com/${WHATSAPP_API_VERSION}`,
 })
 
-export function sendWhatsAppMessageWithTitle(to: string, text: string): Promise<void> {
+export function sendWhatsAppMessageWithTitle(
+  to: string,
+  text: string,
+  options?: SendWhatsAppMessageOptions,
+): Promise<string> {
   const message = withAssistantTitlePhone(text, to)
 
-  return sendWhatsAppMessage(to, message)
+  return sendWhatsAppMessage(to, message, options)
 }
 
-export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
+export interface SendWhatsAppMessageOptions {
+  source?: 'BOT' | 'SYSTEM' | 'HUMAN_PANEL' | 'OUTREACH' | 'REMINDER'
+  businessId?: string | number
+  businessPhone?: string
+  metadata?: Record<string, any>
+  suppressConversationEvent?: boolean
+}
+
+export async function sendWhatsAppMessage(
+  to: string,
+  text: string,
+  options?: SendWhatsAppMessageOptions,
+): Promise<string> {
   cancelTypingIndicatorForUser(to)
 
   if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
@@ -34,7 +51,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
       'Sending message to WhatsApp receiver',
     )
 
-    await metaApi.post(
+    const response = await metaApi.post(
       `/${PHONE_NUMBER_ID}/messages`,
       {
         messaging_product: 'whatsapp',
@@ -57,6 +74,35 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
       },
       'Message sent successfully',
     )
+
+    const messageId = response.data?.messages?.[0]?.id || 'unknown'
+
+    if (!options?.suppressConversationEvent) {
+      try {
+        await ConversationEventsClient.emitOutboundMessage({
+          clientPhone: to,
+          text,
+          source: options?.source || 'BOT',
+          businessId: options?.businessId,
+          businessPhone: options?.businessPhone,
+          providerMessageId: messageId,
+          providerStatus: 'SENT',
+          rawPayload: response.data || null,
+          metadata: options?.metadata || null,
+        })
+      } catch (emitError: any) {
+        whatsappLogger.warn(
+          {
+            receiver: to,
+            messageId,
+            error: emitError?.message,
+          },
+          'Falha ao emitir evento outbound de conversa após envio WhatsApp',
+        )
+      }
+    }
+
+    return messageId
   } catch (error: any) {
     whatsappLogger.error(
       {
@@ -198,12 +244,35 @@ export async function sendWhatsAppInteractiveList(params: {
       },
       'Sending interactive list to WhatsApp receiver',
     )
-    await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
+    const response = await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
       headers: {
         Authorization: `Bearer ${META_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
     })
+
+    const messageId = response.data?.messages?.[0]?.id
+    if (messageId) {
+      try {
+        await ConversationEventsClient.emitOutboundMessage({
+          clientPhone: to,
+          text: sanitizedBody,
+          source: 'BOT',
+          providerMessageId: String(messageId),
+          providerStatus: 'SENT',
+          rawPayload: response.data || null,
+          metadata: {
+            interactiveType: 'list',
+            header: sanitizedHeader || null,
+            footer: sanitizedFooter || null,
+            button: sanitizedButtonLabel,
+            rows: sanitizedRows.map((r) => ({ id: r.id, title: r.title })),
+          },
+        })
+      } catch (emitError: any) {
+        whatsappLogger.warn({ receiver: to, messageId, error: emitError?.message }, 'Falha ao emitir evento de lista interativa')
+      }
+    }
   } catch (error: any) {
     whatsappLogger.error(
       {
@@ -278,12 +347,34 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
       },
       'Sending interactive buttons to WhatsApp receiver',
     )
-    await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
+    const response = await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
       headers: {
         Authorization: `Bearer ${META_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
     })
+
+    const messageId = response.data?.messages?.[0]?.id
+    if (messageId) {
+      try {
+        await ConversationEventsClient.emitOutboundMessage({
+          clientPhone: to,
+          text: sanitizedBody,
+          source: 'BOT',
+          providerMessageId: String(messageId),
+          providerStatus: 'SENT',
+          rawPayload: response.data || null,
+          metadata: {
+            interactiveType: 'button',
+            header: sanitizedHeader || null,
+            footer: sanitizedFooter || null,
+            buttons: sanitizedButtons.map((b) => ({ id: b.id, title: b.title })),
+          },
+        })
+      } catch (emitError: any) {
+        whatsappLogger.warn({ receiver: to, messageId, error: emitError?.message }, 'Falha ao emitir evento de botões interativos')
+      }
+    }
   } catch (error: any) {
     whatsappLogger.error(
       {

@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { env } from 'process'
 import { ContextService } from '../context/contextService'
 import { markMessageAsRead } from '../../api/meta.api'
+import { ConversationEventsClient } from '../conversations/conversation-events.client'
 
 export class WebhookService {
   private static instance: WebhookService
@@ -31,14 +32,33 @@ export class WebhookService {
 
     if (body.object !== 'whatsapp_business_account') return
 
-    const messageData = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]
-    const businessId = body.entry?.[0]?.changes?.[0]?.value?.metadata?.display_phone_number
+    const changeValue = body.entry?.[0]?.changes?.[0]?.value
+    const messageData = changeValue?.messages?.[0]
+    const statusEvents = Array.isArray(changeValue?.statuses) ? changeValue.statuses : []
+    const businessPhone = changeValue?.metadata?.display_phone_number
+
+    for (const statusEvent of statusEvents) {
+      try {
+        await ConversationEventsClient.emitStatusFromWebhook({
+          statusData: statusEvent,
+          businessPhone,
+          rawPayload: statusEvent,
+        })
+      } catch (statusError) {
+        console.error('[WebhookService] Erro ao persistir status de mensagem:', statusError)
+      }
+    }
 
     if (!messageData?.id || !messageData?.from) return
 
     try {
+      await ConversationEventsClient.emitInboundFromWebhook({
+        messageData,
+        businessPhone,
+        rawPayload: messageData,
+      })
       markMessageAsRead(messageData.id)
-      await this.contextService.handleIncomingMessage(messageData, businessId)
+      await this.contextService.handleIncomingMessage(messageData, businessPhone)
     } catch (error) {
       console.error('[WebhookService] Erro inesperado ao processar webhook:', error)
       try {
