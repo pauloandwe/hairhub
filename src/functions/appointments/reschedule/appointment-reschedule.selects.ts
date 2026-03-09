@@ -18,8 +18,8 @@ const editAppointmentId: FieldEditor = async (phone) => {
     const appointments = await appointmentRescheduleService.fetchPendingAppointments(phone)
 
     if (!appointments.length) {
-      await sendWhatsAppMessage(phone, 'Você não tem agendamentos pendentes para remarcar.')
-      return respond('Nenhum agendamento pendente', false)
+      await sendWhatsAppMessage(phone, 'Você não tem próximos agendamentos elegíveis para remarcação.')
+      return respond('Nenhum agendamento elegível para remarcação', false)
     }
 
     await sendPendingAppointmentSelectionList(phone)
@@ -85,7 +85,7 @@ const askAppointmentId: MissingFieldHandler = async (phone, draft) => {
     const appointments = await appointmentRescheduleService.fetchPendingAppointments(phone)
 
     if (!appointments.length) {
-      const message = 'Você não tem agendamentos pendentes para remarcar.'
+      const message = 'Você não tem próximos agendamentos elegíveis para remarcação.'
       await appendAssistantTextAuto(phone, message)
       await sendWhatsAppMessage(phone, message)
       return { message, interactive: false, draft }
@@ -103,7 +103,7 @@ const askAppointmentId: MissingFieldHandler = async (phone, draft) => {
     return { message: 'Menu de agendamentos enviado', interactive: true, draft }
   } catch (error) {
     console.error('[askAppointmentId] Error:', error)
-    const message = 'Não consegui buscar seus agendamentos pendentes. Tente novamente.'
+    const message = 'Não consegui buscar seus próximos agendamentos. Tente novamente.'
     await sendWhatsAppMessage(phone, message)
     return { message, interactive: false, draft }
   }

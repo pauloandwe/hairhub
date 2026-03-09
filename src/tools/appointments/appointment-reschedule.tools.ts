@@ -10,7 +10,7 @@ export const appointmentRescheduleTools: OpenAITool[] = [
 QUANDO USAR:
 - Quando o usuário pedir para remarcar, trocar ou alterar o horário de um agendamento.
 - Sempre que o usuário mencionar "remarcar", "adiar", "trocar horário" ou algo similar.
-- Use mesmo que o usuário não passe dados adicionais; o fluxo recupera os horários pendentes automaticamente.
+- Use mesmo que o usuário não passe dados adicionais; o fluxo recupera os próximos agendamentos elegíveis automaticamente.
 
 EXEMPLOS:
 - "Quero remarcar meu corte" → startAppointmentReschedule({})

@@ -15,7 +15,9 @@ import { unsupportedRegistrationFunctions } from '../functions/utils/unsupported
 
 import { aiLogger, logOpenAIPrompt, logOpenAIResponse, logToolExecution } from '../utils/pino'
 import { appointmentFunctions } from '../functions/appointments/appointment.functions'
+import { appointmentCancellationFunctions } from '../functions/appointments/cancellation/appointment-cancellation.functions'
 import { appointmentTools } from '../tools/appointments/appointment.tools'
+import { appointmentCancellationTools } from '../tools/appointments/appointment-cancellation.tools'
 import { appointmentQueryTools } from '../tools/appointments/appointment-queries.tools'
 import { appointmentQueryFunctions } from '../functions/appointments/appointment-queries.functions'
 import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
@@ -23,11 +25,12 @@ import { appointmentRescheduleTools } from '../tools/appointments/appointment-re
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...this.pickStartTools([...appointmentCancellationTools] as OpenAITool[]), ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
   private serviceFunctions = {
     ...unsupportedRegistrationFunctions,
     ...appointmentQueryFunctions,
     startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
+    startAppointmentCancellation: appointmentCancellationFunctions.startAppointmentCancellation,
     startAppointmentReschedule: appointmentRescheduleFunctions.startAppointmentReschedule,
   }
 
@@ -115,14 +118,16 @@ export class DefaultContextService {
 
           **Diretrizes de intenção**
           - Se o usuário disser "olá", "bom dia" ou cumprimentos semelhantes → apenas cumprimente de forma curta e amigável (ex.: *"Olá, como posso ajudar com seus agendamentos?"* ou *"Oi! Quer agendar um corte, verificar horários ou reagendar?"* responda amigavelmente e use um ou outro emoji para deixar a conversa mais natural e humana).
-          - Se o usuário mencionar uma ação (ex.: *agendar*, *remarcar*, *cancelar*, *verificar horários*, *ver histórico*) → identifique a intenção e inicie o fluxo correspondente com a ferramenta apropriada.
+          - Se o usuário mencionar uma ação (ex.: *agendar*, *remarcar*, *cancelar horário*, *verificar horários*, *ver histórico*) → identifique a intenção e inicie o fluxo correspondente com a ferramenta apropriada.
 
           **IMPORTANTE - A plataforma é focada em agendamentos:**
             * Agendamento de corte/serviço → use startAppointmentRegistration
+            * Cancelamento de agendamento → use startAppointmentCancellation
             * Remarcação de agendamento → use startAppointmentReschedule
             * Solicitações fora do escopo de agendamentos → use reportUnsupportedRegistration
 
           **IMPORTANTE - Consultas/Buscas disponíveis no sistema:**
+            * Próximos agendamentos / "quando é meu horário?" → use getUpcomingAppointments
             * Horários disponíveis → use getAvailableTimeSlots
             * Histórico de cortes/agendamentos → use getAppointmentHistory
             * Serviços disponíveis → use getServices

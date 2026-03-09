@@ -82,6 +82,7 @@ export interface AppointmentRescheduleAppointment {
   professionalName?: string | null
   clientName?: string | null
   clientPhone?: string | null
+  notes?: string | null
 }
 
 export interface AppointmentRescheduleState {
@@ -89,6 +90,11 @@ export interface AppointmentRescheduleState {
   selectedAppointmentId?: number
   selectedDate?: string
   selectedTime?: string
+}
+
+export interface AppointmentCancellationState {
+  upcomingAppointments?: AppointmentRescheduleAppointment[]
+  selectedAppointmentId?: number
 }
 
 export interface ClientPersonalizationProfile {
@@ -128,6 +134,7 @@ export interface UserRuntimeContext {
   clientAiContext?: string | null
   awaitingClientName?: boolean
   appointmentReschedule?: AppointmentRescheduleState | null
+  appointmentCancellation?: AppointmentCancellationState | null
   outreachReply?: OutreachReplyContext | null
   activeRegistration: {
     type?: string

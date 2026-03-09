@@ -85,7 +85,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'cancelAppointmentRegistration',
-      description: 'Cancela e limpa o rascunho atual do agendamento. Use quando o usuário disser para cancelar ou desistir.',
+      description: 'Cancela e limpa apenas o rascunho atual de cadastro de agendamento. Use quando o usuário desistir do fluxo em andamento; não use para cancelar um horário já criado.',
       parameters: {
         type: 'object',
         properties: {},
@@ -135,7 +135,7 @@ NÃO USAR para rascunhos em andamento (use changeAppointmentRegistrationField)`,
     type: 'function',
     function: {
       name: 'deleteAppointmentRegistration',
-      description: `Exclui um agendamento já criado.
+      description: `Exclui fisicamente um agendamento já criado. Não é o caminho padrão do cliente final no WhatsApp; para cancelar horário de cliente use o fluxo startAppointmentCancellation.
 
 QUANDO USAR:
 - Após confirmar um agendamento, o sistema mostra botões "Editar" e "Excluir"

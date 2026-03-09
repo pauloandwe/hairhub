@@ -1,18 +1,8 @@
 import api from '../../config/api.config'
 import { env, getBusinessIdForPhone, getUserContextSync, setUserContext, AppointmentRescheduleAppointment, AppointmentRescheduleState } from '../../env.config'
-import { unwrapApiResponse } from '../../utils/http'
+import { customerAppointmentsService } from './customer-appointments.service'
 
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
-
-const sanitizePhone = (raw: string): string => raw.replace(/\D/g, '')
-
-const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0
-
-const toNumberOrNull = (value: unknown): number | null => {
-  if (value === null || value === undefined) return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 const cloneState = (state: AppointmentRescheduleState | null | undefined): AppointmentRescheduleState => {
   if (!state) return {}
@@ -21,40 +11,6 @@ const cloneState = (state: AppointmentRescheduleState | null | undefined): Appoi
     selectedAppointmentId: state.selectedAppointmentId,
     selectedDate: state.selectedDate,
     selectedTime: state.selectedTime,
-  }
-}
-
-const mapAppointment = (raw: any): AppointmentRescheduleAppointment | null => {
-  const id = toNumberOrNull(raw?.id)
-  if (!id) return null
-
-  const startDate = isNonEmptyString(raw?.startDate) ? raw.startDate : null
-  const endDate = isNonEmptyString(raw?.endDate) ? raw.endDate : null
-
-  const serviceId = toNumberOrNull(raw?.serviceId ?? raw?.service?.id)
-  const serviceName = isNonEmptyString(raw?.service?.name) ? raw.service.name : isNonEmptyString(raw?.serviceName) ? raw.serviceName : null
-  const serviceDuration = toNumberOrNull(raw?.service?.duration)
-
-  const professionalId = toNumberOrNull(raw?.professionalId ?? raw?.professional?.id)
-  const professionalName = isNonEmptyString(raw?.professional?.name) ? raw.professional.name : isNonEmptyString(raw?.professionalName) ? raw.professionalName : null
-
-  const clientName = isNonEmptyString(raw?.clientContact?.name) ? raw.clientContact.name : isNonEmptyString(raw?.client?.name) ? raw.client.name : null
-  const clientPhone = isNonEmptyString(raw?.clientContact?.phone) ? raw.clientContact.phone : null
-
-  if (!startDate) return null
-
-  return {
-    id,
-    startDate,
-    endDate,
-    status: isNonEmptyString(raw?.status) ? raw.status : null,
-    serviceId,
-    serviceName,
-    serviceDuration,
-    professionalId,
-    professionalName,
-    clientName,
-    clientPhone,
   }
 }
 
@@ -105,31 +61,8 @@ class AppointmentRescheduleService {
   }
 
   async fetchPendingAppointments(phone: string): Promise<AppointmentRescheduleAppointment[]> {
-    const businessId = getBusinessIdForPhone(phone)
-    const normalizedBusinessId = businessId ? String(businessId).trim() : ''
-    const sanitizedPhone = sanitizePhone(phone)
-
-    if (!normalizedBusinessId) {
-      throw new Error('Não consegui identificar sua business para buscar os agendamentos.')
-    }
-
-    if (!sanitizedPhone) {
-      throw new Error('Não consegui identificar o telefone do cliente para buscar os agendamentos.')
-    }
-
-    const url = `${env.APPOINTMENTS_URL}/appointments/${encodeURIComponent(normalizedBusinessId)}/appointments/phone/${encodeURIComponent(sanitizedPhone)}`
-
     try {
-      const response = await api.get(url, {
-        params: {
-          status: 'pending',
-        },
-      })
-
-      const payload = unwrapApiResponse<unknown[]>(response) ?? []
-
-      const appointments = payload.map(mapAppointment).filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
-
+      const appointments = await customerAppointmentsService.getUpcomingAppointmentsForAction(phone, 'reschedule')
       const previousState = this.getState(phone)
       const selectedInPreviousState = previousState.selectedAppointmentId
 
@@ -142,8 +75,8 @@ class AppointmentRescheduleService {
 
       return appointments
     } catch (error) {
-      console.error('[AppointmentRescheduleService] Erro ao buscar agendamentos pendentes:', error)
-      throw new Error('Não consegui buscar seus agendamentos pendentes. Tente novamente mais tarde.')
+      console.error('[AppointmentRescheduleService] Erro ao buscar próximos agendamentos:', error)
+      throw new Error(error instanceof Error ? error.message : 'Não consegui buscar seus próximos agendamentos. Tente novamente mais tarde.')
     }
   }
 
@@ -158,7 +91,7 @@ class AppointmentRescheduleService {
     const appointment = appointments.find((apt) => apt.id === appointmentId)
 
     if (!appointment) {
-      throw new Error('Não encontrei esse agendamento na lista de pendentes.')
+      throw new Error('Não encontrei esse agendamento na lista de próximos horários.')
     }
 
     await this.setState(phone, {
@@ -221,8 +154,10 @@ class AppointmentRescheduleService {
 
     const appointment = state.pendingAppointments?.find((apt) => apt.id === state.selectedAppointmentId)
     if (!appointment) {
-      throw new Error('Não encontrei o agendamento selecionado entre os pendentes.')
+      throw new Error('Não encontrei o agendamento selecionado entre os próximos horários.')
     }
+
+    await customerAppointmentsService.validateAppointmentAction(phone, 'reschedule', appointment)
 
     const businessId = getBusinessIdForPhone(phone)
     const normalizedBusinessId = businessId ? String(businessId).trim() : ''

@@ -32,7 +32,10 @@ export class ServiceService {
       return data.map((item) => ({
         id: String(item.id),
         name: item.name || item.description || '',
+        description: item.description || undefined,
         duration: item.duration || null,
+        price: item.price ?? null,
+        active: item.active !== false,
       }))
     } catch (error) {
       console.error('[ServiceService] Error fetching services:', error)

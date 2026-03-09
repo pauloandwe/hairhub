@@ -4,6 +4,7 @@ import { DraftStatus, IBaseEntity, SelectionItem, SummarySections } from '../gen
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { DateFormatter } from '../../utils/date'
 import { appointmentRescheduleService } from './appointment-reschedule.service'
+import { customerAppointmentsService } from './customer-appointments.service'
 
 export enum RescheduleField {
   AppointmentId = 'appointmentId',
@@ -95,9 +96,13 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
   create = async (phone: string, draft: RescheduleDraft, endpointOverride?: string): Promise<{ id: string }> => {
     void endpointOverride
 
-    if (!draft.appointmentId) {
+    const hydratedDraft = await this.hydrateSelectedAppointment(phone, draft)
+
+    if (!hydratedDraft.appointmentId || !hydratedDraft.selectedAppointment) {
       throw new Error('Selecione um agendamento para remarcar.')
     }
+
+    await customerAppointmentsService.validateAppointmentAction(phone, 'reschedule', hydratedDraft.selectedAppointment)
 
     const rawBusinessId = getBusinessIdForPhone(phone)
     const businessId = rawBusinessId !== undefined && rawBusinessId !== null ? String(rawBusinessId).trim() : ''
@@ -106,7 +111,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     }
 
     const farmIdAsNumber = Number(businessId)
-    const apiPayload = this.transformToApiPayload(draft, { farmId: Number.isFinite(farmIdAsNumber) ? farmIdAsNumber : 0 })
+    const apiPayload = this.transformToApiPayload(hydratedDraft, { farmId: Number.isFinite(farmIdAsNumber) ? farmIdAsNumber : 0 })
 
     const patchPayload: Partial<RescheduleCreationPayload> = {
       startDate: apiPayload.startDate,
@@ -115,7 +120,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
 
     const baseEndpoint = `/appointments/${businessId}/appointments`
 
-    return this._patchRecord(phone, String(draft.appointmentId), baseEndpoint, patchPayload)
+    return this._patchRecord(phone, String(hydratedDraft.appointmentId), baseEndpoint, patchPayload)
   }
 
   hydrateSelectedAppointment = async (phone: string, draftOverride?: RescheduleDraft): Promise<RescheduleDraft> => {
@@ -216,6 +221,14 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
 
   protected getListErrorMessage = (): string => {
     return 'Erro ao carregar lista.'
+  }
+
+  override handleServiceError = (err: unknown): string => {
+    if (err instanceof Error && err.message?.trim()) {
+      return err.message
+    }
+
+    return 'Não consegui remarcar o agendamento agora. Tente novamente mais tarde.'
   }
 
   getValidFieldsFormatted = (): string => {

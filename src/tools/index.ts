@@ -8,10 +8,11 @@ import { simplifiedExpenseSelectionTools } from './finances/simplifiedExpenseSel
 import { unsupportedRegistrationTools } from './utils/unsupportedRegistration.tools'
 import { unsupportedQueryTools } from './utils/unsupportedQuery.tools'
 import { appointmentTools } from './appointments/appointment.tools'
+import { appointmentCancellationTools } from './appointments/appointment-cancellation.tools'
 import { appointmentRescheduleTools } from './appointments/appointment-reschedule.tools'
 import { appointmentQueryTools } from './appointments/appointment-queries.tools'
 
-export const allTools: OpenAITool[] = [...appointmentTools, ...appointmentRescheduleTools, ...appointmentQueryTools, ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+export const allTools: OpenAITool[] = [...appointmentTools, ...appointmentCancellationTools, ...appointmentRescheduleTools, ...appointmentQueryTools, ...unsupportedRegistrationTools, ...unsupportedQueryTools]
 
 export const interactiveTools: OpenAITool[] = [...ageCategoryTools, ...locationSelectionTools, ...deathCauseTools, ...simplifiedExpenseSelectionTools]
 

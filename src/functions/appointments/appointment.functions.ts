@@ -3,6 +3,7 @@ import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../interactives/genericConfirmation'
 import { appendUserTextAuto } from '../../services/history-router.service'
 import { appointmentService } from '../../services/appointments/appointmentService'
+import { appointmentCancellationFunctions } from './cancellation/appointment-cancellation.functions'
 import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
@@ -217,13 +218,21 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     await sendEditDeleteButtons({
       namespace: this.editDeleteNamespace,
       userId: phone,
-      message: 'Deseja editar alguma informação?',
+      message: 'Deseja editar alguma informação ou cancelar esse horário?',
       editLabel: 'Editar',
+      deleteLabel: 'Cancelar horário',
       summaryText: summary,
       header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
         await this.editAppointmentRegistration({ phone: userId })
+      },
+      onDelete: async (userId) => {
+        await appendUserTextAuto(userId, 'Cancelar horário')
+        await appointmentCancellationFunctions.startAppointmentCancellation({
+          phone: userId,
+          appointmentId: Number(recordId),
+        })
       },
     })
   }

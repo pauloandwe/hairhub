@@ -4,6 +4,31 @@ export const appointmentQueryTools: OpenAITool[] = [
   {
     type: 'function',
     function: {
+      name: 'getUpcomingAppointments',
+      description: `Retorna os próximos agendamentos em aberto do cliente.
+
+QUANDO USAR:
+- Quando o usuário perguntar "quando é meu horário?"
+- Quando o usuário disser "tenho algum agendamento?", "meus próximos horários" ou similar
+- Quando precisar identificar qual horário futuro o cliente quer cancelar ou confirmar em conversa
+
+EXEMPLOS:
+- "Quando é meu próximo horário?" → getUpcomingAppointments({})
+- "Tenho algum agendamento marcado?" → getUpcomingAppointments({ limit: 5 })`,
+      parameters: {
+        type: 'object',
+        properties: {
+          clientPhone: { type: 'string', description: 'Telefone do cliente (opcional).' },
+          limit: { type: 'integer', description: 'Número máximo de registros a retornar (padrão: 10).' },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'getAvailableTimeSlots',
       description: `Retorna os horários disponíveis para agendamento em um determinado dia.
 
@@ -31,10 +56,10 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'getAppointmentHistory',
-      description: `Retorna o histórico de agendamentos do cliente.
+      description: `Retorna o histórico de agendamentos passados do cliente.
 
 QUANDO USAR:
-- Quando o usuário pergunta "Quais agendamentos eu tenho?"
+- Quando o usuário pergunta "Qual foi meu último corte?"
 - Quando o usuário quer consultar seus cortes anteriores
 - Para mostrar histórico de visitas
 

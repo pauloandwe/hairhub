@@ -15,6 +15,7 @@ import { simplifiedExpenseFunctions } from './finances/simplifiedExpense/simplif
 import { unsupportedRegistrationFunctions } from './utils/unsupportedRegistration.functions'
 import { unsupportedQueryFunctions } from './utils/unsupportedQuery.functions'
 import { appointmentFunctions } from './appointments/appointment.functions'
+import { appointmentCancellationFunctions } from './appointments/cancellation/appointment-cancellation.functions'
 import { appointmentRescheduleFunctions } from './appointments/reschedule/appointment-reschedule.functions'
 import { appointmentQueryFunctions } from './appointments/appointment-queries.functions'
 
@@ -34,6 +35,7 @@ export const allFunctions = {
   ...deathFunctions,
   ...simplifiedExpenseFunctions,
   ...appointmentFunctions,
+  ...appointmentCancellationFunctions,
   ...appointmentRescheduleFunctions,
   ...appointmentQueryFunctions,
   ...unsupportedRegistrationFunctions,

@@ -2,6 +2,7 @@ import { sendWhatsAppMessage } from '../api/meta.api'
 import { FlowType } from '../enums/generic.enum'
 import { getUserContext } from '../env.config'
 import { appointmentFunctions } from '../functions/appointments/appointment.functions'
+import { appointmentCancellationFunctions } from '../functions/appointments/cancellation/appointment-cancellation.functions'
 import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
 import { simplifiedExpenseFunctions } from '../functions/finances/simplifiedExpense/simplifiedExpense.functions'
 import { birthFunctions } from '../functions/livestocks/birth/birth.functions'
@@ -17,6 +18,7 @@ const continuationStrategies: Readonly<Record<string, ContinuationFunction>> = {
   [FlowType.SimplifiedExpense]: continueSimplifiedExpenseRegistration,
   [FlowType.Selling]: continueSaleRegistration,
   [FlowType.Appointment]: continueAppointmentRegistration,
+  [FlowType.AppointmentCancellation]: continueAppointmentCancellation,
   [FlowType.AppointmentReschedule]: continueAppointmentReschedule,
 } as const
 
@@ -26,6 +28,7 @@ const cancellationStrategies: Readonly<Record<string, CancellationFunction>> = {
   [FlowType.SimplifiedExpense]: cancelSimplifiedExpenseRegistration,
   [FlowType.Selling]: cancelSaleRegistration,
   [FlowType.Appointment]: cancelAppointmentRegistration,
+  [FlowType.AppointmentCancellation]: cancelAppointmentCancellation,
   [FlowType.AppointmentReschedule]: cancelAppointmentReschedule,
 } as const
 
@@ -113,6 +116,14 @@ async function cancelAppointmentRegistration(userId: string): Promise<void> {
 
 async function continueAppointmentReschedule(userId: string): Promise<void> {
   await appointmentRescheduleFunctions.continueRegistration({ phone: userId })
+}
+
+async function continueAppointmentCancellation(userId: string): Promise<void> {
+  await appointmentCancellationFunctions.continueAppointmentCancellation({ phone: userId })
+}
+
+async function cancelAppointmentCancellation(userId: string): Promise<void> {
+  await appointmentCancellationFunctions.cancelAppointmentCancellation({ phone: userId })
 }
 
 async function cancelAppointmentReschedule(userId: string): Promise<void> {

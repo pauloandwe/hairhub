@@ -12,6 +12,7 @@ import { DefaultContextService } from '../defaultContext'
 import { BirthContextService } from '../livestocks/Birth/birthService.context'
 import { SellingContextService } from '../livestocks/Selling/sellingService.context'
 import { AppointmentContextService } from '../appointments/appointmentService.context'
+import { AppointmentCancellationContextService } from '../appointments/appointmentCancellation.context'
 import { AppointmentRescheduleContextService } from '../appointments/appointmentReschedule.context'
 
 export class ContextService {
@@ -22,6 +23,7 @@ export class ContextService {
   private readonly birthContext = BirthContextService.getInstance()
   private readonly sellingContext = SellingContextService.getInstance()
   private readonly appointmentContext = AppointmentContextService.getInstance()
+  private readonly appointmentCancellationContext = AppointmentCancellationContextService.getInstance()
   private readonly appointmentRescheduleContext = AppointmentRescheduleContextService.getInstance()
 
   private readonly contextMap = {
@@ -30,6 +32,7 @@ export class ContextService {
     [FlowType.Birth]: this.birthContext,
     [FlowType.Selling]: this.sellingContext,
     [FlowType.Appointment]: this.appointmentContext,
+    [FlowType.AppointmentCancellation]: this.appointmentCancellationContext,
     [FlowType.AppointmentReschedule]: this.appointmentRescheduleContext,
   }
 
@@ -120,7 +123,15 @@ export class ContextService {
   }
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
-    let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService | AppointmentRescheduleContextService = this.defaultContext
+    let context:
+      | SimplifiedExpenseContextService
+      | DeathContextService
+      | DefaultContextService
+      | BirthContextService
+      | SellingContextService
+      | AppointmentContextService
+      | AppointmentCancellationContextService
+      | AppointmentRescheduleContextService = this.defaultContext
 
     if (activeFlowType) {
       context = this.contextMap[activeFlowType as keyof typeof this.contextMap]

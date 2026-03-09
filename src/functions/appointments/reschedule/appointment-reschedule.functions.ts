@@ -7,6 +7,7 @@ import { sendEditCancelButtonsAfterCreationError } from '../../../interactives/g
 import { appendUserTextAuto, appendAssistantTextAuto } from '../../../services/history-router.service'
 import { rescheduleFieldEditors, missingFieldHandlers } from './appointment-reschedule.selects'
 import { sendWhatsAppMessage } from '../../../api/meta.api'
+import { customerAppointmentsService } from '../../../services/appointments/customer-appointments.service'
 import { DateFormatter } from '../../../utils/date'
 
 type RescheduleEditField = `${RescheduleField}`
@@ -50,7 +51,14 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
   }
 
   startAppointmentReschedule = async (args: { phone: string }) => {
-    return super.startRegistration(args)
+    try {
+      await customerAppointmentsService.ensureActionEnabled(args.phone, 'reschedule')
+      return super.startRegistration(args)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não consegui iniciar a remarcação agora.'
+      await sendWhatsAppMessage(args.phone, message)
+      return this.buildResponse(message, false)
+    }
   }
 
   changeAppointmentRescheduleField = async (args: { phone: string; field: RescheduleEditField; value?: any }) => {

@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { createSelectionFlow } from '../flows'
-import { appointmentRescheduleService } from '../../services/appointments/appointment-reschedule.service'
-import { appointmentRescheduleDraftService } from '../../services/appointments/appointment-reschedule-draft.service'
+import { appointmentCancellationService } from '../../services/appointments/appointment-cancellation.service'
+import { appointmentCancellationDraftService } from '../../services/appointments/appointment-cancellation-draft.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { DateFormatter } from '../../utils/date'
 import { tryContinueRegistration } from '../followup'
@@ -25,16 +25,16 @@ const buildDescription = (item: SelectionItem, source?: { serviceName?: string |
   return item.description
 }
 
-export const RESCHEDULE_APPOINTMENT_NAMESPACE = 'RESCHEDULE_APPOINTMENT_SELECTION'
+export const CANCEL_APPOINTMENT_NAMESPACE = 'CANCEL_APPOINTMENT_SELECTION'
 
-const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceName?: string | null; professionalName?: string | null }>({
-  namespace: RESCHEDULE_APPOINTMENT_NAMESPACE,
-  type: 'rescheduleAppointmentSelect',
+const cancelAppointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceName?: string | null; professionalName?: string | null }>({
+  namespace: CANCEL_APPOINTMENT_NAMESPACE,
+  type: 'cancelAppointmentSelect',
   fetchItems: async (phone) => {
-    const appointments = appointmentRescheduleService.getPendingAppointmentsFromState(phone)
+    const appointments = appointmentCancellationService.getUpcomingAppointmentsFromState(phone)
 
     if (!appointments.length) {
-      await sendWhatsAppMessage(phone, 'Não encontrei próximos agendamentos elegíveis para remarcação.')
+      await sendWhatsAppMessage(phone, 'Não encontrei próximos agendamentos elegíveis para cancelamento.')
       return []
     }
 
@@ -52,27 +52,27 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
     footer: 'Inttegra Assistente',
     buttonLabel: 'Ver horários',
   },
-  defaultBody: 'Qual agendamento você quer remarcar?',
+  defaultBody: 'Qual agendamento você quer cancelar?',
   invalidSelectionMsg: 'Essa opção não é mais válida. Escolha novamente, por favor.',
-  emptyListMessage: 'Você não tem próximos agendamentos elegíveis para remarcação.',
+  emptyListMessage: 'Nenhum próximo agendamento elegível para cancelamento foi encontrado.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
   descriptionBuilder: (item) => buildDescription(item, { serviceName: item.serviceName, professionalName: item.professionalName }),
   onSelected: async ({ userId, item }) => {
     try {
       const appointmentId = Number(item.id)
-      await appointmentRescheduleService.selectAppointment(userId, appointmentId)
-      await appointmentRescheduleDraftService.updateDraftField(userId, 'appointmentId', appointmentId)
-      await appointmentRescheduleDraftService.hydrateSelectedAppointment(userId)
+      await appointmentCancellationService.selectAppointment(userId, appointmentId)
+      await appointmentCancellationDraftService.updateDraftField(userId, 'appointmentId', appointmentId)
+      await appointmentCancellationDraftService.hydrateSelectedAppointment(userId)
       await sendWhatsAppMessage(userId, `Agendamento '${item.name}' selecionado.`)
       await tryContinueRegistration(userId)
     } catch (error) {
-      console.error('[RescheduleAppointmentSelection] Erro ao selecionar agendamento:', error)
+      console.error('[CancelAppointmentSelection] Erro ao selecionar agendamento:', error)
       await sendWhatsAppMessage(userId, 'Não consegui selecionar esse agendamento agora. Tente novamente mais tarde.')
     }
   },
 })
 
-export async function sendPendingAppointmentSelectionList(userId: string, bodyMsg = 'Qual agendamento você quer remarcar?', offset = 0) {
-  await appointmentSelectionFlow.sendList(userId, bodyMsg, offset)
+export async function sendCancelableAppointmentSelectionList(userId: string, bodyMsg = 'Qual agendamento você quer cancelar?', offset = 0) {
+  await cancelAppointmentSelectionFlow.sendList(userId, bodyMsg, offset)
 }
