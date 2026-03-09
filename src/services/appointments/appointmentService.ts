@@ -515,9 +515,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         return {
           status: 'reset-professional',
           draft: this.withAvailabilityFallback(draft, 'reset-professional'),
-          message: draft.professional?.name
-            ? `${draft.professional.name} nao atende esse servico. Vou te mostrar outros profissionais.`
-            : 'Esse profissional nao atende esse servico. Vou te mostrar outras opcoes.',
+          message: draft.professional?.name ? `${draft.professional.name} nao atende esse servico. Vou te mostrar outros profissionais.` : 'Esse profissional nao atende esse servico. Vou te mostrar outras opcoes.',
         }
       }
 

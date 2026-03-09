@@ -3,13 +3,7 @@ import { sendWhatsAppMessage } from '../../api/meta.api'
 import { getUserContextSync, setUserContext } from '../../env.config'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { SelectionItem } from '../generic/generic.types'
-import {
-  AvailabilityResolutionCandidate,
-  IAppointmentValidationDraft,
-  PendingAppointmentOffer,
-  PendingAvailabilityResolution,
-  StartAppointmentArgs,
-} from './appointment.types'
+import { AvailabilityResolutionCandidate, IAppointmentValidationDraft, PendingAppointmentOffer, PendingAvailabilityResolution, StartAppointmentArgs } from './appointment.types'
 import { appointmentService } from './appointmentService'
 import { professionalService } from './professional.service'
 import { serviceService } from './service.service'
@@ -46,48 +40,13 @@ type CheckThenOfferResult =
       message: string
     }
 
-type PendingOfferReplyResult =
-  | { handled: false }
-  | { handled: true; action: 'accept' | 'decline'; offer?: PendingAppointmentOffer }
+type PendingOfferReplyResult = { handled: false } | { handled: true; action: 'accept' | 'decline'; offer?: PendingAppointmentOffer }
 
-type PendingResolutionReplyResult =
-  | { handled: false }
-  | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> }
-  | { handled: true; action: 'decline' }
+type PendingResolutionReplyResult = { handled: false } | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> } | { handled: true; action: 'decline' }
 
-const AFFIRMATIVE_REPLIES = new Set([
-  'sim',
-  's',
-  'quero',
-  'pode',
-  'pode sim',
-  'claro',
-  'ok',
-  'okay',
-  'fechou',
-  'confirmo',
-  'pode marcar',
-  'quero marcar',
-  'marca',
-  'marcar',
-  'agenda',
-  'agendar',
-])
+const AFFIRMATIVE_REPLIES = new Set(['sim', 's', 'quero', 'pode', 'pode sim', 'claro', 'ok', 'okay', 'fechou', 'confirmo', 'pode marcar', 'quero marcar', 'marca', 'marcar', 'agenda', 'agendar'])
 
-const NEGATIVE_REPLIES = new Set([
-  'nao',
-  'não',
-  'n',
-  'agora nao',
-  'agora não',
-  'deixa',
-  'deixa pra la',
-  'deixa pra lá',
-  'deixa quieto',
-  'cancelar',
-  'nao quero',
-  'não quero',
-])
+const NEGATIVE_REPLIES = new Set(['nao', 'não', 'n', 'agora nao', 'agora não', 'deixa', 'deixa pra la', 'deixa pra lá', 'deixa quieto', 'cancelar', 'nao quero', 'não quero'])
 
 function cloneServiceRef(value: IAppointmentValidationDraft['service']): IAppointmentValidationDraft['service'] {
   if (!value) return null
@@ -139,10 +98,7 @@ function cloneResolution(resolution: PendingAvailabilityResolution | null | unde
     request: {
       ...resolution.request,
       service: typeof resolution.request.service === 'object' && resolution.request.service !== null ? { ...(resolution.request.service as Record<string, unknown>) } : resolution.request.service,
-      professional:
-        typeof resolution.request.professional === 'object' && resolution.request.professional !== null
-          ? { ...(resolution.request.professional as Record<string, unknown>) }
-          : resolution.request.professional,
+      professional: typeof resolution.request.professional === 'object' && resolution.request.professional !== null ? { ...(resolution.request.professional as Record<string, unknown>) } : resolution.request.professional,
     },
     candidates: resolution.candidates.map((candidate) => ({
       id: candidate.id,
@@ -470,11 +426,7 @@ class AppointmentIntentService {
       ...(draft.appointmentDate ? { appointmentDate: draft.appointmentDate } : {}),
       ...(draft.appointmentTime ? { appointmentTime: draft.appointmentTime } : {}),
       ...(args.service !== undefined ? { service: args.service } : draft.service?.id || draft.service?.name ? { service: cloneServiceRef(draft.service) } : {}),
-      ...(args.professional !== undefined
-        ? { professional: args.professional }
-        : draft.professional?.id || draft.professional?.name
-          ? { professional: cloneProfessionalRef(draft.professional) }
-          : {}),
+      ...(args.professional !== undefined ? { professional: args.professional } : draft.professional?.id || draft.professional?.name ? { professional: cloneProfessionalRef(draft.professional) } : {}),
       ...(args.clientName !== undefined ? { clientName: args.clientName } : {}),
       ...(args.clientPhone !== undefined ? { clientPhone: args.clientPhone } : {}),
       ...(args.notes !== undefined ? { notes: args.notes } : {}),
@@ -641,9 +593,7 @@ class AppointmentIntentService {
       ...(serviceId ? { serviceId } : {}),
     })
 
-    const sameProfessionalSlots = professionalId
-      ? aggregatedSlots.filter((slot) => slot.professionals.some((professional) => String(professional.id) === professionalId))
-      : aggregatedSlots
+    const sameProfessionalSlots = professionalId ? aggregatedSlots.filter((slot) => slot.professionals.some((professional) => String(professional.id) === professionalId)) : aggregatedSlots
 
     const exactMatch = sameProfessionalSlots.some((slot) => slot.start === appointmentTime)
     const alternatives = sameProfessionalSlots
@@ -702,12 +652,7 @@ class AppointmentIntentService {
     return offer
   }
 
-  private async storeResolution(
-    phone: string,
-    kind: PendingAvailabilityResolution['kind'],
-    request: Omit<StartAppointmentArgs, 'intentMode'>,
-    candidates: AvailabilityResolutionCandidate[],
-  ): Promise<PendingAvailabilityResolution> {
+  private async storeResolution(phone: string, kind: PendingAvailabilityResolution['kind'], request: Omit<StartAppointmentArgs, 'intentMode'>, candidates: AvailabilityResolutionCandidate[]): Promise<PendingAvailabilityResolution> {
     const resolution: PendingAvailabilityResolution = {
       kind,
       request,
@@ -743,9 +688,7 @@ class AppointmentIntentService {
   }
 
   private buildUnavailableMessage(draft: IAppointmentValidationDraft, alternatives: string[]): string {
-    const intro = draft.professional?.name
-      ? `Nao encontrei esse horario com ${draft.professional.name}.`
-      : 'Nao encontrei esse horario disponivel.'
+    const intro = draft.professional?.name ? `Nao encontrei esse horario com ${draft.professional.name}.` : 'Nao encontrei esse horario disponivel.'
 
     if (alternatives.length === 0) {
       return `${intro} Se quiser, posso verificar outra opcao pra voce.`
