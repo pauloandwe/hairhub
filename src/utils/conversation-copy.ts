@@ -1,27 +1,8 @@
 import type { FlowMessages } from '../functions/generic/generic.flow'
 
-type InteractiveCopyKind =
-  | 'chooseOption'
-  | 'expiredOption'
-  | 'loadError'
-  | 'whatNext'
-  | 'confirmAction'
-  | 'confirmActionShort'
-  | 'notAvailable'
-  | 'retryEmptyList'
-  | 'retryExpired'
+type InteractiveCopyKind = 'chooseOption' | 'expiredOption' | 'loadError' | 'whatNext' | 'confirmAction' | 'confirmActionShort' | 'notAvailable' | 'retryEmptyList' | 'retryExpired'
 
-type SelectionAckKind =
-  | 'generic'
-  | 'service'
-  | 'professional'
-  | 'date'
-  | 'time'
-  | 'appointment'
-  | 'newDate'
-  | 'newTime'
-  | 'location'
-  | 'category'
+type SelectionAckKind = 'generic' | 'service' | 'professional' | 'date' | 'time' | 'appointment' | 'newDate' | 'newTime' | 'location' | 'category'
 
 export function createHumanFlowMessages(overrides: Partial<FlowMessages> = {}): FlowMessages {
   return {

@@ -19,9 +19,7 @@ export function buildAssistantTitle(farmName: string, flowType?: string, flowSte
 
 export function stripAssistantTitle(text: string): string {
   if (!text) return text
-  return text
-    .replace(/^(\*?(?:Assistente de Business|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
-    .replace(/^\*[^\n]{2,80}\*\n/, '')
+  return text.replace(/^(\*?(?:Assistente de Business|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '').replace(/^\*[^\n]{2,80}\*\n/, '')
 }
 
 export function sanitizeOutgoingText(text: string): string {
