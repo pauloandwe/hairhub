@@ -17,10 +17,7 @@ const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
 const AVAILABILITY_FALLBACK_MESSAGE = 'Infelizmente não tenho disponibilidade para essa combinação, mas vou te mostrar outras opções.'
-const AVAILABILITY_ERROR_MESSAGES = new Set([
-  'Time slot already booked',
-  'Professional unavailable for selected period',
-])
+const AVAILABILITY_ERROR_MESSAGES = new Set(['Time slot already booked', 'Professional unavailable for selected period'])
 
 const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'professional', 'clientName', 'clientPhone', 'notes'] as const
 
