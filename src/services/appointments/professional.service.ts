@@ -5,7 +5,7 @@ import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
 export class ProfessionalService {
-  async getProfessionals(phone: string): Promise<SelectionItem[]> {
+  async getProfessionals(phone: string, serviceId?: string | number | null): Promise<SelectionItem[]> {
     const businessId = getBusinessIdForPhone(phone)
     const normalizedBusinessId = businessId ? String(businessId).trim() : ''
 
@@ -19,6 +19,12 @@ export class ProfessionalService {
       const params: Record<string, string> = {}
       if (normalizedBusinessId) {
         params.businessId = normalizedBusinessId
+      }
+      if (serviceId !== undefined && serviceId !== null && String(serviceId).trim() !== '') {
+        const numericServiceId = Number(serviceId)
+        if (Number.isFinite(numericServiceId)) {
+          params.serviceId = String(numericServiceId)
+        }
       }
       params.onlyWithConfiguredSchedule = 'true'
 

@@ -16,7 +16,9 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   namespace: PROFESSIONAL_NAMESPACE,
   type: 'selectProfessional',
   fetchItems: async (phone) => {
-    const professionals = await professionalService.getProfessionals(phone)
+    const draft = await appointmentService.loadDraft(phone)
+    const serviceId = draft.service?.id ?? null
+    const professionals = await professionalService.getProfessionals(phone, serviceId)
     if (professionals.length === 0) {
       return []
     }
