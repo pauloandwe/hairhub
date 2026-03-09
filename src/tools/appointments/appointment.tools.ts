@@ -8,6 +8,8 @@ export const appointmentTools: OpenAITool[] = [
       name: 'startAppointmentRegistration',
       description: `DISPARADOR (INTENÇÃO):
 - SEMPRE use esta ferramenta quando o usuário mencionar agendar/marcar/fazer agendamento/corte/serviço de business.
+- Se o usuário perguntar sobre disponibilidade de um horário EXATO já pensando em marcar (ex.: "Tem amanhã às 15h com o João?"), use esta função com \`intentMode: "check_then_offer"\`.
+- Use \`intentMode: "book"\` (ou omita o campo) para o fluxo normal de agendamento.
 - Se houver dados na própria frase (ex.: data, horário, serviço, professional, nome, observações), preencha esses campos e envie junto.
 - Os campos canônicos internos são \`appointmentDate\` e \`appointmentTime\`, mas \`date\` e \`time\` continuam aceitos como alias.
 - Se não houver dados explícitos, chame com arguments = {} apenas.
@@ -22,11 +24,18 @@ QUANDO NÃO USAR:
 EXEMPLOS:
 - "Quero agendar um corte para amanhã" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>" })
 - "Agendar corte + barba com João para 15/11/2024 às 14:00" → startAppointmentRegistration({ appointmentDate: "2024-11-15", appointmentTime: "14:00", service: "Corte + Barba", professional: "João" })
+- "Tem horário amanhã às 15h com o João?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", professional: "João", intentMode: "check_then_offer" })
+- "Tem sexta às 14h para barba?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD da sexta>", appointmentTime: "14:00", service: "Barba", intentMode: "check_then_offer" })
 - "Agendar um corte e preciso avisar que tenho alergia a alguns produtos" → startAppointmentRegistration({ notes: "Alergia a alguns produtos" })
 - "Quero fazer um agendamento" → startAppointmentRegistration({})`,
       parameters: {
         type: 'object',
         properties: {
+          intentMode: {
+            type: 'string',
+            enum: ['book', 'check_then_offer'],
+            description: 'Use "check_then_offer" para verificar um horário exato pensando em marcar e "book" para o fluxo normal de agendamento.',
+          },
           appointmentDate: { type: 'string', format: 'date', description: 'Campo canônico para a data do agendamento (YYYY-MM-DD).' },
           appointmentTime: { type: ['string', 'null'], description: 'Campo canônico para o horário do agendamento (HH:mm).' },
           date: { type: 'string', format: 'date' },

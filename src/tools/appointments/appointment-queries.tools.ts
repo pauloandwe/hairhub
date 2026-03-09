@@ -36,6 +36,10 @@ QUANDO USAR:
 - Quando o usuário pergunta "Quais horários tem disponível?"
 - Quando o usuário quer saber "Qual melhor horário para agendar?"
 - Durante o fluxo de agendamento para mostrar opções de horários
+- Use para consultas amplas de opções.
+
+QUANDO NÃO USAR:
+- Se o usuário já trouxe um horário exato pensando em marcar (ex.: "Tem amanhã às 15h com o João?"). Nesse caso, prefira startAppointmentRegistration com intentMode = "check_then_offer".
 
 EXEMPLOS:
 - "Quais horários estão livres amanhã?" → getAvailableTimeSlots({ date: "<YYYY-MM-DD de amanhã>" })

@@ -22,6 +22,7 @@ import { appointmentQueryTools } from '../tools/appointments/appointment-queries
 import { appointmentQueryFunctions } from '../functions/appointments/appointment-queries.functions'
 import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
 import { appointmentRescheduleTools } from '../tools/appointments/appointment-reschedule.tools'
+import { registerAppointmentAvailabilityResolutionHandler } from '../interactives/appointments/availabilityResolutionSelection'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
@@ -39,6 +40,10 @@ export class DefaultContextService {
     startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
     startAppointmentCancellation: appointmentCancellationFunctions.startAppointmentCancellation,
     startAppointmentReschedule: appointmentRescheduleFunctions.startAppointmentReschedule,
+  }
+
+  private constructor() {
+    registerAppointmentAvailabilityResolutionHandler()
   }
 
   isFunctionTool(tool: OpenAITool): tool is OpenAI.ChatCompletionFunctionTool {
@@ -135,11 +140,18 @@ export class DefaultContextService {
 
           **IMPORTANTE - Consultas/Buscas disponíveis no sistema:**
             * Próximos agendamentos / "quando é meu horário?" → use getUpcomingAppointments
-            * Horários disponíveis → use getAvailableTimeSlots
+            * Horários disponíveis em consulta ampla (ex.: "quais horários tem amanhã?") → use getAvailableTimeSlots
             * Histórico de cortes/agendamentos → use getAppointmentHistory
             * Serviços disponíveis → use getServices
             * Barbeiros/profissionais disponíveis → use getProfessionals
             * Para QUALQUER outra consulta fora desse escopo → use reportUnsupportedQuery
+
+          **REGRA IMPORTANTE PARA CONSULTA COM INTENÇÃO DE MARCAR:**
+          - Se o usuário perguntar disponibilidade e já trouxer data e horário exatos, com ou sem profissional/serviço, trate isso como pré-agendamento.
+          - Nesse caso, use startAppointmentRegistration com intentMode = "check_then_offer".
+          - Exemplo: "Tem horário amanhã às 15h com o João?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD>", appointmentTime: "15:00", professional: "João", intentMode: "check_then_offer" })
+          - Exemplo: "Tem horário sexta às 14h para barba?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD>", appointmentTime: "14:00", service: "Barba", intentMode: "check_then_offer" })
+          - Só use getAvailableTimeSlots quando a pessoa estiver pedindo opções de horários, e não um horário exato para possível marcação.
 
           - Se houver ambiguidade, faça **uma única pergunta de esclarecimento**, curta e objetiva, para confirmar a intenção antes de acionar um fluxo.
           - Caso o usuário envie apenas um número ou palavra solta sem contexto → peça de forma curta que ele explique melhor o que deseja.

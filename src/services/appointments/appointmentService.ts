@@ -2,7 +2,7 @@ import { format, isValid, parse, parseISO } from 'date-fns'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
-import { AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, UpsertAppointmentArgs } from './appointment.types'
+import { AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone } from '../../env.config'
@@ -195,7 +195,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       return normalized.length ? normalized : null
     }
 
-    const previousServiceId = normalizeIdValue(currentDraft.service?.id)
     const previousProfessionalId = normalizeIdValue(currentDraft.professional?.id)
     const previousDate = currentDraft.appointmentDate ?? null
 
@@ -222,12 +221,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     const normalizedService = this.normalizeRefInput(extendedArgs.service)
 
     if (normalizedService !== undefined) {
-      const incomingServiceId = normalizeIdValue(normalizedService?.id)
-      const hasServiceChanged = incomingServiceId !== previousServiceId
-      if (hasServiceChanged) {
-        currentDraft.professional = { id: null, name: null }
-        currentDraft.appointmentTime = null
-      }
       assignRef('service', normalizedService)
     }
 
@@ -300,6 +293,18 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       const trimmedNotes = args.notes ? String(args.notes).trim() : ''
       currentDraft.notes = trimmedNotes.length ? trimmedNotes : null
     }
+  }
+
+  applyStartArgsToDraft(draft: IAppointmentValidationDraft, args: Partial<StartAppointmentArgs>): IAppointmentValidationDraft {
+    const nextDraft = JSON.parse(JSON.stringify(draft)) as IAppointmentValidationDraft
+    this.validateDraftArgsTypes(args as Partial<UpsertAppointmentArgs>, nextDraft)
+    return nextDraft
+  }
+
+  async resolveSuggestedDraft(phone: string, draft: IAppointmentValidationDraft): Promise<Partial<IAppointmentValidationDraft>> {
+    const autoCompleteResponse = await this.autoComplete(phone, draft)
+    const autoCompletePayload = this.extractDataFromResult('autoComplete', autoCompleteResponse)
+    return (autoCompletePayload as Partial<IAppointmentValidationDraft>) ?? {}
   }
 
   protected getRequiredFields = (): MissingRule<IAppointmentValidationDraft>[] => {
@@ -503,6 +508,19 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     if (hasResolvedProfessional) {
       const professionalId = this.extractValidId(draft.professional?.id)
+      const eligibleProfessionals = await professionalService.getProfessionals(phone, serviceId)
+      const stillCompatible = eligibleProfessionals.some((professional) => this.extractValidId(professional.id) === professionalId)
+
+      if (!stillCompatible) {
+        return {
+          status: 'reset-professional',
+          draft: this.withAvailabilityFallback(draft, 'reset-professional'),
+          message: draft.professional?.name
+            ? `${draft.professional.name} nao atende esse servico. Vou te mostrar outros profissionais.`
+            : 'Esse profissional nao atende esse servico. Vou te mostrar outras opcoes.',
+        }
+      }
+
       const slots = await professionalService.getAvailableSlots({
         phone,
         professionalId,
@@ -650,11 +668,11 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return Boolean(this.extractStringValue(ref.id) || this.extractStringValue(ref.name))
   }
 
-  private withAvailabilityFallback(draft: IAppointmentValidationDraft, mode: 'reset-time' | 'reset-date'): IAppointmentValidationDraft {
+  private withAvailabilityFallback(draft: IAppointmentValidationDraft, mode: 'reset-time' | 'reset-date' | 'reset-professional'): IAppointmentValidationDraft {
     return {
       ...draft,
       service: draft.service ? { ...draft.service } : null,
-      professional: draft.professional ? { ...draft.professional } : draft.professional,
+      professional: mode === 'reset-professional' ? { id: null, name: null } : draft.professional ? { ...draft.professional } : draft.professional,
       appointmentDate: mode === 'reset-date' ? null : draft.appointmentDate,
       appointmentTime: null,
     }

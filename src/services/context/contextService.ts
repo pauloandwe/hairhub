@@ -14,6 +14,8 @@ import { SellingContextService } from '../livestocks/Selling/sellingService.cont
 import { AppointmentContextService } from '../appointments/appointmentService.context'
 import { AppointmentCancellationContextService } from '../appointments/appointmentCancellation.context'
 import { AppointmentRescheduleContextService } from '../appointments/appointmentReschedule.context'
+import { appointmentIntentService } from '../appointments/appointment-intent.service'
+import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 
 export class ContextService {
   private static instance: ContextService
@@ -138,6 +140,36 @@ export class ContextService {
     return await context.handleFlowInitiation(userId, incomingMessage)
   }
 
+  private handlePendingAppointmentIntent = async (userId: string, incomingMessage: string): Promise<boolean> => {
+    await appointmentIntentService.cleanupExpiredState(userId)
+
+    const pendingOfferReply = await appointmentIntentService.consumePendingOfferReply(userId, incomingMessage)
+    if (pendingOfferReply.handled) {
+      if (pendingOfferReply.action === 'accept' && pendingOfferReply.offer) {
+        await appointmentFunctions.acceptPendingOffer(userId, pendingOfferReply.offer)
+      } else if (pendingOfferReply.action === 'decline') {
+        await appointmentIntentService.notifyOfferDeclined(userId)
+      }
+      return true
+    }
+
+    const pendingResolutionReply = await appointmentIntentService.consumePendingResolutionReply(userId, incomingMessage)
+    if (pendingResolutionReply.handled) {
+      if (pendingResolutionReply.action === 'selected') {
+        await appointmentFunctions.startAppointmentRegistration({
+          phone: userId,
+          ...pendingResolutionReply.request,
+          intentMode: 'check_then_offer',
+        })
+      } else if (pendingResolutionReply.action === 'decline') {
+        await sendWhatsAppMessage(userId, 'Tudo bem. Quando quiser, me fala o horario que voce quer verificar.')
+      }
+      return true
+    }
+
+    return false
+  }
+
   handleIncomingMessage = async (messageData: any, businessId?: string) => {
     const { from: userId } = messageData
 
@@ -194,6 +226,10 @@ export class ContextService {
       if (resolvedClientName === null && !runtimeContext?.awaitingClientName) {
         await sendWhatsAppMessageWithTitle(userId, 'Antes de continuar, por favor informe seu nome para o atendimento:')
         await setUserContext(userId, { awaitingClientName: true })
+        return
+      }
+
+      if (await this.handlePendingAppointmentIntent(userId, incomingMessage)) {
         return
       }
 

@@ -1,10 +1,12 @@
 import { FlowType } from '../../enums/generic.enum'
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../interactives/genericConfirmation'
+import { sendAppointmentAvailabilityResolutionList } from '../../interactives/appointments/availabilityResolutionSelection'
 import { appendUserTextAuto } from '../../services/history-router.service'
+import { appointmentIntentService } from '../../services/appointments/appointment-intent.service'
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { appointmentCancellationFunctions } from './cancellation/appointment-cancellation.functions'
-import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, PendingAppointmentOffer, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
@@ -53,8 +55,8 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
   }
 
   startAppointmentRegistration = async (args: { phone: string } & StartAppointmentArgs) => {
-    const { phone, date, time, ...rawUpdates } = args
-    const updates: UpsertAppointmentArgs = { ...rawUpdates }
+    const { phone, date, time, intentMode = 'book', ...rawUpdates } = args
+    const updates = { ...rawUpdates } as unknown as UpsertAppointmentArgs
 
     if (date !== undefined && updates.appointmentDate === undefined) {
       updates.appointmentDate = date
@@ -72,6 +74,12 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         updates.clientPhone = fallbackPhone
       }
     }
+
+    if (intentMode === 'check_then_offer') {
+      return this.handleCheckThenOffer(phone, updates)
+    }
+
+    await appointmentIntentService.clearTransientState(phone)
 
     return super.startRegistration({
       phone,
@@ -297,6 +305,55 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       acc[typedKey] = value as any
       return acc
     }, {})
+  }
+
+  async acceptPendingOffer(phone: string, offer?: PendingAppointmentOffer | null): Promise<void> {
+    const resolvedOffer = offer ?? (await appointmentIntentService.takePendingOffer(phone))
+    if (!resolvedOffer) {
+      await sendWhatsAppMessage(phone, 'Esse horario expirou por aqui. Pode me pedir de novo?')
+      return
+    }
+
+    const startArgs = appointmentIntentService.buildStartArgsFromOffer(resolvedOffer)
+    await this.startAppointmentRegistration({
+      phone,
+      ...startArgs,
+      intentMode: 'book',
+    })
+  }
+
+  private async handleCheckThenOffer(phone: string, updates: UpsertAppointmentArgs): Promise<FlowResponse<IAppointmentValidationDraft>> {
+    const result = await appointmentIntentService.handleCheckThenOffer(phone, updates as Omit<StartAppointmentArgs, 'intentMode'>)
+
+    if (result.status === 'resolution') {
+      await sendAppointmentAvailabilityResolutionList(phone)
+      return this.buildResponse(result.resolution.prompt, true)
+    }
+
+    if (result.status === 'offer') {
+      await sendConfirmationButtons({
+        namespace: 'APPOINTMENT_PREBOOKING_OFFER',
+        userId: phone,
+        message: result.message,
+        confirmLabel: 'Quero marcar',
+        cancelLabel: 'Agora nao',
+        loadDraft: async (userId) => appointmentIntentService.getPendingOfferSnapshot(userId),
+        onConfirm: async (userId) => {
+          await appendUserTextAuto(userId, 'Quero marcar')
+          await this.acceptPendingOffer(userId)
+        },
+        onCancel: async (userId) => {
+          await appendUserTextAuto(userId, 'Agora nao')
+          await appointmentIntentService.clearPendingOffer(userId)
+          await appointmentIntentService.notifyOfferDeclined(userId)
+        },
+      })
+
+      return this.buildResponse(result.message, true)
+    }
+
+    await sendWhatsAppMessage(phone, result.message)
+    return this.buildResponse(result.message, false)
   }
 }
 

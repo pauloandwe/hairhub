@@ -3,6 +3,7 @@ import { InstitutionType } from './enums/institutions.enum'
 import { FlowStep } from './enums/generic.enum'
 import { createUserContextStore } from './services/user-context-store'
 import { EnvKeys } from './helpers/Enums'
+import type { PendingAppointmentOffer, PendingAvailabilityResolution } from './services/appointments/appointment.types'
 
 function getEnvVar(key: string): string {
   const value = process.env[key]
@@ -135,6 +136,8 @@ export interface UserRuntimeContext {
   awaitingClientName?: boolean
   appointmentReschedule?: AppointmentRescheduleState | null
   appointmentCancellation?: AppointmentCancellationState | null
+  pendingAppointmentOffer?: PendingAppointmentOffer | null
+  pendingAvailabilityResolution?: PendingAvailabilityResolution | null
   outreachReply?: OutreachReplyContext | null
   activeRegistration: {
     type?: string
