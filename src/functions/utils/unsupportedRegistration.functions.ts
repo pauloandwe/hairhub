@@ -4,15 +4,12 @@ export const unsupportedRegistrationFunctions = {
 
     return {
       success: false,
-      message: `Desculpe, mas o cadastro de "${registrationType}" ainda não está disponível no sistema.
+      message: `Poxa, no momento eu ainda não consigo te ajudar com "${registrationType}" por aqui.
 
-Atualmente, você pode fazer os seguintes cadastros:
-• Morte/baixa de animais
-• Despesas/custos
-• Nascimento/parto/parição de animais
+Mas posso continuar te ajudando com agendamentos, como marcar um horário, remarcar, consultar horários disponíveis, ver seus agendamentos e mostrar os serviços disponíveis.
 
-Estamos trabalhando para adicionar mais funcionalidades em breve! Se precisar de ajuda com algum dos cadastros disponíveis, é só me avisar.`,
-      availableRegistrations: ['morte de animais', 'despesas'],
+Se quiser, me diga o que você precisa e eu sigo com você da melhor forma.`,
+      availableRegistrations: ['agendamento', 'remarcação', 'consulta de horários', 'consulta de serviços'],
       requestedType: registrationType,
     }
   },

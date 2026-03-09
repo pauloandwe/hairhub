@@ -1,9 +1,10 @@
 import { FlowType } from '../../enums/generic.enum'
+import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../interactives/genericConfirmation'
 import { appendUserTextAuto } from '../../services/history-router.service'
 import { appointmentService } from '../../services/appointments/appointmentService'
-import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
-import { GenericCrudFlow } from '../generic/generic.flow'
+import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
@@ -54,9 +55,17 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return digits.length ? digits : null
   }
 
-  startAppointmentRegistration = async (args: { phone: string } & UpsertAppointmentArgs) => {
-    const { phone, ...rawUpdates } = args
+  startAppointmentRegistration = async (args: { phone: string } & StartAppointmentArgs) => {
+    const { phone, date, time, ...rawUpdates } = args
     const updates: UpsertAppointmentArgs = { ...rawUpdates }
+
+    if (date !== undefined && updates.appointmentDate === undefined) {
+      updates.appointmentDate = date
+    }
+
+    if (time !== undefined && updates.appointmentTime === undefined) {
+      updates.appointmentTime = time
+    }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'clientPhone')) {
       updates.clientPhone = this.sanitizePhone(updates.clientPhone ?? null)
@@ -136,6 +145,52 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       ...args,
       updates: sanitizedUpdates,
     })
+  }
+
+  protected async afterDraftPrepared(phone: string, draft: IAppointmentValidationDraft): Promise<{ draft: IAppointmentValidationDraft; response?: FlowResponse<IAppointmentValidationDraft> | null }> {
+    const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
+
+    if (availability.status === 'ok') {
+      return { draft: availability.draft }
+    }
+
+    await appointmentService.saveDraft(phone, availability.draft)
+    await sendWhatsAppMessage(phone, availability.message)
+
+    const nextStep = await this.handleNextMissing(phone, availability.draft)
+    if (nextStep) {
+      return {
+        draft: availability.draft,
+        response: nextStep,
+      }
+    }
+
+    return {
+      draft: availability.draft,
+      response: this.buildResponse(availability.message, false, availability.draft),
+    }
+  }
+
+  protected async recoverFromCreateError(phone: string, draft: IAppointmentValidationDraft, error: unknown): Promise<FlowResponse<IAppointmentValidationDraft> | null> {
+    if (!appointmentService.isAvailabilityConflictError(error)) {
+      return null
+    }
+
+    const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
+    if (availability.status === 'ok') {
+      return null
+    }
+
+    await appointmentService.saveDraft(phone, availability.draft)
+    await this.setFlowContext(phone)
+    await sendWhatsAppMessage(phone, availability.message)
+
+    const nextStep = await this.handleNextMissing(phone, availability.draft)
+    if (nextStep) {
+      return nextStep
+    }
+
+    return this.buildResponse(availability.message, false, availability.draft)
   }
 
   protected async sendConfirmation(phone: string, draft: IAppointmentValidationDraft, summary: string): Promise<void> {

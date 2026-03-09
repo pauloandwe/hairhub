@@ -4,16 +4,12 @@ export const unsupportedQueryFunctions = {
 
     return {
       success: false,
-      message: `Desculpe, mas a consulta sobre "${queryType}" ainda não está disponível no sistema.
+      message: `Poxa, essa consulta sobre "${queryType}" ainda não está disponível por aqui.
 
-Atualmente, você pode consultar:
-• Desembolsos/gastos (total por período, mês atual, safra)
-• Precipitação/chuva acumulada (safra atual/anterior)
-• Rebanho atual (quantidade total de animais)
-• Quantidade de animais por lote
+Mesmo assim, posso te ajudar com o que faz parte do atendimento de agendamentos, como consultar horários disponíveis, ver seus agendamentos, mostrar os serviços e verificar os profissionais disponíveis.
 
-Estamos trabalhando para adicionar mais relatórios e métricas em breve! Se precisar de ajuda com alguma das consultas disponíveis, é só me avisar.`,
-      availableQueries: ['desembolsos por período/safra', 'precipitação acumulada', 'rebanho atual', 'quantidade de animais por lote'],
+Se quiser, me fala o que você precisa e eu continuo com você.`,
+      availableQueries: ['horários disponíveis', 'agendamentos', 'serviços', 'profissionais'],
       requestedQuery: queryType,
     }
   },

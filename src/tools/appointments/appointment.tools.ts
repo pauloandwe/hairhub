@@ -9,6 +9,7 @@ export const appointmentTools: OpenAITool[] = [
       description: `DISPARADOR (INTENÇÃO):
 - SEMPRE use esta ferramenta quando o usuário mencionar agendar/marcar/fazer agendamento/corte/serviço de business.
 - Se houver dados na própria frase (ex.: data, horário, serviço, professional, nome, observações), preencha esses campos e envie junto.
+- Os campos canônicos internos são \`appointmentDate\` e \`appointmentTime\`, mas \`date\` e \`time\` continuam aceitos como alias.
 - Se não houver dados explícitos, chame com arguments = {} apenas.
 - NÃO faça perguntas nesta etapa; o fluxo interno cuidará da coleta dos dados.
 
@@ -19,13 +20,15 @@ QUANDO NÃO USAR:
 - Consultas/buscas → não usar esta função.
 
 EXEMPLOS:
-- "Quero agendar um corte para amanhã" → startAppointmentRegistration({ date: "<YYYY-MM-DD de amanhã>" })
-- "Agendar corte + barba com João para 15/11/2024 às 14:00" → startAppointmentRegistration({ date: "2024-11-15", time: "14:00", service: "Corte + Barba", professional: "João" })
+- "Quero agendar um corte para amanhã" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>" })
+- "Agendar corte + barba com João para 15/11/2024 às 14:00" → startAppointmentRegistration({ appointmentDate: "2024-11-15", appointmentTime: "14:00", service: "Corte + Barba", professional: "João" })
 - "Agendar um corte e preciso avisar que tenho alergia a alguns produtos" → startAppointmentRegistration({ notes: "Alergia a alguns produtos" })
 - "Quero fazer um agendamento" → startAppointmentRegistration({})`,
       parameters: {
         type: 'object',
         properties: {
+          appointmentDate: { type: 'string', format: 'date', description: 'Campo canônico para a data do agendamento (YYYY-MM-DD).' },
+          appointmentTime: { type: ['string', 'null'], description: 'Campo canônico para o horário do agendamento (HH:mm).' },
           date: { type: 'string', format: 'date' },
           time: { type: ['string', 'null'] },
           service: { type: ['string', 'null'] },

@@ -36,3 +36,16 @@ export interface AppointmentRecord extends IAppointmentCreationPayload {
 }
 
 export type UpsertAppointmentArgs = Partial<IAppointmentValidationDraft>
+
+export type StartAppointmentArgs = UpsertAppointmentArgs & {
+  date?: string | null
+  time?: string | null
+}
+
+export type AppointmentAvailabilityResolution =
+  | { status: 'ok'; draft: IAppointmentValidationDraft }
+  | {
+      status: 'reset-time' | 'reset-date'
+      draft: IAppointmentValidationDraft
+      message: string
+    }

@@ -26,6 +26,11 @@ export type FlowResponse<TDraft extends RegistrationDraftBase> = {
   draft?: TDraft
 }
 
+type DraftPreparationResult<TDraft extends RegistrationDraftBase> = {
+  draft: TDraft
+  response?: FlowResponse<TDraft> | null
+}
+
 type ActiveRegistrationState<TDraft extends RegistrationDraftBase> = {
   type?: string
   step?: FlowStep
@@ -125,10 +130,13 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
     await this.setFlowContext(phone)
 
-    const missingResult = await this.handleNextMissing(phone, updatedDraft)
+    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft)
+    if (preparedDraft.response) return preparedDraft.response
+
+    const missingResult = await this.handleNextMissing(phone, preparedDraft.draft)
     if (missingResult) return missingResult
 
-    return this.presentConfirmation(phone, updatedDraft)
+    return this.presentConfirmation(phone, preparedDraft.draft)
   }
 
   async continueRegistration(args: { phone: string }): Promise<FlowResponse<TDraft>> {
@@ -138,11 +146,13 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     await this.setFlowContext(phone)
 
     const draft = await this.options.service.loadDraft(phone)
+    const preparedDraft = await this.afterDraftPrepared(phone, draft)
+    if (preparedDraft.response) return preparedDraft.response
 
-    const missingResult = await this.handleNextMissing(phone, draft)
+    const missingResult = await this.handleNextMissing(phone, preparedDraft.draft)
     if (missingResult) return missingResult
 
-    return this.presentConfirmation(phone, draft)
+    return this.presentConfirmation(phone, preparedDraft.draft)
   }
 
   async confirmRegistration(args: { phone: string }): Promise<FlowResponse<TDraft>> {
@@ -177,6 +187,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
       return this.buildResponse(this.options.messages.creationResponse, false)
     } catch (err) {
+      const recovered = await this.recoverFromCreateError(phone, draft, err)
+      if (recovered) return recovered
+
       const userFacingMessage = this.options.service.handleServiceError(err)
       await sendWhatsAppMessage(phone, userFacingMessage)
 
@@ -703,6 +716,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
       return this.buildResponse(this.options.messages.confirmation, false, completedDraft)
     } catch (err) {
+      const recovered = await this.recoverFromCreateError(phone, draft, err)
+      if (recovered) return recovered
+
       const userFacingMessage = this.options.service.handleServiceError(err)
       await sendWhatsAppMessage(phone, userFacingMessage)
 
@@ -747,6 +763,11 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     void _draft
   }
 
+  protected async afterDraftPrepared(_phone: string, draft: TDraft): Promise<DraftPreparationResult<TDraft>> {
+    void _phone
+    return { draft }
+  }
+
   protected async onAfterConfirmationSent(_phone: string, _draft: TDraft, _summary: string): Promise<void> {
     void _phone
     void _draft
@@ -783,6 +804,13 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     void userMessage
 
     await this.clearHistoryArtifactsAfterError(phone)
+  }
+
+  protected async recoverFromCreateError(_phone: string, _draft: TDraft, _error: unknown): Promise<FlowResponse<TDraft> | null> {
+    void _phone
+    void _draft
+    void _error
+    return null
   }
 
   private async clearHistoryArtifactsAfterError(phone: string): Promise<void> {

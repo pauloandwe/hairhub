@@ -2,16 +2,25 @@ import { format, isValid, parse, parseISO } from 'date-fns'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
-import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, UpsertAppointmentArgs } from './appointment.types'
+import { AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone } from '../../env.config'
 import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
+import { professionalService } from './professional.service'
+import { ApiError } from '../../errors/api-error'
+import { getAppErrorMessage } from '../../utils/error-messages'
+import { AppErrorCodes } from '../../enums/constants'
 
 const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+const AVAILABILITY_FALLBACK_MESSAGE = 'Infelizmente não tenho disponibilidade para essa combinação, mas vou te mostrar outras opções.'
+const AVAILABILITY_ERROR_MESSAGES = new Set([
+  'Time slot already booked',
+  'Professional unavailable for selected period',
+])
 
 const VALID_EDITABLE_FIELDS: (keyof UpsertAppointmentArgs)[] = ['appointmentDate', 'appointmentTime', 'service', 'professional', 'clientName', 'clientPhone', 'notes'] as const
 
@@ -38,7 +47,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   }
   constructor() {
     const buildEndpoint = ({ farmId }: { farmId?: string | number }): string => (farmId ? `/appointments/${farmId}/appointments` : '/appointments')
-    const buildAutoComplete = ({ farmId }: { farmId?: string | number }): string => (farmId ? `/appointments/${farmId}/suggest` : AUTO_COMPLETE_ENDPOINT)
 
     super(
       'appointment',
@@ -49,15 +57,30 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       {
         rawPayload: true,
         endpoints: {
-          autoComplete: buildAutoComplete,
+          autoComplete: AUTO_COMPLETE_ENDPOINT,
           create: buildEndpoint,
           update: buildEndpoint,
           patch: buildEndpoint,
           delete: buildEndpoint,
         },
       },
-      true,
+      false,
     )
+  }
+
+  protected override buildAutoCompletePayload(data: IAppointmentValidationDraft, context: { phone: string; recordId?: string; farmId?: string; businessId?: string }): Record<string, unknown> {
+    const businessId = context.farmId ? Number(context.farmId) : Number(getBusinessIdForPhone(context.phone))
+    const hasValidBusinessId = Number.isFinite(businessId) && businessId > 0
+
+    return {
+      data: {
+        ...(hasValidBusinessId ? { businessId } : {}),
+        ...(data.appointmentDate ? { appointmentDate: data.appointmentDate } : {}),
+        ...(data.appointmentTime ? { appointmentTime: data.appointmentTime } : {}),
+        ...(this.hasUsableRef(data.service) ? { service: data.service } : {}),
+        ...(this.hasUsableRef(data.professional) ? { professional: data.professional } : {}),
+      },
+    }
   }
 
   private formatDraftDate = (rawDate?: string | Date | null): string | null => {
@@ -221,8 +244,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       assignRef('professional', normalizedProfessional)
     }
 
-    if (extendedArgs.appointmentDate !== undefined) {
-      const appointmentDateInput = extendedArgs.appointmentDate
+    const appointmentDateInput = extendedArgs.appointmentDate !== undefined ? extendedArgs.appointmentDate : extendedArgs.date
+    if (appointmentDateInput !== undefined) {
       let nextDate: string | null = currentDraft.appointmentDate ?? null
       let hasNewValue = false
 
@@ -255,8 +278,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       }
     }
 
-    if (extendedArgs.appointmentTime !== undefined) {
-      const appointmentTimeInput = extendedArgs.appointmentTime
+    const appointmentTimeInput = extendedArgs.appointmentTime !== undefined ? extendedArgs.appointmentTime : extendedArgs.time
+    if (appointmentTimeInput !== undefined) {
       if (appointmentTimeInput === null) {
         currentDraft.appointmentTime = null
       } else {
@@ -424,12 +447,121 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
   protected extractDataFromResult = (listType: string, result: any): any => {
     if (listType === 'autoComplete') {
-      return result?.data?.data ?? {}
+      const payload = result?.data?.data ?? {}
+      const draftUpdates: Partial<IAppointmentValidationDraft> = {}
+
+      if (payload?.service !== undefined) {
+        draftUpdates.service = payload.service
+      }
+      if (payload?.professional !== undefined) {
+        draftUpdates.professional = payload.professional
+      }
+      if (payload?.appointmentDate !== undefined) {
+        draftUpdates.appointmentDate = payload.appointmentDate
+      }
+      if (payload?.appointmentTime !== undefined) {
+        draftUpdates.appointmentTime = payload.appointmentTime
+      }
+
+      return draftUpdates
     }
     const data = result?.data?.data
     if (Array.isArray(data)) return data
     if (Array.isArray(data?.data)) return data.data
     return []
+  }
+
+  handleServiceError = (err: unknown): string => {
+    if (this.isAvailabilityConflictError(err)) {
+      return AVAILABILITY_FALLBACK_MESSAGE
+    }
+
+    if (err instanceof ApiError) {
+      return getAppErrorMessage(err.key)
+    }
+
+    if (err instanceof Error) {
+      console.error('An unexpected non-API error occurred:', err)
+      return getAppErrorMessage(AppErrorCodes.UNKNOWN_ERROR)
+    }
+
+    console.error('An unknown error type was caught:', err)
+    return getAppErrorMessage(AppErrorCodes.UNKNOWN_ERROR)
+  }
+
+  async reconcileDraftAvailability(phone: string, draft: IAppointmentValidationDraft): Promise<AppointmentAvailabilityResolution> {
+    const serviceId = this.extractValidId(draft.service?.id)
+    const date = draft.appointmentDate ?? null
+
+    if (!serviceId || !date) {
+      return { status: 'ok', draft }
+    }
+
+    const hasResolvedProfessional = Boolean(this.extractValidId(draft.professional?.id))
+    const hasUnresolvedProfessionalName = Boolean(draft.professional?.name && !hasResolvedProfessional)
+
+    if (hasUnresolvedProfessionalName) {
+      return { status: 'ok', draft }
+    }
+
+    if (hasResolvedProfessional) {
+      const professionalId = this.extractValidId(draft.professional?.id)
+      const slots = await professionalService.getAvailableSlots({
+        phone,
+        professionalId,
+        date,
+        serviceId,
+      })
+
+      if (!slots.length) {
+        return {
+          status: 'reset-date',
+          draft: this.withAvailabilityFallback(draft, 'reset-date'),
+          message: AVAILABILITY_FALLBACK_MESSAGE,
+        }
+      }
+
+      if (draft.appointmentTime && !slots.includes(draft.appointmentTime)) {
+        return {
+          status: 'reset-time',
+          draft: this.withAvailabilityFallback(draft, 'reset-time'),
+          message: AVAILABILITY_FALLBACK_MESSAGE,
+        }
+      }
+
+      return { status: 'ok', draft }
+    }
+
+    if (draft.professional === null) {
+      const slots = await professionalService.getAvailableSlotsAggregated({
+        phone,
+        date,
+        serviceId,
+      })
+
+      if (!slots.length) {
+        return {
+          status: 'reset-date',
+          draft: this.withAvailabilityFallback(draft, 'reset-date'),
+          message: AVAILABILITY_FALLBACK_MESSAGE,
+        }
+      }
+
+      if (draft.appointmentTime && !slots.some((slot) => slot.start === draft.appointmentTime)) {
+        return {
+          status: 'reset-time',
+          draft: this.withAvailabilityFallback(draft, 'reset-time'),
+          message: AVAILABILITY_FALLBACK_MESSAGE,
+        }
+      }
+    }
+
+    return { status: 'ok', draft }
+  }
+
+  isAvailabilityConflictError(error: unknown): boolean {
+    const message = this.extractErrorMessage(error)
+    return Boolean(message && AVAILABILITY_ERROR_MESSAGES.has(message))
   }
 
   protected formatItemToSelection = (listType: string, item: any): SelectionItem => {
@@ -514,6 +646,33 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   private extractValidId(id: unknown): number | undefined {
     const numId = Number(id)
     return Number.isFinite(numId) && numId > 0 ? numId : undefined
+  }
+
+  private hasUsableRef(ref: IdNameRef | null | undefined): boolean {
+    if (!ref) return false
+    return Boolean(this.extractStringValue(ref.id) || this.extractStringValue(ref.name))
+  }
+
+  private withAvailabilityFallback(draft: IAppointmentValidationDraft, mode: 'reset-time' | 'reset-date'): IAppointmentValidationDraft {
+    return {
+      ...draft,
+      service: draft.service ? { ...draft.service } : null,
+      professional: draft.professional ? { ...draft.professional } : draft.professional,
+      appointmentDate: mode === 'reset-date' ? null : draft.appointmentDate,
+      appointmentTime: null,
+    }
+  }
+
+  private extractErrorMessage(error: unknown): string | null {
+    if (error instanceof ApiError) {
+      return error.message?.trim() || error.userMessage?.trim() || null
+    }
+
+    if (error instanceof Error) {
+      return error.message?.trim() || null
+    }
+
+    return null
   }
 
   private validateAppointmentDraft(draft: IAppointmentValidationDraft): void {
