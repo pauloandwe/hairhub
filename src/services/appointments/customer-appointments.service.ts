@@ -101,9 +101,7 @@ class CustomerAppointmentsService {
       return []
     }
 
-    return payload
-      .map(mapAppointment)
-      .filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
+    return payload.map(mapAppointment).filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
   }
 
   private isUpcoming(appointment: AppointmentRescheduleAppointment): boolean {
@@ -168,9 +166,7 @@ class CustomerAppointmentsService {
   async getUpcomingAppointments(phone: string): Promise<AppointmentRescheduleAppointment[]> {
     const appointments = await this.fetchAppointments(phone, OPEN_APPOINTMENT_STATUSES)
 
-    return appointments
-      .filter((appointment) => this.isUpcoming(appointment))
-      .sort(compareAscending)
+    return appointments.filter((appointment) => this.isUpcoming(appointment)).sort(compareAscending)
   }
 
   async getUpcomingAppointmentsForAction(phone: string, action: CustomerAppointmentAction): Promise<AppointmentRescheduleAppointment[]> {
@@ -179,9 +175,7 @@ class CustomerAppointmentsService {
     const { settings } = await this.ensureBusinessContext(phone)
     const appointments = await this.getUpcomingAppointments(phone)
 
-    return appointments
-      .filter((appointment) => this.evaluatePolicy(settings, action, appointment).allowed)
-      .sort(compareAscending)
+    return appointments.filter((appointment) => this.evaluatePolicy(settings, action, appointment).allowed).sort(compareAscending)
   }
 
   async validateAppointmentAction(phone: string, action: CustomerAppointmentAction, appointment: AppointmentRescheduleAppointment): Promise<void> {

@@ -123,15 +123,7 @@ export class ContextService {
   }
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
-    let context:
-      | SimplifiedExpenseContextService
-      | DeathContextService
-      | DefaultContextService
-      | BirthContextService
-      | SellingContextService
-      | AppointmentContextService
-      | AppointmentCancellationContextService
-      | AppointmentRescheduleContextService = this.defaultContext
+    let context: SimplifiedExpenseContextService | DeathContextService | DefaultContextService | BirthContextService | SellingContextService | AppointmentContextService | AppointmentCancellationContextService | AppointmentRescheduleContextService = this.defaultContext
 
     if (activeFlowType) {
       context = this.contextMap[activeFlowType as keyof typeof this.contextMap]

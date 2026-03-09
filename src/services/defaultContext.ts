@@ -25,7 +25,14 @@ import { appointmentRescheduleTools } from '../tools/appointments/appointment-re
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [...this.pickStartTools([...appointmentTools] as OpenAITool[]), ...this.pickStartTools([...appointmentCancellationTools] as OpenAITool[]), ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]), ...(appointmentQueryTools as OpenAITool[]), ...unsupportedRegistrationTools, ...unsupportedQueryTools]
+  private contextTools = [
+    ...this.pickStartTools([...appointmentTools] as OpenAITool[]),
+    ...this.pickStartTools([...appointmentCancellationTools] as OpenAITool[]),
+    ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]),
+    ...(appointmentQueryTools as OpenAITool[]),
+    ...unsupportedRegistrationTools,
+    ...unsupportedQueryTools,
+  ]
   private serviceFunctions = {
     ...unsupportedRegistrationFunctions,
     ...appointmentQueryFunctions,

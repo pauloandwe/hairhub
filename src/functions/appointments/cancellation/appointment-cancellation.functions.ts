@@ -10,14 +10,7 @@ import { sendWhatsAppMessage } from '../../../api/meta.api'
 
 type AppointmentCancellationEditField = `${AppointmentCancellationField}`
 
-class AppointmentCancellationFlowService extends GenericCrudFlow<
-  AppointmentCancellationDraft,
-  AppointmentCancellationCreationPayload,
-  AppointmentCancellationRecord,
-  UpsertAppointmentCancellationArgs,
-  AppointmentCancellationEditField,
-  AppointmentCancellationField
-> {
+class AppointmentCancellationFlowService extends GenericCrudFlow<AppointmentCancellationDraft, AppointmentCancellationCreationPayload, AppointmentCancellationRecord, UpsertAppointmentCancellationArgs, AppointmentCancellationEditField, AppointmentCancellationField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CANCELLATION_CONFIRMATION'
 
   constructor() {

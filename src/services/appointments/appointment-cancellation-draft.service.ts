@@ -39,12 +39,7 @@ function emptyAppointmentCancellationDraft(): AppointmentCancellationDraft {
   }
 }
 
-export class AppointmentCancellationDraftService extends GenericService<
-  AppointmentCancellationDraft,
-  AppointmentCancellationCreationPayload,
-  AppointmentCancellationRecord,
-  UpsertAppointmentCancellationArgs
-> {
+export class AppointmentCancellationDraftService extends GenericService<AppointmentCancellationDraft, AppointmentCancellationCreationPayload, AppointmentCancellationRecord, UpsertAppointmentCancellationArgs> {
   constructor() {
     super(
       'appointmentCancellation',
