@@ -8,6 +8,7 @@ import { AgeCategoryService, AgeGroup, AgeCategory } from '../services/livestock
 import { CategoryService } from '../services/livestocks/category.service'
 import { tryContinueRegistration } from './followup'
 import { createTwoStepSelectionFlow } from './flows'
+import { getSelectionAck } from '../utils/conversation-copy'
 
 export const AGE_GROUP_NAMESPACE = 'AGE_GROUP'
 export const AGE_CATEGORY_NAMESPACE = 'AGE_CATEGORY'
@@ -33,8 +34,8 @@ interface AgeCategorySelectors {
   sendCategoryList: (userId: string, groupId: string, bodyMsg?: string, offset?: number) => Promise<void>
 }
 
-const DEFAULT_GROUP_PROMPT = 'Bora escolher o grupo de idade'
-const DEFAULT_CATEGORY_PROMPT = 'Selecione a categoria desejada'
+const DEFAULT_GROUP_PROMPT = 'Qual grupo de idade faz sentido aqui?'
+const DEFAULT_CATEGORY_PROMPT = 'Agora me diz qual categoria.'
 
 const ageCategoryService = new AgeCategoryService()
 const categoryService = new CategoryService()
@@ -53,12 +54,11 @@ export const buildAgeCategorySelection = (config: AgeCategorySelectionConfig): A
       ui: {
         header: 'Qual o grupo de idade?',
         sectionTitle: 'Grupos',
-        footer: 'Inttegra Assistente',
         buttonLabel: 'Ver opções',
       },
       defaultBody: groupPrompt,
-      invalidSelectionMsg: 'Opa, essa opção expirou',
-      emptyListMessage: 'Nenhum grupo de idade encontrado',
+      invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+      emptyListMessage: 'Nao encontrei grupos de idade por aqui.',
       titleBuilder: (g, idx, base) => `${base + idx + 1}. ${g.name}`,
       descriptionBuilder: (g) => g.categories?.map((c) => c.name).join(', '),
       onSelected: async ({ userId, item }) => {
@@ -81,15 +81,14 @@ export const buildAgeCategorySelection = (config: AgeCategorySelectionConfig): A
       ui: {
         header: 'Qual a categoria?',
         sectionTitle: 'Categorias',
-        footer: 'Inttegra Assistente',
         buttonLabel: 'Ver opções',
       },
       defaultBody: categoryPrompt,
-      invalidSelectionMsg: 'Opa, essa opção expirou',
-      emptyListMessage: 'Nenhuma categoria de idade encontrada',
+      invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+      emptyListMessage: 'Nao encontrei categorias por aqui.',
       titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-      descriptionBuilder: () => 'Selecionar esta categoria',
-      buildBodyAfterStep1: (selectedGroup) => `Beleza! Grupo '${selectedGroup.name}' já anotado. Agora selecione a categoria`,
+      descriptionBuilder: () => 'Escolher essa categoria',
+      buildBodyAfterStep1: (selectedGroup) => `Perfeito, anotei o grupo ${selectedGroup.name}. Agora me diz a categoria.`,
       onSelected: async ({ userId, item }) => {
         await getUserContext(userId)
         const ctx = getUserContextSync(userId)
@@ -113,7 +112,7 @@ export const buildAgeCategorySelection = (config: AgeCategorySelectionConfig): A
           }
         }
 
-        const successMessage = config.messages?.success?.({ groupName: groupSnapshot.name, categoryName: item.name }) ?? `Beleza! Categoria '${item.name}' selecionada${groupSnapshot.name ? ` para o grupo '${groupSnapshot.name}'` : ''}`
+        const successMessage = config.messages?.success?.({ groupName: groupSnapshot.name, categoryName: item.name }) ?? getSelectionAck('category', item.name)
         await sendWhatsAppMessage(userId, successMessage)
 
         if (activeFlow === config.flowType) {
@@ -147,9 +146,9 @@ const deathAgeCategorySelector = buildAgeCategorySelection({
   namespaces: { group: AGE_GROUP_NAMESPACE, category: AGE_CATEGORY_NAMESPACE },
   flowType: FlowType.Death,
   messages: {
-    groupPrompt: 'Bora escolher o grupo de idade',
-    categoryPrompt: 'Selecione a categoria desejada',
-    success: ({ groupName, categoryName }) => (groupName ? `Beleza! Categoria '${categoryName}' selecionada para o grupo '${groupName}'` : `Beleza! Categoria '${categoryName}' selecionada.`),
+    groupPrompt: 'Qual grupo de idade faz sentido aqui?',
+    categoryPrompt: 'Agora me diz qual categoria.',
+    success: ({ groupName, categoryName }) => (groupName ? `Perfeito, fiquei com ${categoryName} no grupo ${groupName}.` : getSelectionAck('category', categoryName)),
   },
   applySelection: async ({ userId, group, category }) => {
     await updateDraftWithAgeCategorySelection(userId, {
@@ -176,10 +175,10 @@ const deathAgeCategorySelector = buildAgeCategorySelection({
   },
 })
 
-export async function sendAgeGroupSelectionList(userId: string, bodyMsg = 'Bora escolher o grupo de idade', offset = 0) {
+export async function sendAgeGroupSelectionList(userId: string, bodyMsg = 'Qual grupo de idade faz sentido aqui?', offset = 0) {
   await deathAgeCategorySelector.sendGroupList(userId, bodyMsg, offset)
 }
 
-export async function sendAgeCategorySelectionList(userId: string, groupId: string, bodyMsg = 'Selecione a categoria desejada.', offset = 0) {
+export async function sendAgeCategorySelectionList(userId: string, groupId: string, bodyMsg = 'Agora me diz qual categoria.', offset = 0) {
   await deathAgeCategorySelector.sendCategoryList(userId, groupId, bodyMsg, offset)
 }

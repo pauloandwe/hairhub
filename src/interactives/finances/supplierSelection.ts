@@ -8,6 +8,7 @@ import { simplifiedExpenseFunctions } from '../../functions/finances/simplifiedE
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const SUPPLIER_NAMESPACE = 'SUPPLIER_GROUP'
 
@@ -18,17 +19,16 @@ const supplierFlow = createSelectionFlow<SelectionItem>({
     return simplifiedExpenseService.listSuppliers(phone)
   },
   ui: {
-    header: 'Escolha o Fornecedor',
+    header: 'Escolha o fornecedor',
     sectionTitle: 'Fornecedores',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Antes de continuar, selecione fornecedor desejado.',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum fornecedor encontrado',
+  defaultBody: 'Qual fornecedor voce quer usar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei fornecedores por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este fornecedor',
+  descriptionBuilder: () => 'Escolher esse fornecedor',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -40,7 +40,7 @@ const supplierFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.SimplifiedExpense) {
       await simplifiedExpenseService.updateDraftField(userId, SimplifiedExpenseField.Supplier, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Fornecedor '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -56,6 +56,6 @@ const supplierFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendSupplierSelectionList(userId: string, bodyMsg = 'Antes de continuar, selecione o fornecedor.', offset = 0) {
+export async function sendSupplierSelectionList(userId: string, bodyMsg = 'Qual fornecedor voce quer usar?', offset = 0) {
   await supplierFlow.sendList(userId, bodyMsg, offset)
 }

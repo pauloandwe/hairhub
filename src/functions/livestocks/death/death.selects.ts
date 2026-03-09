@@ -6,6 +6,7 @@ import { DeathField } from '../../../enums/cruds/deathFields.enums'
 import { appendAssistantTextAuto } from '../../../services/history-router.service'
 import { DeathFields, DeathValidationDraft } from '../../../services/livestocks/death-draft.service'
 import { ChangeResponse, FieldEditor } from '../../functions.types'
+import { getMenuSentCopy } from '../../../utils/conversation-copy'
 
 type DeathEditField = `${DeathField.Quantity}` | `${DeathField.DeathDate}` | `${DeathField.Age}` | `${DeathField.Category}` | `${DeathField.DeathCause}` | `${DeathField.AnimalLot}` | `${DeathField.Retreat}` | `${DeathField.Area}`
 
@@ -20,18 +21,18 @@ const editQuantity: FieldEditor = async (phone) => {
 }
 
 const editAgeOrCategory: FieldEditor = async (phone) => {
-  await sendAgeGroupSelectionList(phone, 'Qual a idade/categoria? 👇')
-  return respond('Menu enviado', true)
+  await sendAgeGroupSelectionList(phone, 'Me diz a idade ou categoria.')
+  return respond(getMenuSentCopy('idade e categoria'), true)
 }
 
 const editDeathCause: FieldEditor = async (phone) => {
-  await sendDeathCauseSelectionList(phone, 'Qual a causa da morte? 👇')
-  return respond('Menu enviado', true)
+  await sendDeathCauseSelectionList(phone, 'Qual foi a causa?')
+  return respond(getMenuSentCopy('causas'), true)
 }
 
 const editAnimalLot: FieldEditor = async (phone) => {
-  await sendLocationSelectionList(phone, 'Qual a localização? 👇')
-  return respond('Menu enviado', true)
+  await sendLocationSelectionList(phone, 'Em qual localizacao foi isso?')
+  return respond(getMenuSentCopy('localizacoes'), true)
 }
 
 const editDeathDate: FieldEditor = async (phone) => {
@@ -68,19 +69,19 @@ const askQuantity: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askAgeCategory: MissingFieldHandler = async (phone, draft) => {
-  await sendAgeGroupSelectionList(phone, 'Qual a idade/categoria? 👇')
-  return { message: 'Menu enviado', interactive: true, draft }
+  await sendAgeGroupSelectionList(phone, 'Me diz a idade ou categoria.')
+  return { message: getMenuSentCopy('idade e categoria'), interactive: true, draft }
 }
 
 const askDeathCause: MissingFieldHandler = async (phone, draft) => {
-  await sendDeathCauseSelectionList(phone, 'Qual a causa da morte? 👇')
-  return { message: 'Menu enviado', interactive: true, draft }
+  await sendDeathCauseSelectionList(phone, 'Qual foi a causa?')
+  return { message: getMenuSentCopy('causas'), interactive: true, draft }
 }
 
 const askAnimalLot: MissingFieldHandler = async (phone, draft) => {
-  await sendLocationSelectionList(phone, 'Qual a localização? 👇')
+  await sendLocationSelectionList(phone, 'Em qual localizacao foi isso?')
   return {
-    message: 'Menu enviado',
+    message: getMenuSentCopy('localizacoes'),
     interactive: true,
     draft,
   }

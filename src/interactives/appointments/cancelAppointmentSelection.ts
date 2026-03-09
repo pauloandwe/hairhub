@@ -5,6 +5,7 @@ import { appointmentCancellationDraftService } from '../../services/appointments
 import { SelectionItem } from '../../services/generic/generic.types'
 import { DateFormatter } from '../../utils/date'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 const buildTitle = (startDate: string): string => {
   const dayMonth = DateFormatter.formatToDayMonth(startDate) ?? 'Data indefinida'
@@ -34,7 +35,7 @@ const cancelAppointmentSelectionFlow = createSelectionFlow<SelectionItem & { ser
     const appointments = appointmentCancellationService.getUpcomingAppointmentsFromState(phone)
 
     if (!appointments.length) {
-      await sendWhatsAppMessage(phone, 'Não encontrei próximos agendamentos elegíveis para cancelamento.')
+      await sendWhatsAppMessage(phone, 'Nao encontrei horarios em aberto para cancelar por aqui.')
       return []
     }
 
@@ -47,14 +48,13 @@ const cancelAppointmentSelectionFlow = createSelectionFlow<SelectionItem & { ser
     }))
   },
   ui: {
-    header: 'Escolha o Agendamento',
+    header: 'Escolha o agendamento',
     sectionTitle: 'Próximos Agendamentos',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver horários',
   },
-  defaultBody: 'Qual agendamento você quer cancelar?',
-  invalidSelectionMsg: 'Essa opção não é mais válida. Escolha novamente, por favor.',
-  emptyListMessage: 'Nenhum próximo agendamento elegível para cancelamento foi encontrado.',
+  defaultBody: 'Qual horario voce quer cancelar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mostrar seus horarios de novo.',
+  emptyListMessage: 'Nao encontrei horarios em aberto para cancelar.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
   descriptionBuilder: (item) => buildDescription(item, { serviceName: item.serviceName, professionalName: item.professionalName }),
@@ -64,15 +64,15 @@ const cancelAppointmentSelectionFlow = createSelectionFlow<SelectionItem & { ser
       await appointmentCancellationService.selectAppointment(userId, appointmentId)
       await appointmentCancellationDraftService.updateDraftField(userId, 'appointmentId', appointmentId)
       await appointmentCancellationDraftService.hydrateSelectedAppointment(userId)
-      await sendWhatsAppMessage(userId, `Agendamento '${item.name}' selecionado.`)
+      await sendWhatsAppMessage(userId, getSelectionAck('appointment', item.name))
       await tryContinueRegistration(userId)
     } catch (error) {
       console.error('[CancelAppointmentSelection] Erro ao selecionar agendamento:', error)
-      await sendWhatsAppMessage(userId, 'Não consegui selecionar esse agendamento agora. Tente novamente mais tarde.')
+      await sendWhatsAppMessage(userId, 'Nao consegui separar esse agendamento agora. Tenta de novo em instantes?')
     }
   },
 })
 
-export async function sendCancelableAppointmentSelectionList(userId: string, bodyMsg = 'Qual agendamento você quer cancelar?', offset = 0) {
+export async function sendCancelableAppointmentSelectionList(userId: string, bodyMsg = 'Qual horario voce quer cancelar?', offset = 0) {
   await cancelAppointmentSelectionFlow.sendList(userId, bodyMsg, offset)
 }

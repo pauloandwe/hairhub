@@ -8,6 +8,7 @@ import { tryContinueRegistration } from '../followup'
 import { saleFunctions } from '../../functions/livestocks/selling/selling.functions'
 import { SelectArrayItem } from '../../helpers/converters/converters.type'
 import { sellingService } from '../../services/livestocks/Selling/sellingService'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const SALE_TYPE_NAMESPACE = 'SALE_TYPE'
 
@@ -28,15 +29,14 @@ const saleTypesFlow = createSelectionFlow<SelectArrayItem>({
   ui: {
     header: 'Qual tipo de venda?',
     sectionTitle: 'Tipos de Venda',
-    footer: 'Inttegra',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Bora selecionar o tipo de venda.',
-  invalidSelectionMsg: 'Opa, essa opção expirou. Deixe eu enviar de novo pra você.',
-  emptyListMessage: 'Nenhum tipo de venda encontrado',
+  defaultBody: 'Qual tipo de venda voce quer registrar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei tipos de venda por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar',
+  descriptionBuilder: () => 'Escolher',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
     const ctx = getUserContextSync(userId)
@@ -49,7 +49,7 @@ const saleTypesFlow = createSelectionFlow<SelectArrayItem>({
     if (ctx?.activeRegistration?.type === FlowType.Selling) {
       await sellingService.updateDraftField(userId, 'saleType', item.id)
     }
-    await sendWhatsAppMessage(userId, `Beleza! Tipo de venda '${item.name}' já anotado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -61,7 +61,7 @@ const saleTypesFlow = createSelectionFlow<SelectArrayItem>({
   },
 })
 
-export async function sendSaleTypeSelectionList(userId: string, bodyMsg = 'Antes de continuar, selecione o tipo de venda.', offset = 0) {
+export async function sendSaleTypeSelectionList(userId: string, bodyMsg = 'Qual tipo de venda voce quer registrar?', offset = 0) {
   await saleTypesFlow.sendList(userId, bodyMsg, offset)
 }
 
@@ -70,7 +70,7 @@ export const SALE_LOCATION_NAMESPACE = 'SALE_LOCATION'
 const saleLocationSelector = buildSaleLocationSelectionFlow({
   namespace: SALE_LOCATION_NAMESPACE,
   flowType: FlowType.Selling,
-  defaultBody: 'Bora escolher a localização (Retiro → Área) 👇',
+  defaultBody: 'Me diz em qual localizacao aconteceu a venda.',
 })
 
 function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: FlowType; defaultBody: string }) {
@@ -84,12 +84,11 @@ function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: F
     ui: {
       header: 'Qual a localização?',
       sectionTitle: 'Localizações',
-      footer: 'Inttegra Assistente',
       buttonLabel: 'Ver opções',
     },
     defaultBody: config.defaultBody,
-    invalidSelectionMsg: 'Opa, essa opção expirou',
-    emptyListMessage: 'Nenhuma localização encontrada',
+    invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+    emptyListMessage: 'Nao encontrei localizacoes por aqui.',
     pageLimit: 10,
     titleBuilder: (option, idx, base) => `${base + idx + 1}. ${option.lotName ? option.lotName : option.areaName}`,
     descriptionBuilder: (option) => (option.lotName ? `${option.retreatName} -> ${option.areaName} -> ${option.lotName}` : `${option.retreatName} -> ${option.areaName}`),
@@ -114,7 +113,7 @@ function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: F
       }
 
       const path = item.lotName ? `${item.retreatName} -> ${item.areaName} -> ${item.lotName}` : `${item.retreatName} -> ${item.areaName}`
-      await sendWhatsAppMessage(userId, `Beleza! Localização marcada: ${path}`)
+      await sendWhatsAppMessage(userId, getSelectionAck('location', path))
       await tryContinueRegistration(userId)
     },
     onEditModeSelected: async ({ userId, item }) => {
@@ -133,7 +132,7 @@ function buildSaleLocationSelectionFlow(config: { namespace: string; flowType: F
   return { sendList }
 }
 
-export async function sendSaleLocationSelectionList(userId: string, bodyMsg = 'Bora escolher a localização (Retiro → Área) 👇', offset = 0, itemsOverride?: AnimalLotOption[]) {
+export async function sendSaleLocationSelectionList(userId: string, bodyMsg = 'Me diz em qual localizacao aconteceu a venda.', offset = 0, itemsOverride?: AnimalLotOption[]) {
   await saleLocationSelector.sendList(userId, bodyMsg, offset, itemsOverride)
 }
 
@@ -142,7 +141,7 @@ export const SALE_DESTINATION_FARM_NAMESPACE = 'SALE_DESTINATION_FARM'
 const saleDestinationFarmSelector = buildSaleDestinationFarmSelectionFlow({
   namespace: SALE_DESTINATION_FARM_NAMESPACE,
   flowType: FlowType.Selling,
-  defaultBody: 'Qual a fazenda de destino? 👇',
+  defaultBody: 'Qual e a fazenda de destino?',
 })
 
 function buildSaleDestinationFarmSelectionFlow(config: { namespace: string; flowType: FlowType; defaultBody: string }) {
@@ -156,15 +155,14 @@ function buildSaleDestinationFarmSelectionFlow(config: { namespace: string; flow
     ui: {
       header: 'Qual a fazenda de destino?',
       sectionTitle: 'Fazendas',
-      footer: 'Inttegra Assistente',
       buttonLabel: 'Ver opções',
     },
     defaultBody: config.defaultBody,
-    invalidSelectionMsg: 'Opa, essa opção expirou',
-    emptyListMessage: 'Nenhuma fazenda encontrada',
+    invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+    emptyListMessage: 'Nao encontrei fazendas por aqui.',
     pageLimit: 10,
     titleBuilder: (farm, idx, base) => `${base + idx + 1}. ${farm.name}`,
-    descriptionBuilder: () => 'Selecionar',
+    descriptionBuilder: () => 'Escolher',
     onSelected: async ({ userId, item }) => {
       await getUserContext(userId)
       await setUserContext(userId, {
@@ -180,7 +178,7 @@ function buildSaleDestinationFarmSelectionFlow(config: { namespace: string; flow
         }
       }
 
-      await sendWhatsAppMessage(userId, `Beleza! Fazenda de destino marcada: ${item.name}`)
+      await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
       await tryContinueRegistration(userId)
     },
     onEditModeSelected: async ({ userId, item }) => {
@@ -199,6 +197,6 @@ function buildSaleDestinationFarmSelectionFlow(config: { namespace: string; flow
   return { sendList }
 }
 
-export async function sendSaleDestinationFarmSelectionList(userId: string, bodyMsg = 'Qual a fazenda de destino? 👇', offset = 0) {
+export async function sendSaleDestinationFarmSelectionList(userId: string, bodyMsg = 'Qual e a fazenda de destino?', offset = 0) {
   await saleDestinationFarmSelector.sendList(userId, bodyMsg, offset)
 }

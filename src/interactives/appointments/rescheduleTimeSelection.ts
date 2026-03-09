@@ -5,6 +5,7 @@ import { appointmentRescheduleDraftService } from '../../services/appointments/a
 import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const RESCHEDULE_TIME_NAMESPACE = 'RESCHEDULE_TIME_SELECTION'
 
@@ -16,12 +17,12 @@ const timeSelectionFlow = createSelectionFlow<SelectionItem>({
     const date = appointmentRescheduleService.getSelectedDate(phone)
 
     if (!appointment || !appointment.professionalId || !appointment.serviceId) {
-      await sendWhatsAppMessage(phone, 'Não tenho os dados do agendamento para listar horários. Volte e selecione o agendamento novamente.')
+      await sendWhatsAppMessage(phone, 'Perdi os dados desse agendamento. Vamos escolher de novo?')
       return []
     }
 
     if (!date) {
-      await sendWhatsAppMessage(phone, 'Antes escolha uma nova data para ver os horários disponíveis.')
+      await sendWhatsAppMessage(phone, 'Antes me fala qual nova data voce quer, ai eu te mostro os horarios.')
       return []
     }
 
@@ -34,29 +35,28 @@ const timeSelectionFlow = createSelectionFlow<SelectionItem>({
       })
 
       if (!slots.length) {
-        await sendWhatsAppMessage(phone, 'Esse dia não tem horários disponíveis com o professional escolhido. Que tal tentar outra data?')
+        await sendWhatsAppMessage(phone, 'Esse dia nao tem horarios livres com esse barbeiro. Quer tentar outra data?')
       }
 
       return slots.map<SelectionItem>((slot) => ({
         id: slot,
         name: slot,
-        description: 'Selecionar este horário',
+        description: 'Escolher esse horario',
       }))
     } catch (error) {
       console.error('[RescheduleTimeSelection] Error fetching available slots:', error)
-      await sendWhatsAppMessage(phone, 'Não consegui carregar os horários agora. Tente novamente mais tarde.')
+      await sendWhatsAppMessage(phone, 'Nao consegui carregar os horarios agora. Tenta de novo em instantes?')
       return []
     }
   },
   ui: {
-    header: 'Escolha o Horário',
+    header: 'Escolha o horario',
     sectionTitle: 'Horários Disponíveis',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver horários',
   },
-  defaultBody: 'Qual horário você prefere?',
-  invalidSelectionMsg: 'Esse horário não está mais disponível. Escolha outro, por favor.',
-  emptyListMessage: 'Nenhum horário disponível para esta data.',
+  defaultBody: 'Qual novo horario fica melhor pra voce?',
+  invalidSelectionMsg: 'Esse horario nao esta mais livre. Vou te mostrar outras opcoes.',
+  emptyListMessage: 'Nao achei horarios disponiveis para essa data.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
   descriptionBuilder: (item) => item.description,
@@ -64,15 +64,15 @@ const timeSelectionFlow = createSelectionFlow<SelectionItem>({
     try {
       await appointmentRescheduleService.setSelectedTime(userId, item.id)
       await appointmentRescheduleDraftService.updateDraftField(userId, 'newTime', item.id)
-      await sendWhatsAppMessage(userId, `Horário '${item.name}' selecionado.`)
+      await sendWhatsAppMessage(userId, getSelectionAck('newTime', item.name))
       await tryContinueRegistration(userId)
     } catch (error) {
       console.error('[RescheduleTimeSelection] Error confirming reschedule:', error)
-      await sendWhatsAppMessage(userId, 'Não consegui remarcar com esse horário. Tente outro horário ou dia, por favor.')
+      await sendWhatsAppMessage(userId, 'Nao consegui usar esse horario agora. Se quiser, tenta outro horario ou outra data.')
     }
   },
 })
 
-export async function sendRescheduleTimeSelectionList(userId: string, bodyMsg = 'Qual horário você prefere?', offset = 0) {
+export async function sendRescheduleTimeSelectionList(userId: string, bodyMsg = 'Qual novo horario fica melhor pra voce?', offset = 0) {
   await timeSelectionFlow.sendList(userId, bodyMsg, offset)
 }

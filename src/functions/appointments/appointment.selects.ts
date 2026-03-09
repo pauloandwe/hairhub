@@ -6,6 +6,7 @@ import { sendDateSelectionList } from '../../interactives/appointments/dateSelec
 import { appendAssistantTextAuto } from '../../services/history-router.service'
 import { IAppointmentValidationDraft } from '../../services/appointments/appointment.types'
 import { FieldEditor } from '../functions.types'
+import { getMenuSentCopy } from '../../utils/conversation-copy'
 
 export type AppointmentEditField = 'appointmentDate' | 'appointmentTime' | 'service' | 'professional' | 'notes' | 'clientName' | 'clientPhone'
 export type AppointmentMissingField = 'appointmentDate' | 'appointmentTime' | 'service' | 'professional'
@@ -18,23 +19,23 @@ const respond = (message: string, interactive: boolean): ChangeResponse => ({
 })
 
 const editDate: FieldEditor = async (phone) => {
-  await sendDateSelectionList(phone, 'Qual data você prefere? 👇')
-  return respond('Menu de datas enviado', true)
+  await sendDateSelectionList(phone, 'Qual dia fica melhor pra voce?')
+  return respond(getMenuSentCopy('datas'), true)
 }
 
 const editTime: FieldEditor = async (phone) => {
-  await sendTimeSlotSelectionList(phone, 'Qual horário você prefere? 👇')
-  return respond('Menu de horários enviado', true)
+  await sendTimeSlotSelectionList(phone, 'Qual horario fica melhor pra voce?')
+  return respond(getMenuSentCopy('horarios'), true)
 }
 
 const editService: FieldEditor = async (phone) => {
-  await sendServiceSelectionList(phone, 'Qual serviço você quer? 👇')
-  return respond('Menu de serviços enviado', true)
+  await sendServiceSelectionList(phone, 'Qual servico voce quer marcar?')
+  return respond(getMenuSentCopy('servicos'), true)
 }
 
 const editProfessional: FieldEditor = async (phone) => {
-  await sendProfessionalSelectionList(phone, 'Qual professional você prefere?')
-  return respond('Menu de barbeiros enviado', true)
+  await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+  return respond(getMenuSentCopy('barbeiros'), true)
 }
 
 const editNotes: FieldEditor = async (phone) => {
@@ -71,23 +72,23 @@ export const appointmentFieldEditors: Record<AppointmentEditField, FieldEditor> 
 type MissingFieldHandler = (phone: string, draft: IAppointmentValidationDraft) => Promise<{ message: string; interactive: boolean; draft: IAppointmentValidationDraft }>
 
 const askDate: MissingFieldHandler = async (phone, draft) => {
-  await sendDateSelectionList(phone, 'Qual data você prefere? 👇')
-  return { message: 'Menu de datas enviado', interactive: true, draft }
+  await sendDateSelectionList(phone, 'Qual dia fica melhor pra voce?')
+  return { message: getMenuSentCopy('datas'), interactive: true, draft }
 }
 
 const askTime: MissingFieldHandler = async (phone, draft) => {
-  await sendTimeSlotSelectionList(phone, 'Qual horário você prefere? 👇')
-  return { message: 'Menu de horários enviado', interactive: true, draft }
+  await sendTimeSlotSelectionList(phone, 'Qual horario fica melhor pra voce?')
+  return { message: getMenuSentCopy('horarios'), interactive: true, draft }
 }
 
 const askService: MissingFieldHandler = async (phone, draft) => {
-  await sendServiceSelectionList(phone, 'Qual serviço você quer? 👇')
-  return { message: 'Menu de serviços enviado', interactive: true, draft }
+  await sendServiceSelectionList(phone, 'Qual servico voce quer marcar?')
+  return { message: getMenuSentCopy('servicos'), interactive: true, draft }
 }
 
 const askProfessional: MissingFieldHandler = async (phone, draft) => {
-  await sendProfessionalSelectionList(phone, 'Qual professional você prefere?')
-  return { message: 'Menu de barbeiros enviado', interactive: true, draft }
+  await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+  return { message: getMenuSentCopy('barbeiros'), interactive: true, draft }
 }
 
 export const missingFieldHandlers: Record<AppointmentMissingField, MissingFieldHandler> = {

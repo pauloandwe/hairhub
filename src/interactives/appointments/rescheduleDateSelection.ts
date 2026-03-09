@@ -5,6 +5,7 @@ import { appointmentRescheduleDraftService } from '../../services/appointments/a
 import { professionalService } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const RESCHEDULE_DATE_NAMESPACE = 'RESCHEDULE_DATE_SELECTION'
 
@@ -15,13 +16,13 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     const appointment = appointmentRescheduleService.getSelectedAppointment(phone)
 
     if (!appointment) {
-      await sendWhatsAppMessage(phone, 'Não identifiquei qual agendamento vamos remarcar. Volte e selecione o agendamento primeiro.')
+      await sendWhatsAppMessage(phone, 'Perdi qual agendamento voce quer remarcar. Vamos escolher de novo?')
       return []
     }
 
     if (!appointment.professionalId || !appointment.serviceId) {
       console.warn('[RescheduleDateSelection] Missing professional/service for appointment:', appointment)
-      await sendWhatsAppMessage(phone, 'Esse agendamento não tem professional ou serviço vinculados. Não consigo sugerir novas datas.')
+      await sendWhatsAppMessage(phone, 'Nao consegui identificar os dados desse agendamento para te sugerir novas datas.')
       return []
     }
 
@@ -33,25 +34,24 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
       })
 
       if (!days.length) {
-        await sendWhatsAppMessage(phone, 'Não encontrei datas disponíveis para os próximos dias com esse professional.')
+        await sendWhatsAppMessage(phone, 'Nao achei novas datas livres com esse barbeiro nos proximos dias.')
       }
 
       return days
     } catch (error) {
       console.error('[RescheduleDateSelection] Error fetching available days:', error)
-      await sendWhatsAppMessage(phone, 'Não consegui carregar as datas disponíveis agora. Tente novamente mais tarde.')
+      await sendWhatsAppMessage(phone, 'Nao consegui carregar as novas datas agora. Tenta de novo em instantes?')
       return []
     }
   },
   ui: {
-    header: 'Escolha a Nova Data',
+    header: 'Escolha a nova data',
     sectionTitle: 'Datas Disponíveis',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver datas',
   },
-  defaultBody: 'Qual nova data você prefere?',
-  invalidSelectionMsg: 'Essa data não está mais disponível. Escolha outra, por favor.',
-  emptyListMessage: 'Nenhuma data disponível encontrada.',
+  defaultBody: 'Qual novo dia fica melhor pra voce?',
+  invalidSelectionMsg: 'Essa data nao esta mais livre. Vou te mostrar outras opcoes.',
+  emptyListMessage: 'Nao encontrei novas datas disponiveis agora.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
   descriptionBuilder: (item) => item.description,
@@ -59,15 +59,15 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     try {
       await appointmentRescheduleService.setSelectedDate(userId, item.id)
       await appointmentRescheduleDraftService.updateDraftField(userId, 'newDate', item.id)
-      await sendWhatsAppMessage(userId, `Data '${item.name}' selecionada.`)
+      await sendWhatsAppMessage(userId, getSelectionAck('newDate', item.name))
       await tryContinueRegistration(userId)
     } catch (error) {
       console.error('[RescheduleDateSelection] Error handling selected date:', error)
-      await sendWhatsAppMessage(userId, 'Não consegui usar essa data no momento. Tente novamente mais tarde.')
+      await sendWhatsAppMessage(userId, 'Nao consegui usar essa data agora. Tenta de novo em instantes?')
     }
   },
 })
 
-export async function sendRescheduleDateSelectionList(userId: string, bodyMsg = 'Qual data você prefere?', offset = 0) {
+export async function sendRescheduleDateSelectionList(userId: string, bodyMsg = 'Qual novo dia fica melhor pra voce?', offset = 0) {
   await dateSelectionFlow.sendList(userId, bodyMsg, offset)
 }

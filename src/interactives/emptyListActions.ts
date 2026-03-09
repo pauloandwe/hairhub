@@ -1,14 +1,15 @@
 import { sendWhatsAppInteractiveButtons, sendWhatsAppMessage } from '../api/meta.api'
 import { appendUserTextAuto } from '../services/history-router.service'
 import { buildNamespacedId, registerPendingListInteraction } from '../utils/interactive'
+import { getInteractiveCopy } from '../utils/conversation-copy'
 import { cancelActiveRegistration } from './followup'
 import { UiDefaults } from './types'
 
 export const EMPTY_LIST_RETRY_ACTION = 'EMPTY_RETRY'
 export const EMPTY_LIST_CANCEL_ACTION = 'EMPTY_CANCEL'
-export const EMPTY_LIST_BUTTON_BODY = 'Não encontrei opções agora. Quer tentar novamente ou cancelar o cadastro?'
-export const EMPTY_LIST_RETRY_LABEL = 'Listar novamente'
-export const EMPTY_LIST_CANCEL_LABEL = 'Cancelar cadastro'
+export const EMPTY_LIST_BUTTON_BODY = getInteractiveCopy('retryEmptyList')
+export const EMPTY_LIST_RETRY_LABEL = 'Tentar de novo'
+export const EMPTY_LIST_CANCEL_LABEL = 'Parar por aqui'
 
 interface EmptyListActionsParams {
   userId: string
@@ -31,7 +32,7 @@ export async function sendEmptyListActions({ userId, namespace, type, emptyMessa
   await sendWhatsAppInteractiveButtons({
     to: userId,
     header: ui.header,
-    footer: ui.footer ?? 'Inttegra Assistente',
+    footer: ui.footer,
     body: EMPTY_LIST_BUTTON_BODY,
     buttons: [
       { id: buildNamespacedId(namespace, EMPTY_LIST_RETRY_ACTION), title: EMPTY_LIST_RETRY_LABEL },
@@ -53,7 +54,7 @@ export async function handleEmptyListAction({ userId, value, accepted, onRetry }
   }
 
   if (!accepted) {
-    await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+    await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
     if (value === EMPTY_LIST_RETRY_ACTION) {
       await onRetry()
     }

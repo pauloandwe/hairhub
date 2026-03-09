@@ -49,7 +49,7 @@ const DEFAULT_EXTERNAL_API_ERROR_MESSAGE = getAppErrorMessage(AppErrorCodes.DEFA
 
 type EditRecordFieldResponse = ChangeResponse & { error?: string }
 
-interface FlowMessages {
+export interface FlowMessages {
   confirmation: string
   creationSuccess: string
   creationResponse: string

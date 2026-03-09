@@ -4,6 +4,7 @@ import { UsersService } from '../services/users/users.service'
 import { setUserContext } from '../env.config'
 import { sendFarmSelectionList } from './farmSelection'
 import { createSelectionFlow } from './flows'
+import { getSelectionAck } from '../utils/conversation-copy'
 
 export const INSTITUTION_NAMESPACE = 'INSTITUTION'
 
@@ -16,17 +17,16 @@ const institutionFlow = createSelectionFlow<{ id: string; name: string }>({
     return institutions.map((i) => ({ id: String(i.id), name: i.name }))
   },
   ui: {
-    header: 'Escolha a Instituição',
+    header: 'Escolha a instituicao',
     sectionTitle: 'Instituições',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Antes de continuar preciso que você selecione qual instituição deseja consultar.',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhuma instituição encontrada',
+  defaultBody: 'Antes de continuar, me fala qual instituicao voce quer consultar.',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei instituicoes por aqui.',
   pageLimit: 10,
   titleBuilder: (i, idx, base) => `${base + idx + 1}. ${i.name}`,
-  descriptionBuilder: () => 'Selecione esta instituição',
+  descriptionBuilder: () => 'Escolher essa instituicao',
   onSelected: async ({ userId, item }) => {
     try {
       const usersService = new UsersService()
@@ -37,13 +37,13 @@ const institutionFlow = createSelectionFlow<{ id: string; name: string }>({
 
     await setUserContext(userId, { farmId: '', farmName: '' })
 
-    await sendWhatsAppMessage(userId, `Instituição '${item.name}' selecionada. Agora selecione a fazenda.`)
+    await sendWhatsAppMessage(userId, `${getSelectionAck('generic', item.name)} Agora me fala qual fazenda voce quer usar.`)
 
     await sendFarmSelectionList(userId)
   },
 })
 
-export async function sendInstitutionSelectionList(userId: string, institutions?: { id: string | number; name: string }[], bodyMsg = 'Antes de continuar preciso que você selecione qual instituição deseja consultar.', offset = 0) {
+export async function sendInstitutionSelectionList(userId: string, institutions?: { id: string | number; name: string }[], bodyMsg = 'Antes de continuar, me fala qual instituicao voce quer consultar.', offset = 0) {
   const normalized = (institutions || []).map((i) => ({
     id: String(i.id),
     name: i.name,

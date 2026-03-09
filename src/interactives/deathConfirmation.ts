@@ -4,6 +4,7 @@ import { registerInteractiveSelectionHandler } from './registry'
 import { loadDeathDraft } from '../services/livestocks/death-draft.service'
 import { deathFunctions } from '../functions/livestocks/death/death.functions'
 import { appendUserTextAuto } from '../services/history-router.service'
+import { getInteractiveCopy } from '../utils/conversation-copy'
 
 export const DEATH_CONFIRM_NAMESPACE = 'DEATH_CONFIRM'
 
@@ -17,10 +18,10 @@ export async function sendDeathConfirmationButtons(userId: string, summaryText?:
 
   await sendWhatsAppInteractiveButtons({
     to: userId,
-    body: 'Tudo pronto pra confirmar?',
+    body: getInteractiveCopy('confirmAction'),
     buttons: [
       { id: confirmId, title: 'Confirmar' },
-      { id: cancelId, title: 'Cancelar' },
+      { id: cancelId, title: 'Agora nao' },
     ],
   })
 
@@ -34,7 +35,7 @@ export async function sendDeathConfirmationButtons(userId: string, summaryText?:
 
 registerInteractiveSelectionHandler(DEATH_CONFIRM_NAMESPACE, async ({ userId, value, accepted }) => {
   if (!accepted) {
-    await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+    await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
     const draft = await loadDeathDraft(userId)
     if (!draft || !draft.quantity) {
       return

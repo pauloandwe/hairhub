@@ -8,6 +8,7 @@ import { simplifiedExpenseFunctions } from '../../functions/finances/simplifiedE
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const PAYMENT_METHOD_NAMESPACE = 'PAYMENT_METHOD'
 
@@ -18,17 +19,16 @@ const paymentMethodFlow = createSelectionFlow<SelectionItem>({
     return simplifiedExpenseService.listPaymentMethods(phone)
   },
   ui: {
-    header: 'Escolha o método de pagamento',
+    header: 'Escolha o metodo de pagamento',
     sectionTitle: 'Métodos de pagamento',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Antes de continuar, selecione o método de pagamento desejado.',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhuma forma de pagamento encontrada',
+  defaultBody: 'Qual forma de pagamento voce quer usar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei formas de pagamento por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este método de pagamento',
+  descriptionBuilder: () => 'Escolher essa forma de pagamento',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -40,7 +40,7 @@ const paymentMethodFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.SimplifiedExpense) {
       await simplifiedExpenseService.updateDraftField(userId, SimplifiedExpenseField.PaymentMethod, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Método de pagamento '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -56,6 +56,6 @@ const paymentMethodFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendPaymentMethodList(userId: string, bodyMsg = 'Antes de continuar, selecione o método de pagamento.', offset = 0) {
+export async function sendPaymentMethodList(userId: string, bodyMsg = 'Qual forma de pagamento voce quer usar?', offset = 0) {
   await paymentMethodFlow.sendList(userId, bodyMsg, offset)
 }

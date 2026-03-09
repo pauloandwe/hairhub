@@ -1,5 +1,6 @@
 import { markMessageAsRead, sendWhatsAppInteractiveList, sendWhatsAppMessage } from '../api/meta.api'
 import { MORE_ACTION_TOKEN, buildNamespacedId, buildPaginatedListRows, registerPendingListInteraction } from '../utils/interactive'
+import { getInteractiveCopy } from '../utils/conversation-copy'
 import { registerInteractiveSelectionHandler } from './registry'
 import { getUserContextSync } from '../env.config'
 import { UiDefaults } from './types'
@@ -120,7 +121,7 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       const availableRowSlots = MAX_WHATSAPP_LIST_ROWS - extraActionCount
       if (availableRowSlots <= 0) {
         console.error(`[SelectionFlow] Unable to render list for ${config.namespace}: no row slots available after reserving extra actions.`)
-        await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+        await sendWhatsAppMessage(userId, config.invalidSelectionMsg || getInteractiveCopy('loadError'))
         return
       }
 
@@ -175,8 +176,8 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       await sendWhatsAppInteractiveList({
         to: userId,
         header: config.ui.header,
-        body: bodyMsg || config.defaultBody || 'Selecione uma opção',
-        footer: config.ui.footer ?? 'Inttegra Assistente',
+        body: bodyMsg || config.defaultBody || getInteractiveCopy('chooseOption'),
+        footer: config.ui.footer,
         buttonLabel: config.ui.buttonLabel ?? 'Ver opções',
         sectionTitle: config.ui.sectionTitle,
         rows,
@@ -199,7 +200,7 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       console.error(`[SelectionFlow] Erro ao carregar lista em ${config.namespace}:`, error)
       const handled = await handleFlowError(userId, error, 'list')
       if (!handled) {
-        await sendWhatsAppMessage(userId, 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+        await sendWhatsAppMessage(userId, getInteractiveCopy('loadError'))
       }
     }
   }
@@ -208,14 +209,14 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
     try {
       if (String(value).startsWith(`${MORE_ACTION_TOKEN}:`)) {
         const nextOffset = parseInt(String(value).split(':')[1] || '0', 10) || 0
-        await sendList(userId, config.defaultBody || 'Selecione uma opção', nextOffset)
+        await sendList(userId, config.defaultBody || getInteractiveCopy('chooseOption'), nextOffset)
         return
       }
 
       if (extraActionHandlers.has(String(value))) {
         if (!accepted) {
-          await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
-          await sendList(userId, config.defaultBody || 'Selecione uma opção')
+          await sendWhatsAppMessage(userId, config.invalidSelectionMsg || getInteractiveCopy('expiredOption'))
+          await sendList(userId, config.defaultBody || getInteractiveCopy('chooseOption'))
           return
         }
 
@@ -239,8 +240,8 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
           console.error(`[SelectionFlow] Erro ao recarregar lista em ${config.namespace}:`, error)
           const handled = await handleFlowError(userId, error, 'selection')
           if (!handled) {
-            await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
-            await sendList(userId, config.defaultBody || 'Selecione uma opção')
+            await sendWhatsAppMessage(userId, config.invalidSelectionMsg || getInteractiveCopy('expiredOption'))
+            await sendList(userId, config.defaultBody || getInteractiveCopy('chooseOption'))
           }
           return
         }
@@ -248,8 +249,8 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       }
 
       if (!accepted || !selected) {
-        await sendWhatsAppMessage(userId, config.invalidSelectionMsg || 'Opa, essa opção expirou')
-        await sendList(userId, config.defaultBody || 'Selecione uma opção')
+        await sendWhatsAppMessage(userId, config.invalidSelectionMsg || getInteractiveCopy('expiredOption'))
+        await sendList(userId, config.defaultBody || getInteractiveCopy('chooseOption'))
         return
       }
 
@@ -265,7 +266,7 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       overrideItemCache.delete(userId)
     } catch (error) {
       console.error(`[SelectionFlow] Erro ao processar seleção em ${config.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui processar sua seleção no momento. Por favor, tente novamente.')
+      await sendWhatsAppMessage(userId, 'Nao consegui processar isso agora. Tenta mais uma vez?')
     }
   })
 
@@ -330,8 +331,8 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       await sendWhatsAppInteractiveList({
         to: userId,
         header: config.step1.ui.header,
-        body: bodyMsg || config.step1.defaultBody || 'Selecione uma opção',
-        footer: config.step1.ui.footer ?? 'Inttegra Assistente',
+        body: bodyMsg || config.step1.defaultBody || getInteractiveCopy('chooseOption'),
+        footer: config.step1.ui.footer,
         buttonLabel: config.step1.ui.buttonLabel ?? 'Ver opções',
         sectionTitle: config.step1.ui.sectionTitle,
         rows,
@@ -354,7 +355,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       })
     } catch (error) {
       console.error(`[TwoStepSelectionFlow] Erro ao carregar lista da etapa 1 em ${config.step1.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('loadError'))
     }
   }
 
@@ -380,8 +381,8 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       await sendWhatsAppInteractiveList({
         to: userId,
         header: config.step2.ui.header,
-        body: bodyMsg || config.step2.defaultBody || 'Selecione uma opção',
-        footer: config.step2.ui.footer ?? 'Inttegra Assistente',
+        body: bodyMsg || config.step2.defaultBody || getInteractiveCopy('chooseOption'),
+        footer: config.step2.ui.footer,
         buttonLabel: config.step2.ui.buttonLabel ?? 'Ver opções',
         sectionTitle: config.step2.ui.sectionTitle,
         rows,
@@ -404,7 +405,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       })
     } catch (error) {
       console.error(`[TwoStepSelectionFlow] Erro ao carregar lista da etapa 2 em ${config.step2.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui carregar as opções no momento. Por favor, tente novamente.')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('loadError'))
     }
   }
 
@@ -412,7 +413,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
     try {
       if (String(value).startsWith(`${MORE_ACTION_TOKEN}:`)) {
         const nextOffset = parseInt(String(value).split(':')[1] || '0', 10) || 0
-        await sendStep1List(userId, config.step1.defaultBody || 'Selecione uma opção', nextOffset)
+        await sendStep1List(userId, config.step1.defaultBody || getInteractiveCopy('chooseOption'), nextOffset)
         return
       }
 
@@ -420,7 +421,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       const selected = items.find((it) => String(it.id) === String(value))
 
       if (!accepted || !selected) {
-        await sendWhatsAppMessage(userId, config.step1.invalidSelectionMsg || 'Opa, essa opção expirou')
+        await sendWhatsAppMessage(userId, config.step1.invalidSelectionMsg || getInteractiveCopy('expiredOption'))
         await sendStep1List(userId, config.step1.defaultBody)
         return
       }
@@ -430,11 +431,11 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
         await config.step1.onSelected({ userId, item: selected, messageId })
       }
 
-      const bodyForStep2 = config.step2.buildBodyAfterStep1?.(selected) || config.step2.defaultBody || 'Selecione uma opção'
+      const bodyForStep2 = config.step2.buildBodyAfterStep1?.(selected) || config.step2.defaultBody || getInteractiveCopy('chooseOption')
       await sendStep2List(userId, selected.id, bodyForStep2)
     } catch (error) {
       console.error(`[TwoStepSelectionFlow] Erro ao processar seleção da etapa 1 em ${config.step1.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui processar sua seleção no momento. Por favor, tente novamente.')
+      await sendWhatsAppMessage(userId, 'Nao consegui processar isso agora. Tenta mais uma vez?')
     }
   })
 
@@ -444,17 +445,17 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
         const nextOffset = parseInt(String(value).split(':')[1] || '0', 10) || 0
         const parentId = config.step2.getParentId(userId)
         if (!parentId) {
-          await sendWhatsAppMessage(userId, 'Não encontrei o contexto da etapa anterior. Recomeçando')
+          await sendWhatsAppMessage(userId, 'Perdi a etapa anterior daqui. Vou te mandar de novo.')
           await sendStep1List(userId, config.step1.defaultBody)
           return
         }
-        await sendStep2List(userId, parentId, config.step2.defaultBody || 'Selecione uma opção', nextOffset)
+        await sendStep2List(userId, parentId, config.step2.defaultBody || getInteractiveCopy('chooseOption'), nextOffset)
         return
       }
 
       const parentId = config.step2.getParentId(userId)
       if (!parentId) {
-        await sendWhatsAppMessage(userId, 'Contexto ausente. Reenviando a primeira seleção')
+        await sendWhatsAppMessage(userId, 'Perdi esse contexto aqui. Vou recomeçar com voce.')
         await sendStep1List(userId, config.step1.defaultBody)
         return
       }
@@ -463,8 +464,8 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       const selected = items.find((it) => String(it.id) === String(value))
 
       if (!accepted || !selected) {
-        await sendWhatsAppMessage(userId, config.step2.invalidSelectionMsg || 'Opa, essa opção expirou')
-        await sendStep2List(userId, parentId, config.step2.defaultBody || 'Selecione uma opção')
+        await sendWhatsAppMessage(userId, config.step2.invalidSelectionMsg || getInteractiveCopy('expiredOption'))
+        await sendStep2List(userId, parentId, config.step2.defaultBody || getInteractiveCopy('chooseOption'))
         return
       }
 
@@ -490,7 +491,7 @@ export function createTwoStepSelectionFlow<G extends { id: string; name?: string
       }
     } catch (error) {
       console.error(`[TwoStepSelectionFlow] Erro ao processar seleção da etapa 2 em ${config.step2.namespace}:`, error)
-      await sendWhatsAppMessage(userId, 'Não consegui processar sua seleção no momento. Por favor, tente novamente.')
+      await sendWhatsAppMessage(userId, 'Nao consegui processar isso agora. Tenta mais uma vez?')
     }
   })
 

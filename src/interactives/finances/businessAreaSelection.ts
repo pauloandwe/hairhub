@@ -8,6 +8,7 @@ import { simplifiedExpenseFunctions } from '../../functions/finances/simplifiedE
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const BUSINESS_AREA_NAMESPACE = 'BUSINESS_AREA_SELECTION'
 
@@ -18,17 +19,16 @@ const businessAreaFlow = createSelectionFlow<SelectionItem>({
     return simplifiedExpenseService.listBusinessAreas(userId)
   },
   ui: {
-    header: 'Escolha a Área de Negócio',
+    header: 'Escolha a area de negocio',
     sectionTitle: 'Área de Negócio',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Antes de continuar, selecione a area de negócio desejada.',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhuma área de negócio encontrada',
+  defaultBody: 'Qual area de negocio voce quer usar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei areas de negocio por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar esta área de negócio',
+  descriptionBuilder: () => 'Escolher essa area de negocio',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -40,7 +40,7 @@ const businessAreaFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.SimplifiedExpense) {
       await simplifiedExpenseService.updateDraftField(userId, SimplifiedExpenseField.BusinessArea, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Area de negócio '${item.name}' selecionada.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -56,6 +56,6 @@ const businessAreaFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendBusinessAreaSelectionList(userId: string, bodyMsg = 'Antes de continuar, selecione a área de negócio.', offset = 0) {
+export async function sendBusinessAreaSelectionList(userId: string, bodyMsg = 'Qual area de negocio voce quer usar?', offset = 0) {
   await businessAreaFlow.sendList(userId, bodyMsg, offset)
 }

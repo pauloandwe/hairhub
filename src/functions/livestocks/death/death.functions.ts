@@ -8,6 +8,7 @@ import { Plan, SubPlan } from '../../../enums/plans.enums'
 import { log } from 'console'
 import { sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../../interactives/genericConfirmation'
 import { appendUserTextAuto } from '../../../services/history-router.service'
+import { createHumanFlowMessages } from '../../../utils/conversation-copy'
 
 type DeathEditField = `${DeathField.Quantity}` | `${DeathField.DeathDate}` | `${DeathField.Age}` | `${DeathField.Category}` | `${DeathField.DeathCause}` | `${DeathField.AnimalLot}` | `${DeathField.Retreat}` | `${DeathField.Area}`
 
@@ -21,28 +22,23 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
       flowType: FlowType.Death,
       fieldEditors: deathFieldEditors,
       missingFieldHandlers,
-      messages: {
-        confirmation: 'Confira o resumo e confirma pra mim?',
-        creationSuccess: 'Morte registrada com sucesso!',
-        creationResponse: 'Tudo certo, registro criado.',
-        cancelSent: 'Beleza, cadastro cancelado.',
-        cancelResponse: 'Operação cancelada.',
-        missingDataDuringConfirm: 'Faltam alguns dados. Bora preencher?',
-        invalidField: 'Esse campo não dá pra alterar pelo menu. Me manda uma mensagem com o novo valor.',
-        editModeIntro: 'Bora editar o registro. Me diz o que você quer mudar.',
-        editModeExamples: ['"Mudar quantidade pra 3"', '"Alterar a causa da morte"', '"Corrigir o lote"'],
-        editRecordNotFound: 'Não achei o registro pra editar.',
-        editFieldUpdateError: 'Não consegui alterar esse campo.',
-        editPromptFallback: 'Qual a informação nova?',
-        editDirectChangeSuccess: 'Dados atualizados.',
-        editUpdateSuccess: 'Registro atualizado!',
-        editUpdateError: 'Erro ao atualizar. Tenta de novo?',
-        deleteRecordNotFound: 'Não achei o registro pra deletar.',
-        deleteSuccess: 'Registro deletado com sucesso!',
-        deleteError: 'Erro ao deletar. Tenta de novo?',
-        buttonHeaderSuccess: 'Morte cadastrada!',
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso confirmar esse registro?',
+        creationSuccess: 'Pronto, esse registro foi salvo.',
+        creationResponse: 'Perfeito, ja deixei esse registro salvo.',
+        cancelSent: 'Tudo bem, parei esse cadastro por aqui.',
+        cancelResponse: 'Certo, nao segui com esse cadastro.',
+        missingDataDuringConfirm: 'Ainda falta um detalhe. Vou te pedir agora.',
+        editModeIntro: 'Beleza. Me fala o que voce quer ajustar nesse registro.',
+        editModeExamples: ['"Mudar quantidade para 3"', '"Trocar a causa"', '"Corrigir o lote"'],
+        editRecordNotFound: 'Nao achei esse registro por aqui.',
+        editUpdateSuccess: 'Pronto, atualizei esse registro.',
+        deleteRecordNotFound: 'Nao achei esse registro para remover.',
+        deleteSuccess: 'Pronto, esse registro foi removido.',
+        deleteError: 'Nao consegui remover esse registro agora. Tenta de novo?',
+        buttonHeaderSuccess: 'Registro salvo',
         useNaturalLanguage: false,
-      },
+      }),
       accessControl: {
         allowedPlanIds: [Plan.BASIC, Plan.ADVANCED],
         notAllowedSubPlansIds: [SubPlan.INDIVIDUAL],
@@ -100,9 +96,9 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     await sendEditDeleteButtons({
       namespace,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Excluir',
       summaryText: summary,
       header: this.options.messages.buttonHeaderSuccess || 'Pronto!',
       onEdit: async (userId) => {
@@ -120,9 +116,9 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     await sendEditDeleteButtonsAfterError({
       namespace: this.editDeleteErrorNamespace,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Excluir',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,
@@ -141,9 +137,9 @@ class DeathFlowService extends GenericCrudFlow<DeathValidationDraft, DeathCreati
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Parar por aqui',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,

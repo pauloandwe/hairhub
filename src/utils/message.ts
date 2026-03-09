@@ -1,31 +1,27 @@
 import { getBusinessNameForPhone, getUserContextSync } from '../env.config'
-import { FlowTypeTranslation, FlowStep } from '../enums/generic.enum'
+import { FlowStep } from '../enums/generic.enum'
 
 export function buildAssistantTitle(farmName: string, flowType?: string, flowStep?: string): string {
-  if (flowType && flowStep) {
-    const typeTranslation = FlowTypeTranslation[flowType as keyof typeof FlowTypeTranslation]
-
-    if (flowStep === FlowStep.Creating && typeTranslation) {
-      const titleText = farmName ? `Novo ${typeTranslation} - ${farmName}` : `Novo ${typeTranslation}`
-      return `*${titleText}*`
-    }
-
-    if (flowStep === FlowStep.Editing && typeTranslation) {
-      const titleText = farmName ? `Edição de ${typeTranslation} - ${farmName}` : `Edição de ${typeTranslation}`
-      return `*${titleText}*`
-    }
-  }
-
   if (farmName) {
-    return `*Assistente de Business - ${farmName}*`
+    if (flowType && flowStep === FlowStep.Editing) {
+      return `*${farmName}*`
+    }
+
+    if (flowType && flowStep === FlowStep.Creating) {
+      return `*${farmName}*`
+    }
+
+    return `*${farmName}*`
   }
 
-  return '*Assistente de Business*'
+  return ''
 }
 
 export function stripAssistantTitle(text: string): string {
   if (!text) return text
-  return text.replace(/^(\*?(?:Assistente de Business|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
+  return text
+    .replace(/^(\*?(?:Assistente de Business|Novo|Edição de)\s*(?:de\s+)?[^\n]*\*?\n)+/i, '')
+    .replace(/^\*[^\n]{2,80}\*\n/, '')
 }
 
 export function sanitizeOutgoingText(text: string): string {
@@ -57,6 +53,7 @@ export function withAssistantTitle(text: string, farmName?: string, flowType?: s
   if (!farmName && !flowType) return sanitized
 
   const title = buildAssistantTitle(farmName || '', flowType, flowStep)
+  if (!title) return sanitized
   return `${title}\n${sanitized}`.trim()
 }
 

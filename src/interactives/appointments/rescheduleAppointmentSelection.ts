@@ -5,6 +5,7 @@ import { appointmentRescheduleDraftService } from '../../services/appointments/a
 import { SelectionItem } from '../../services/generic/generic.types'
 import { DateFormatter } from '../../utils/date'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 const buildTitle = (startDate: string): string => {
   const dayMonth = DateFormatter.formatToDayMonth(startDate) ?? 'Data indefinida'
@@ -34,7 +35,7 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
     const appointments = appointmentRescheduleService.getPendingAppointmentsFromState(phone)
 
     if (!appointments.length) {
-      await sendWhatsAppMessage(phone, 'Não encontrei próximos agendamentos elegíveis para remarcação.')
+      await sendWhatsAppMessage(phone, 'Nao encontrei horarios em aberto para remarcar por aqui.')
       return []
     }
 
@@ -47,14 +48,13 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
     }))
   },
   ui: {
-    header: 'Escolha o Agendamento',
+    header: 'Escolha o agendamento',
     sectionTitle: 'Próximos Agendamentos',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver horários',
   },
-  defaultBody: 'Qual agendamento você quer remarcar?',
-  invalidSelectionMsg: 'Essa opção não é mais válida. Escolha novamente, por favor.',
-  emptyListMessage: 'Você não tem próximos agendamentos elegíveis para remarcação.',
+  defaultBody: 'Qual horario voce quer remarcar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mostrar seus horarios de novo.',
+  emptyListMessage: 'Voce nao tem horarios em aberto para remarcar agora.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}`,
   descriptionBuilder: (item) => buildDescription(item, { serviceName: item.serviceName, professionalName: item.professionalName }),
@@ -64,15 +64,15 @@ const appointmentSelectionFlow = createSelectionFlow<SelectionItem & { serviceNa
       await appointmentRescheduleService.selectAppointment(userId, appointmentId)
       await appointmentRescheduleDraftService.updateDraftField(userId, 'appointmentId', appointmentId)
       await appointmentRescheduleDraftService.hydrateSelectedAppointment(userId)
-      await sendWhatsAppMessage(userId, `Agendamento '${item.name}' selecionado.`)
+      await sendWhatsAppMessage(userId, getSelectionAck('appointment', item.name))
       await tryContinueRegistration(userId)
     } catch (error) {
       console.error('[RescheduleAppointmentSelection] Erro ao selecionar agendamento:', error)
-      await sendWhatsAppMessage(userId, 'Não consegui selecionar esse agendamento agora. Tente novamente mais tarde.')
+      await sendWhatsAppMessage(userId, 'Nao consegui separar esse agendamento agora. Tenta de novo em instantes?')
     }
   },
 })
 
-export async function sendPendingAppointmentSelectionList(userId: string, bodyMsg = 'Qual agendamento você quer remarcar?', offset = 0) {
+export async function sendPendingAppointmentSelectionList(userId: string, bodyMsg = 'Qual horario voce quer remarcar?', offset = 0) {
   await appointmentSelectionFlow.sendList(userId, bodyMsg, offset)
 }

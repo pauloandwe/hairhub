@@ -56,7 +56,7 @@ export class SimplifiedExpenseContextService extends GenericContextService<Simpl
     const query = incomingMessage.trim()
 
     if (!query) {
-      await sendWhatsAppMessage(userId, 'Não entendi. Informe o índice ou parte do nome do centro de custo para pesquisar.')
+      await sendWhatsAppMessage(userId, 'Nao entendi. Me manda o indice ou parte do nome do centro de custo.')
       return
     }
 
@@ -64,11 +64,11 @@ export class SimplifiedExpenseContextService extends GenericContextService<Simpl
       const results = await simplifiedExpenseService.searchCostCenters(userId, query)
 
       if (results.length === 0) {
-        await sendWhatsAppMessage(userId, `Não encontrei centros de custo para "${query}". Tente outro nome ou índice.`)
+        await sendWhatsAppMessage(userId, `Nao encontrei centro de custo para "${query}". Se quiser, tenta outro nome ou indice.`)
         return
       }
 
-      await sendCostCenterSelectionList(userId, `Encontrei ${results.length} centro(s) de custo para "${query}". Selecione uma opção:`, 0, results)
+      await sendCostCenterSelectionList(userId, `Encontrei ${results.length} opcao(oes) para "${query}". Me diz qual voce quer usar.`, 0, results)
       await setUserContext(userId, {
         costCenterSearch: {
           awaitingQuery: false,
@@ -77,7 +77,7 @@ export class SimplifiedExpenseContextService extends GenericContextService<Simpl
       })
     } catch (error) {
       console.error('[SimplifiedExpenseContext] Erro durante busca de centros de custo:', error)
-      await sendWhatsAppMessage(userId, 'Não consegui buscar os centros de custo agora. Tente novamente em instantes.')
+      await sendWhatsAppMessage(userId, 'Nao consegui buscar os centros de custo agora. Tenta de novo em instantes?')
     }
   }
 

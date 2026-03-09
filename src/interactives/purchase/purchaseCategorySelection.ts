@@ -6,6 +6,7 @@ import { SelectArrayItem } from '../../helpers/converters/converters.type'
 import { purchaseService } from '../../services/livestocks/Purchase/purchaseService'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const PURCHASE_CATEGORY_NAMESPACE = 'PURCHASE_CATEGORY'
 
@@ -16,17 +17,16 @@ const purchaseCategoriesFlow = createSelectionFlow<SelectArrayItem>({
     return purchaseService.listPurchaseCategories()
   },
   ui: {
-    header: 'Por favor, selecione a categoria desejada.',
+    header: 'Escolha a categoria',
     sectionTitle: 'Categorias',
-    footer: 'Inttegra',
     buttonLabel: 'Ver opções',
   },
   defaultBody: 'Bora selecionar a categoria para essa compra.',
-  invalidSelectionMsg: 'Opa, essa opção expirou. Deixe eu enviar de novo pra você.',
-  emptyListMessage: 'Nenhuma categoria encontrada',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei categorias por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar',
+  descriptionBuilder: () => 'Escolher',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
     const ctx = getUserContextSync(userId)
@@ -36,7 +36,7 @@ const purchaseCategoriesFlow = createSelectionFlow<SelectArrayItem>({
       purchaseCategoryName: item.name,
     })
 
-    await sendWhatsAppMessage(userId, `Beleza! Categoria '${item.name}' já anotada.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('category', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -48,6 +48,6 @@ const purchaseCategoriesFlow = createSelectionFlow<SelectArrayItem>({
   },
 })
 
-export async function sendPurchaseCategoriesList(userId: string, bodyMsg = 'Antes de continuar, selecione a categoria desejada.', offset = 0) {
+export async function sendPurchaseCategoriesList(userId: string, bodyMsg = 'Qual categoria voce quer usar?', offset = 0) {
   await purchaseCategoriesFlow.sendList(userId, bodyMsg, offset)
 }

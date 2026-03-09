@@ -7,6 +7,7 @@ import { appendUserTextAuto } from '../../../services/history-router.service'
 import { appointmentCancellationService } from '../../../services/appointments/appointment-cancellation.service'
 import { customerAppointmentsService } from '../../../services/appointments/customer-appointments.service'
 import { sendWhatsAppMessage } from '../../../api/meta.api'
+import { createHumanFlowMessages } from '../../../utils/conversation-copy'
 
 type AppointmentCancellationEditField = `${AppointmentCancellationField}`
 
@@ -19,28 +20,28 @@ class AppointmentCancellationFlowService extends GenericCrudFlow<AppointmentCanc
       flowType: FlowType.AppointmentCancellation,
       fieldEditors: appointmentCancellationFieldEditors,
       missingFieldHandlers: appointmentCancellationMissingFieldHandlers,
-      messages: {
-        confirmation: 'Confirma o cancelamento desse horário?',
-        creationSuccess: 'Agendamento cancelado com sucesso!',
-        creationResponse: 'Tudo certo, agendamento cancelado.',
-        cancelSent: 'Beleza, cancelamento interrompido.',
-        cancelResponse: 'Operação cancelada.',
-        missingDataDuringConfirm: 'Falta escolher qual agendamento será cancelado.',
-        invalidField: 'Esse campo não pode ser alterado por aqui.',
-        editModeIntro: 'Me diga qual agendamento você quer cancelar.',
-        editModeExamples: ['"Cancelar o horário de amanhã"', '"Escolher outro agendamento"'],
-        editRecordNotFound: 'Não achei o agendamento para cancelar.',
-        editFieldUpdateError: 'Não consegui alterar o agendamento selecionado.',
-        editPromptFallback: 'Qual agendamento você quer cancelar?',
-        editDirectChangeSuccess: 'Seleção atualizada.',
-        editUpdateSuccess: 'Seleção atualizada.',
-        editUpdateError: 'Erro ao atualizar a seleção. Tenta de novo?',
-        deleteRecordNotFound: 'Não achei o agendamento para cancelar.',
-        deleteSuccess: 'Agendamento cancelado com sucesso!',
-        deleteError: 'Erro ao cancelar o agendamento. Tenta de novo?',
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso cancelar esse horario?',
+        creationSuccess: 'Pronto, esse horario foi cancelado.',
+        creationResponse: 'Tudo certo, ja deixei esse cancelamento feito.',
+        cancelSent: 'Tudo bem, nao cancelei nada por aqui.',
+        cancelResponse: 'Certo, parei esse cancelamento.',
+        missingDataDuringConfirm: 'Me mostra primeiro qual horario voce quer cancelar.',
+        invalidField: 'Esse item eu nao consigo mudar por aqui.',
+        editModeIntro: 'Me fala qual horario voce quer cancelar.',
+        editModeExamples: ['"Cancelar o horario de amanha"', '"Escolher outro agendamento"'],
+        editRecordNotFound: 'Nao achei esse agendamento para cancelar.',
+        editFieldUpdateError: 'Nao consegui trocar o horario selecionado agora.',
+        editPromptFallback: 'Qual horario voce quer cancelar?',
+        editDirectChangeSuccess: 'Perfeito, atualizei a selecao.',
+        editUpdateSuccess: 'Perfeito, atualizei a selecao.',
+        editUpdateError: 'Nao consegui atualizar essa selecao agora. Tenta de novo?',
+        deleteRecordNotFound: 'Nao achei esse agendamento para cancelar.',
+        deleteSuccess: 'Pronto, esse horario foi cancelado.',
+        deleteError: 'Nao consegui cancelar esse horario agora. Tenta de novo?',
         buttonHeaderSuccess: 'Cancelamento pronto',
         useNaturalLanguage: false,
-      },
+      }),
       accessControl: {
         deniedMessage: 'Esse plano ainda não tem essa funcionalidade.',
       },
@@ -72,7 +73,7 @@ class AppointmentCancellationFlowService extends GenericCrudFlow<AppointmentCanc
 
       return super.startRegistration({ phone })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não consegui iniciar o cancelamento agora.'
+      const message = error instanceof Error ? error.message : 'Nao consegui abrir esse cancelamento agora.'
       await sendWhatsAppMessage(phone, message)
       return this.buildResponse(message, false)
     }
@@ -120,9 +121,9 @@ class AppointmentCancellationFlowService extends GenericCrudFlow<AppointmentCanc
     await sendConfirmationButtons({
       namespace: this.confirmationNamespace,
       userId: phone,
-      message: 'Deseja mesmo cancelar esse horário?',
+      message: 'Se estiver tudo certo, eu cancelo esse horario para voce.',
       confirmLabel: 'Confirmar',
-      cancelLabel: 'Voltar',
+      cancelLabel: 'Agora nao',
       summaryText: summary,
       onConfirm: async (userId) => {
         await appendUserTextAuto(userId, 'Confirmar cancelamento')
@@ -137,7 +138,7 @@ class AppointmentCancellationFlowService extends GenericCrudFlow<AppointmentCanc
   }
 
   protected async sendEditDeleteOptions(phone: string): Promise<void> {
-    await sendWhatsAppMessage(phone, 'Tudo certo, horário cancelado.')
+    await sendWhatsAppMessage(phone, 'Pronto, esse horario ja foi cancelado.')
   }
 
   protected async sendEditDeleteOptionsAfterError(): Promise<void> {}

@@ -7,6 +7,7 @@ import { IPurchaseCreationPayload, IPurchaseValidationDraft, PurchaseEditField, 
 import { purchaseService } from '../../../services/livestocks/Purchase/purchaseService'
 import { GenericCrudFlow } from '../../generic/generic.flow'
 import { purchaseFieldEditors, missingFieldHandlers } from './purchase.selects'
+import { createHumanFlowMessages } from '../../../utils/conversation-copy'
 
 class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPurchaseCreationPayload, PurchaseRecord, UpsertPurchaseArgs, PurchaseEditField, PurchaseMissingField> {
   private readonly confirmationNamespace = 'PURCHASE_CONFIRMATION'
@@ -20,26 +21,21 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
       flowType: FlowType.Purchase,
       fieldEditors: purchaseFieldEditors,
       missingFieldHandlers,
-      messages: {
-        confirmation: 'Confirma o resumo e confirma pra mim?',
-        creationSuccess: 'Compra registrada com sucesso!',
-        creationResponse: 'Tudo certo, registro criado.',
-        cancelSent: 'Beleza, cadastro cancelado.',
-        cancelResponse: 'Operação cancelada.',
-        missingDataDuringConfirm: 'Faltam alguns dados. Bora preencher?',
-        invalidField: 'Esse campo não dá pra alterar pelo menu. Me manda uma mensagem com o novo valor.',
-        editModeIntro: 'Bora editar o registro. Me diz o que você quer mudar.',
-        editModeExamples: ['"Mudar data para 20/03/2024"', '"Quantidade pra 5"', '"Trocar a categoria"'],
-        editRecordNotFound: 'Não achei o registro pra editar.',
-        editFieldUpdateError: 'Não consegui alterar esse campo.',
-        editPromptFallback: 'Qual a informação nova?',
-        editDirectChangeSuccess: 'Dados atualizados.',
-        editUpdateSuccess: 'Registro atualizado!',
-        editUpdateError: 'Erro ao atualizar. Tenta de novo?',
-        deleteRecordNotFound: 'Não achei o registro pra deletar.',
-        deleteSuccess: 'Registro deletado com sucesso!',
-        deleteError: 'Erro ao deletar. Tenta de novo?',
-      },
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso confirmar essa compra?',
+        creationSuccess: 'Pronto, essa compra foi registrada.',
+        creationResponse: 'Perfeito, ja deixei esse registro salvo.',
+        cancelSent: 'Tudo bem, parei esse cadastro por aqui.',
+        cancelResponse: 'Certo, nao segui com esse cadastro.',
+        missingDataDuringConfirm: 'Ainda falta um detalhe. Vou te pedir agora.',
+        editModeIntro: 'Beleza. Me fala o que voce quer ajustar nessa compra.',
+        editModeExamples: ['"Mudar a data"', '"Quantidade para 5"', '"Trocar a categoria"'],
+        editRecordNotFound: 'Nao achei esse registro por aqui.',
+        editUpdateSuccess: 'Pronto, atualizei esse registro.',
+        deleteRecordNotFound: 'Nao achei esse registro para remover.',
+        deleteSuccess: 'Pronto, esse registro foi removido.',
+        deleteError: 'Nao consegui remover esse registro agora. Tenta de novo?',
+      }),
       accessControl: {
         allowedPlanIds: [Plan.BASIC, Plan.ADVANCED],
         notAllowedSubPlansIds: [SubPlan.INDIVIDUAL],
@@ -89,9 +85,9 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
     await sendConfirmationButtons({
       namespace: this.confirmationNamespace,
       userId: phone,
-      message: 'Tudo pronto pra confirmar?',
+      message: 'Se estiver tudo certo, posso confirmar essa compra?',
       confirmLabel: 'Confirmar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Agora nao',
       summaryText: summary,
       onConfirm: async (userId) => {
         await appendUserTextAuto(userId, 'Confirmar')
@@ -109,9 +105,9 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
     await sendEditDeleteButtons({
       namespace: this.editDeleteNamespace,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Excluir',
       summaryText: summary,
       onEdit: async (userId) => {
         await appendUserTextAuto(userId, 'Editar')
@@ -128,9 +124,9 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
     await sendEditDeleteButtonsAfterError({
       namespace: this.editDeleteErrorNamespace,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      deleteLabel: 'Deletar',
+      deleteLabel: 'Excluir',
       summaryText: summary,
       errorMessage,
       onEdit: async (userId) => {
@@ -148,9 +144,9 @@ class PurchaseFlowService extends GenericCrudFlow<IPurchaseValidationDraft, IPur
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Parar por aqui',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,

@@ -113,7 +113,7 @@ QUANDO USAR:
 
 EXEMPLOS:
 - "Quem atende?" → getProfessionals({})
-- "Qual professional é melhor para corte moderno?" → getProfessionals({})
+- "Qual barbeiro combina mais com corte moderno?" → getProfessionals({})
 - "O João trabalha hoje?" → getProfessionals({})`,
       parameters: {
         type: 'object',

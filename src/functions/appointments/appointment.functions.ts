@@ -7,6 +7,7 @@ import { appointmentCancellationFunctions } from './cancellation/appointment-can
 import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
+import { createHumanFlowMessages } from '../../utils/conversation-copy'
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
@@ -20,28 +21,23 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       flowType: FlowType.Appointment,
       fieldEditors: appointmentFieldEditors,
       missingFieldHandlers,
-      messages: {
-        confirmation: 'Confira o resumo e confirma pra mim?',
-        creationSuccess: 'Agendamento realizado com sucesso!',
-        creationResponse: 'Tudo certo, agendamento criado.',
-        cancelSent: 'Beleza, agendamento cancelado.',
-        cancelResponse: 'Operação cancelada.',
-        missingDataDuringConfirm: 'Faltam alguns dados. Bora preencher?',
-        invalidField: 'Esse campo não dá pra alterar pelo menu. Me manda uma mensagem com o novo valor.',
-        editModeIntro: 'Bora editar o agendamento. Me diz o que você quer mudar.',
-        editModeExamples: ['"Mudar data para 20/03/2024"', '"Alterar o horário"', '"Trocar de professional"'],
-        editRecordNotFound: 'Não achei o agendamento pra editar.',
-        editFieldUpdateError: 'Não consegui alterar esse campo.',
-        editPromptFallback: 'Qual a informação nova?',
-        editDirectChangeSuccess: 'Dados atualizados.',
-        editUpdateSuccess: 'Agendamento atualizado!',
-        editUpdateError: 'Erro ao atualizar. Tenta de novo?',
-        deleteRecordNotFound: 'Não achei o agendamento pra deletar.',
-        deleteSuccess: 'Agendamento deletado com sucesso!',
-        deleteError: 'Erro ao deletar. Tenta de novo?',
-        buttonHeaderSuccess: 'Agendamento confirmado!',
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso confirmar seu horario assim?',
+        creationSuccess: 'Pronto, seu horario ficou marcado.',
+        creationResponse: 'Perfeito, ja deixei seu agendamento confirmado por aqui.',
+        cancelSent: 'Tudo bem, parei esse agendamento por aqui.',
+        cancelResponse: 'Certo, nao segui com o agendamento.',
+        missingDataDuringConfirm: 'Ainda falta um detalhe. Vou te pedir o que falta.',
+        editModeIntro: 'Claro. Me fala o que voce quer mudar no agendamento.',
+        editModeExamples: ['"Mudar a data"', '"Trocar o horario"', '"Mudar o barbeiro"'],
+        editRecordNotFound: 'Nao achei esse agendamento por aqui.',
+        editUpdateSuccess: 'Pronto, atualizei seu agendamento.',
+        deleteRecordNotFound: 'Nao achei esse agendamento para continuar.',
+        deleteSuccess: 'Pronto, esse agendamento foi removido.',
+        deleteError: 'Nao consegui remover esse agendamento agora. Tenta de novo?',
+        buttonHeaderSuccess: 'Horario confirmado',
         useNaturalLanguage: false,
-      },
+      }),
       accessControl: {
         deniedMessage: 'Esse plano ainda não tem essa funcionalidade.',
       },
@@ -198,9 +194,9 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     await sendConfirmationButtons({
       namespace: this.confirmationNamespace,
       userId: phone,
-      message: 'Tudo pronto pra confirmar?',
+      message: 'Se estiver tudo certo, posso confirmar seu horario?',
       confirmLabel: 'Confirmar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Agora nao',
       summaryText: summary,
       onConfirm: async (userId) => {
         await appendUserTextAuto(userId, 'Confirmar')

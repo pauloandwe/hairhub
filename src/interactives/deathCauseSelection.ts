@@ -7,6 +7,7 @@ import { tryContinueRegistration } from './followup'
 import { SelectArrayItem } from '../helpers/converters/converters.type'
 import { deathFunctions } from '../functions/livestocks/death/death.functions'
 import { DeathField } from '../enums/cruds/deathFields.enums'
+import { getSelectionAck } from '../utils/conversation-copy'
 
 export const DEATH_CAUSE_NAMESPACE = 'DEATH_CAUSE'
 
@@ -20,15 +21,14 @@ const deathCauseFlow = createSelectionFlow<SelectArrayItem>({
   ui: {
     header: 'Qual foi a causa?',
     sectionTitle: 'Causas',
-    footer: 'Inttegra',
     buttonLabel: 'Ver opções',
   },
   defaultBody: 'Me ajuda a anotar qual foi a causa dessa morte.',
-  invalidSelectionMsg: 'Opa, essa opção expirou. Deixe eu enviar de novo pra você.',
-  emptyListMessage: 'Nenhuma causa de morte encontrada',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei causas de morte por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar',
+  descriptionBuilder: () => 'Escolher',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
     const context = getUserContextSync(userId)
@@ -41,7 +41,7 @@ const deathCauseFlow = createSelectionFlow<SelectArrayItem>({
     if (!isEditMode && getUserContextSync(userId)?.activeRegistration?.type === 'death') {
       await updateDraftWithDeathCause(userId, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Beleza! Causa de morte registrada: '${item.name}'.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     if (isEditMode) {
       const updates: Partial<UpsertArgs> = {
         [DeathField.DeathCause]: { id: item.id, name: item.name },
@@ -58,6 +58,6 @@ const deathCauseFlow = createSelectionFlow<SelectArrayItem>({
   },
 })
 
-export async function sendDeathCauseSelectionList(userId: string, bodyMsg = 'Antes de continuar, selecione a causa de morte desejada.', offset = 0) {
+export async function sendDeathCauseSelectionList(userId: string, bodyMsg = 'Me ajuda a anotar qual foi a causa dessa morte.', offset = 0) {
   await deathCauseFlow.sendList(userId, bodyMsg, offset)
 }

@@ -6,6 +6,7 @@ import { birthService } from '../../services/livestocks/Birth/birthService'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { birthFunctions } from '../../functions/livestocks/birth/birth.functions'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const BIRTH_CATEGORY_NAMESPACE = 'BIRTH_CATEGORY'
 
@@ -18,15 +19,14 @@ const birthCategoriesFlow = createSelectionFlow<SelectArrayItem>({
   ui: {
     header: 'Qual categoria de nascimento?',
     sectionTitle: 'Categorias',
-    footer: 'Inttegra',
     buttonLabel: 'Ver opções',
   },
   defaultBody: 'Bora selecionar a categoria para esse nascimento.',
-  invalidSelectionMsg: 'Opa, essa opção expirou. Deixe eu enviar de novo pra você.',
-  emptyListMessage: 'Nenhuma categoria encontrada',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei categorias por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar',
+  descriptionBuilder: () => 'Escolher',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
     const ctx = getUserContextSync(userId)
@@ -39,7 +39,7 @@ const birthCategoriesFlow = createSelectionFlow<SelectArrayItem>({
     if (ctx?.activeRegistration?.type === FlowType.Birth) {
       await birthService.updateDraftField(userId, 'category', { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Beleza! Categoria '${item.name}' já anotada.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('category', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -51,6 +51,6 @@ const birthCategoriesFlow = createSelectionFlow<SelectArrayItem>({
   },
 })
 
-export async function sendBirthCategoriesList(userId: string, bodyMsg = 'Antes de continuar, selecione a categoria desejada.', offset = 0) {
+export async function sendBirthCategoriesList(userId: string, bodyMsg = 'Qual categoria voce quer usar?', offset = 0) {
   await birthCategoriesFlow.sendList(userId, bodyMsg, offset)
 }

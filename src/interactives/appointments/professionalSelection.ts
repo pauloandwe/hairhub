@@ -9,6 +9,7 @@ import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const PROFESSIONAL_NAMESPACE = 'BARBER_GROUP'
 
@@ -26,14 +27,13 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
     return [{ id: 'ANY', name: 'Nenhum específico' }, ...professionals]
   },
   ui: {
-    header: 'Escolha o Professional',
+    header: 'Escolha o barbeiro',
     sectionTitle: 'Profissionais Disponíveis',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Qual professional você prefere?',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum profissional com horários configurados. Configure os dias e horários na tela de Profissionais.',
+  defaultBody: 'Tem preferencia de barbeiro?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei profissionais com horario disponivel agora.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => {
     if (c.id === 'ANY') {
@@ -42,8 +42,8 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
     return `${base + idx}. ${c.name}`
   },
   descriptionBuilder: (c) => {
-    if (c.id === 'ANY') return 'Sistema escolherá o melhor profissional'
-    return 'Toque para selecionar'
+    if (c.id === 'ANY') return 'A gente escolhe pelo horario disponivel'
+    return 'Toque para escolher'
   },
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
@@ -59,7 +59,7 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
       if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
         await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, null)
       }
-      await sendWhatsAppMessage(userId, `✅ Profissional será atribuído automaticamente com base na disponibilidade!`)
+      await sendWhatsAppMessage(userId, 'Perfeito, vou buscar o melhor profissional disponivel para esse horario.')
     } else {
       await setUserContext(userId, {
         professionalId: item.id,
@@ -71,7 +71,7 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
       if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
         await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, { id: item.id, name: item.name })
       }
-      await sendWhatsAppMessage(userId, `✅ Professional '${item.name}' selecionado com sucesso!`)
+      await sendWhatsAppMessage(userId, getSelectionAck('professional', item.name))
     }
 
     await tryContinueRegistration(userId)
@@ -107,6 +107,6 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendProfessionalSelectionList(userId: string, bodyMsg = 'Qual professional você prefere?', offset = 0) {
+export async function sendProfessionalSelectionList(userId: string, bodyMsg = 'Tem preferencia de barbeiro?', offset = 0) {
   await professionalFlow.sendList(userId, bodyMsg, offset)
 }

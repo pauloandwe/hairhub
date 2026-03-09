@@ -7,6 +7,7 @@ import { simplifiedExpenseService } from '../../../services/finances/simplifiedE
 import { appendUserTextAuto } from '../../../services/history-router.service'
 import { GenericCrudFlow } from '../../generic/generic.flow'
 import { missingFieldHandlers, simplifiedExpenseEditors } from './simplifiedExpense.selects'
+import { createHumanFlowMessages } from '../../../utils/conversation-copy'
 
 class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseValidationDraft, SimplifiedExpenseCreationPayload, SimpleExpenseRecord, UpsertSimplifiedExpenseArgs, SimplifiedExpenseFields, SimplifiedExpenseRequiredFields> {
   private readonly confirmationNamespace = 'SIMPLEFIED_EXPENSE_CONFIRM_NAMESPACE'
@@ -19,28 +20,24 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
       flowType: FlowType.SimplifiedExpense,
       fieldEditors: simplifiedExpenseEditors,
       missingFieldHandlers,
-      messages: {
-        confirmation: 'Confira o resumo para confirmar.',
-        creationSuccess: 'Registro de despesa simples criado com sucesso.',
-        creationResponse: 'Registro criado e rascunho limpo.',
-        cancelSent: 'Cadastro e rascunho de despesa foram limpos com sucesso.',
-        cancelResponse: 'Cancelado.',
-        missingDataDuringConfirm: 'Ainda faltam dados obrigatórios. Vamos preencher agora.',
-        invalidField: 'Campo inválido para alteração. Me diga exatamente qual informação você quer alterar.',
-        editModeIntro: 'Você está editando o registro. Me diga o que deseja alterar.',
-        editModeExamples: ['"Mudar valor para 500"', '"Alterar fornecedor"', '"Corrigir descrição"'],
-        editRecordNotFound: 'Não foi possível encontrar o registro para editar.',
-        editFieldUpdateError: 'Não consegui alterar o campo informado.',
-        editPromptFallback: 'Qual o novo valor?',
-        editDirectChangeSuccess: 'Dados alterados com sucesso.',
-        editUpdateSuccess: 'Registro editado com sucesso.',
-        editUpdateError: 'Erro ao atualizar o registro.',
-        deleteRecordNotFound: 'Não foi possível encontrar o registro para excluir.',
-        deleteSuccess: 'Registro excluído com sucesso!',
-        deleteError: 'Erro ao excluir o registro. Por favor, tente novamente.',
-        buttonHeaderSuccess: 'Despesa cadastrada!',
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso confirmar essa despesa?',
+        creationSuccess: 'Pronto, a despesa ficou registrada.',
+        creationResponse: 'Perfeito, ja deixei essa despesa salva por aqui.',
+        cancelSent: 'Tudo bem, parei esse lancamento por aqui.',
+        cancelResponse: 'Certo, nao segui com essa despesa.',
+        missingDataDuringConfirm: 'Ainda falta um detalhe. Vou te pedir agora.',
+        invalidField: 'Me fala direitinho o que voce quer mudar que eu te ajudo.',
+        editModeIntro: 'Beleza. Me diz o que voce quer ajustar nessa despesa.',
+        editModeExamples: ['"Mudar valor para 500"', '"Trocar o fornecedor"', '"Corrigir a descricao"'],
+        editRecordNotFound: 'Nao achei essa despesa para editar.',
+        editUpdateSuccess: 'Pronto, atualizei essa despesa.',
+        deleteRecordNotFound: 'Nao achei essa despesa para remover.',
+        deleteSuccess: 'Pronto, essa despesa foi removida.',
+        deleteError: 'Nao consegui remover essa despesa agora. Tenta de novo?',
+        buttonHeaderSuccess: 'Despesa registrada',
         useNaturalLanguage: false,
-      },
+      }),
       accessControl: {
         allowedPlanIds: [Plan.BASIC],
         deniedMessage: 'Desculpe, ainda não há suporte para o plano Inttegra +.',
@@ -76,7 +73,7 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     await sendConfirmationButtons({
       namespace: this.confirmationNamespace,
       userId: phone,
-      message: 'Confirmar o cadastro?',
+      message: 'Se estiver tudo certo, posso confirmar essa despesa?',
       confirmLabel: 'Confirmar',
       cancelLabel: 'Cancelar',
       summaryText: summary,
@@ -98,7 +95,7 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     await sendEditDeleteButtons({
       namespace,
       userId: phone,
-      message: 'O que deseja fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
       deleteLabel: 'Excluir',
       summaryText: summary,
@@ -118,7 +115,7 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     await sendEditDeleteButtonsAfterError({
       namespace: this.editDeleteErrorNamespace,
       userId: phone,
-      message: 'O que deseja fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
       deleteLabel: 'Excluir',
       summaryText: summary,
@@ -139,9 +136,9 @@ class SimplifiedExpenseFlowService extends GenericCrudFlow<SimplifiedExpenseVali
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Parar por aqui',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,

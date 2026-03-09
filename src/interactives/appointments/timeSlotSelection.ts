@@ -9,6 +9,7 @@ import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const TIME_SLOT_NAMESPACE = 'TIME_SLOT_GROUP'
 
@@ -72,17 +73,16 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
     return slots
   },
   ui: {
-    header: 'Escolha o Horário',
-    sectionTitle: 'Horários',
-    footer: 'Inttegra Assistente',
+    header: 'Escolha o horario',
+    sectionTitle: 'Horarios',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Qual horário você prefere?',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum horário disponível para o período selecionado',
+  defaultBody: 'Qual horario fica melhor pra voce?',
+  invalidSelectionMsg: 'Esse horario nao esta mais disponivel. Vou te mandar as opcoes de novo.',
+  emptyListMessage: 'Nao achei horarios disponiveis para esse periodo.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este horário',
+  descriptionBuilder: () => 'Escolher esse horario',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -96,7 +96,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
 
     if (Array.isArray(item.availableProfessionals) && availableProfessionals.length === 0) {
       console.warn('[timeSlotFlow] Horário selecionado sem profissionais disponíveis.', { userId, slot: item.id })
-      await sendWhatsAppMessage(userId, 'Esse horário não está mais disponível. Vou enviar a lista atualizada.')
+      await sendWhatsAppMessage(userId, 'Esse horario nao esta mais livre. Vou te mandar as opcoes atualizadas.')
       await sendTimeSlotSelectionList(userId)
       return
     }
@@ -142,7 +142,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
     if (inAppointmentFlow) {
       await appointmentService.updateDraftField(userId, AppointmentFields.APPOINTMENT_TIME as keyof UpsertAppointmentArgs, item.id)
     }
-    await sendWhatsAppMessage(userId, `Horário '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('time', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -158,6 +158,6 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
   },
 })
 
-export async function sendTimeSlotSelectionList(userId: string, bodyMsg = 'Qual horário você prefere?', offset = 0) {
+export async function sendTimeSlotSelectionList(userId: string, bodyMsg = 'Qual horario fica melhor pra voce?', offset = 0) {
   await timeSlotFlow.sendList(userId, bodyMsg, offset)
 }

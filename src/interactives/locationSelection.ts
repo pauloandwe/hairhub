@@ -15,6 +15,7 @@ import { UpsertArgs as DeathUpsertArgs } from '../services/livestocks/death-draf
 import { purchaseService } from '../services/livestocks/Purchase/purchaseService'
 import { PurchaseField, UpsertPurchaseArgs } from '../services/livestocks/Purchase/purchase.types'
 import { purchaseFunctions } from '../functions/livestocks/purchase/purchase.functions'
+import { getSelectionAck } from '../utils/conversation-copy'
 
 type LocationSelectionConfig = {
   namespace: string
@@ -46,11 +47,10 @@ const buildBaseSelectionFlow = (config: LocationSelectionConfig): LocationSelect
     ui: {
       header: DEFAULT_HEADER,
       sectionTitle: DEFAULT_SECTION_TITLE,
-      footer: 'Inttegra Assistente',
       buttonLabel: 'Ver opções',
     },
     defaultBody: config.defaultBody,
-    invalidSelectionMsg: 'Opa, essa opção expirou',
+    invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
     emptyListMessage: config.emptyListMessage,
     pageLimit: 10,
     titleBuilder: (option, idx, base) => `${base + idx + 1}. ${option.lotName ? option.lotName : option.areaName}`,
@@ -75,7 +75,7 @@ const buildBaseSelectionFlow = (config: LocationSelectionConfig): LocationSelect
       }
 
       const path = config.successMessageBuilder ? config.successMessageBuilder(item) : DEFAULT_SUCCESS_PATH(item)
-      await sendWhatsAppMessage(userId, `Beleza! Localização marcada: ${path}`)
+      await sendWhatsAppMessage(userId, getSelectionAck('location', path))
       await tryContinueRegistration(userId)
     },
     onEditModeSelected: async ({ userId, item }) => {
@@ -99,8 +99,8 @@ export const PURCHASE_LOCATION_NAMESPACE = 'PURCHASE_LOCATION'
 const deathLocationSelector = buildBaseSelectionFlow({
   namespace: LOCATION_NAMESPACE,
   flowType: FlowType.Death,
-  defaultBody: 'Bora escolher a localização (Retiro → Área → Lote) 👇',
-  emptyListMessage: 'Nenhuma localização encontrada',
+  defaultBody: 'Me diz em qual localizacao isso aconteceu.',
+  emptyListMessage: 'Nao encontrei localizacoes por aqui.',
   successMessageBuilder: DEFAULT_SUCCESS_PATH,
   applySelection: async (userId, item) => {
     await updateDraftWithAnimalLotSelection(userId, {
@@ -131,8 +131,8 @@ const deathLocationSelector = buildBaseSelectionFlow({
 const birthLocationSelector = buildBaseSelectionFlow({
   namespace: BIRTH_LOCATION_NAMESPACE,
   flowType: FlowType.Birth,
-  defaultBody: 'Bora escolher a localização (Retiro → Área) 👇',
-  emptyListMessage: 'Nenhuma localização encontrada',
+  defaultBody: 'Me diz em qual localizacao isso aconteceu.',
+  emptyListMessage: 'Nao encontrei localizacoes por aqui.',
   successMessageBuilder: (item) => `${item.retreatName} -> ${item.areaName}`,
   applySelection: async (userId, item) => {
     await birthService.updateDraft(userId, {
@@ -157,8 +157,8 @@ const birthLocationSelector = buildBaseSelectionFlow({
 const purchaseLocationSelector = buildBaseSelectionFlow({
   namespace: PURCHASE_LOCATION_NAMESPACE,
   flowType: FlowType.Appointment,
-  defaultBody: 'Bora escolher a localização (Retiro → Área) 👇',
-  emptyListMessage: 'Nenhuma localização encontrada',
+  defaultBody: 'Me diz em qual localizacao isso aconteceu.',
+  emptyListMessage: 'Nao encontrei localizacoes por aqui.',
   successMessageBuilder: (item) => `${item.retreatName} -> ${item.areaName}`,
   applySelection: async (userId, item) => {
     await purchaseService.updateDraft(userId, {
@@ -180,14 +180,14 @@ const purchaseLocationSelector = buildBaseSelectionFlow({
   onlyWithAnimals: false,
 })
 
-export async function sendLocationSelectionList(userId: string, bodyMsg = 'Bora escolher a localização (Retiro → Área → Lote) 👇', offset = 0) {
+export async function sendLocationSelectionList(userId: string, bodyMsg = 'Me diz em qual localizacao isso aconteceu.', offset = 0) {
   await deathLocationSelector.sendList(userId, bodyMsg, offset)
 }
 
-export async function sendBirthLocationSelectionList(userId: string, bodyMsg = 'Bora escolher a localização (Retiro → Área) 👇', offset = 0) {
+export async function sendBirthLocationSelectionList(userId: string, bodyMsg = 'Me diz em qual localizacao isso aconteceu.', offset = 0) {
   await birthLocationSelector.sendList(userId, bodyMsg, offset)
 }
 
-export async function sendPurchaseLocationSelectionList(userId: string, bodyMsg = 'Por favor, selecione a localização desejada.', offset = 0) {
+export async function sendPurchaseLocationSelectionList(userId: string, bodyMsg = 'Me diz em qual localizacao foi essa compra.', offset = 0) {
   await purchaseLocationSelector.sendList(userId, bodyMsg, offset)
 }

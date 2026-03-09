@@ -9,6 +9,7 @@ import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const SERVICE_NAMESPACE = 'SERVICE_GROUP'
 
@@ -19,17 +20,16 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
     return serviceService.getServices(phone)
   },
   ui: {
-    header: 'Escolha o Serviço',
+    header: 'Escolha o servico',
     sectionTitle: 'Serviços',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Qual serviço você deseja?',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum serviço encontrado',
+  defaultBody: 'Qual servico voce quer marcar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei servicos disponiveis por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
-  descriptionBuilder: () => 'Selecionar este serviço',
+  descriptionBuilder: () => 'Escolher esse servico',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -41,7 +41,7 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
       await appointmentService.updateDraftField(userId, AppointmentFields.SERVICE as keyof UpsertAppointmentArgs, { id: item.id, name: item.name, duration: item.duration })
     }
-    await sendWhatsAppMessage(userId, `Serviço '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('service', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -58,6 +58,6 @@ const serviceFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendServiceSelectionList(userId: string, bodyMsg = 'Qual serviço você deseja?', offset = 0) {
+export async function sendServiceSelectionList(userId: string, bodyMsg = 'Qual servico voce quer marcar?', offset = 0) {
   await serviceFlow.sendList(userId, bodyMsg, offset)
 }

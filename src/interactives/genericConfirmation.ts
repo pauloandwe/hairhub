@@ -1,6 +1,7 @@
 import { sendWhatsAppInteractiveButtons, sendWhatsAppMessage } from '../api/meta.api'
 import { buildNamespacedId, registerPendingListInteraction } from '../utils/interactive'
 import { systemLogger } from '../utils/pino'
+import { getInteractiveCopy } from '../utils/conversation-copy'
 import { registerInteractiveSelectionHandler } from './registry'
 
 type ConfirmationOptions = {
@@ -27,7 +28,7 @@ type EditDeleteOptions = {
   onDelete?: (userId: string) => Promise<void>
 }
 
-export async function sendConfirmationButtons({ namespace, userId, message = 'Tudo pronto pra confirmar?', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onConfirm, onCancel, summaryText, loadDraft, maxRetries = 3 }: ConfirmationOptions & { maxRetries?: number }) {
+export async function sendConfirmationButtons({ namespace, userId, message = getInteractiveCopy('confirmAction'), confirmLabel = 'Confirmar', cancelLabel = 'Agora nao', onConfirm, onCancel, summaryText, loadDraft, maxRetries = 3 }: ConfirmationOptions & { maxRetries?: number }) {
   const confirmId = buildNamespacedId(namespace, 'CONFIRM')
   const cancelId = buildNamespacedId(namespace, 'CANCEL')
 
@@ -58,16 +59,16 @@ export async function sendConfirmationButtons({ namespace, userId, message = 'Tu
       ;(global as any)[attemptKey] = attempts
 
       if (attempts >= maxRetries) {
-        await sendWhatsAppMessage(userId, '😞 Muitas tentativas falharam. Por favor, tente novamente mais tarde.')
+        await sendWhatsAppMessage(userId, 'Nao consegui manter essa confirmacao aberta por aqui. Tenta de novo em instantes.')
         delete (global as any)[attemptKey]
         return
       }
 
-      await sendWhatsAppMessage(userId, `Opa, essa opção expirou (tentativa ${attempts}/${maxRetries})`)
+      await sendWhatsAppMessage(userId, getInteractiveCopy('retryExpired', { attempts, maxRetries }))
 
       const draft = await loadDraft(userId)
       if (!draft) {
-        await sendWhatsAppMessage(userId, '⚠️ Erro: dados não encontrados. Por favor, inicie o processo novamente.')
+        await sendWhatsAppMessage(userId, 'Perdi essas informacoes por aqui. Melhor comecar de novo rapidinho.')
         delete (global as any)[attemptKey]
         return
       }
@@ -108,11 +109,11 @@ export async function sendConfirmationButtons({ namespace, userId, message = 'Tu
   })
 }
 
-export async function sendEditDeleteButtons({ namespace, userId, message = 'O que deseja fazer?', editLabel = 'Editar', deleteLabel = '🗑️ Excluir', onEdit, onDelete, summaryText, header = 'Pronto!' }: EditDeleteOptions) {
+export async function sendEditDeleteButtons({ namespace, userId, message = getInteractiveCopy('whatNext'), editLabel = 'Editar', deleteLabel = 'Excluir', onEdit, onDelete, summaryText, header = 'Tudo certo' }: EditDeleteOptions) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const deleteId = buildNamespacedId(namespace, 'DELETE')
 
-  const body = summaryText || 'Registro criado.'
+  const body = summaryText || 'Pronto, ficou assim.'
   const footer = message
 
   const buttons = [{ id: editId, title: editLabel }]
@@ -140,7 +141,7 @@ export async function sendEditDeleteButtons({ namespace, userId, message = 'O qu
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
     if (!accepted) {
-      await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
       return
     }
 
@@ -151,7 +152,7 @@ export async function sendEditDeleteButtons({ namespace, userId, message = 'O qu
 
     if (value === 'DELETE') {
       if (!onDelete) {
-        await sendWhatsAppMessage(userId, 'Essa opção não está disponível no momento.')
+        await sendWhatsAppMessage(userId, getInteractiveCopy('notAvailable'))
         return
       }
       await onDelete(userId)
@@ -172,11 +173,11 @@ type EditDeleteOptionsAfterError = EditDeleteOptions & {
   errorMessage?: string
 }
 
-export async function sendEditDeleteButtonsAfterError({ namespace, userId, message = 'O que você quer fazer agora?', editLabel = 'Editar', deleteLabel = 'Excluir', onEdit, onDelete, summaryText, header = 'Ops!', errorMessage }: EditDeleteOptionsAfterError) {
+export async function sendEditDeleteButtonsAfterError({ namespace, userId, message = getInteractiveCopy('whatNext'), editLabel = 'Editar', deleteLabel = 'Excluir', onEdit, onDelete, summaryText, header = 'Vamos ajustar', errorMessage }: EditDeleteOptionsAfterError) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const deleteId = buildNamespacedId(namespace, 'DELETE')
 
-  const body = summaryText || 'Houve um problema ao atualizar.'
+  const body = summaryText || 'Te mostro como ficou ate aqui.'
   const footer = message
 
   const buttons = [{ id: editId, title: editLabel }]
@@ -204,7 +205,7 @@ export async function sendEditDeleteButtonsAfterError({ namespace, userId, messa
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
     if (!accepted) {
-      await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
       return
     }
 
@@ -215,7 +216,7 @@ export async function sendEditDeleteButtonsAfterError({ namespace, userId, messa
 
     if (value === 'DELETE') {
       if (!onDelete) {
-        await sendWhatsAppMessage(userId, 'Essa opção não está disponível no momento.')
+        await sendWhatsAppMessage(userId, getInteractiveCopy('notAvailable'))
         return
       }
       await onDelete(userId)
@@ -245,11 +246,11 @@ type EditCancelOptionsAfterCreationError = {
   onCancel: (userId: string) => Promise<void>
 }
 
-export async function sendEditCancelButtonsAfterCreationError({ namespace, userId, message = 'O que você quer fazer?', editLabel = 'Editar', cancelLabel = 'Cancelar', onEdit, onCancel, summaryText, header = 'Ops!', errorMessage }: EditCancelOptionsAfterCreationError) {
+export async function sendEditCancelButtonsAfterCreationError({ namespace, userId, message = getInteractiveCopy('whatNext'), editLabel = 'Editar', cancelLabel = 'Parar por aqui', onEdit, onCancel, summaryText, header = 'Vamos ajustar', errorMessage }: EditCancelOptionsAfterCreationError) {
   const editId = buildNamespacedId(namespace, 'EDIT')
   const cancelId = buildNamespacedId(namespace, 'CANCEL')
 
-  const body = summaryText || 'Não foi possível criar o registro.'
+  const body = summaryText || 'Nao consegui concluir isso agora.'
   const footer = message
 
   await sendWhatsAppInteractiveButtons({
@@ -272,7 +273,7 @@ export async function sendEditCancelButtonsAfterCreationError({ namespace, userI
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
     if (!accepted) {
-      await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
       return
     }
 
@@ -325,7 +326,7 @@ export async function sendSingleActionButton({ namespace, userId, message, butto
 
   registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
     if (!accepted) {
-      await sendWhatsAppMessage(userId, 'Opa, essa opção expirou')
+      await sendWhatsAppMessage(userId, getInteractiveCopy('expiredOption'))
       return
     }
 

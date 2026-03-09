@@ -64,7 +64,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
         currentDraft.paymentDate = normalizedPayment
       }
     }
-    if (args.description) currentDraft.description = args.description ?? 'Lançamento realizado via Inttegra Assistente'
+    if (args.description) currentDraft.description = args.description ?? 'Lancamento registrado pelo WhatsApp'
     if (args.productServiceName) currentDraft.productServiceName = args.productServiceName
     if (args.supplier) mergeIdNameRef(currentDraft.supplier, args.supplier)
     if (args.paymentMethod) mergeIdNameRef(currentDraft.paymentMethod, args.paymentMethod)
@@ -154,7 +154,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
       paymentDate: normalizeOrNull(draft?.paymentDate),
       dueDate: normalizeOrNull(draft?.dueDate),
       value: (draft.value ?? 0) * 100,
-      observation: draft?.description ?? 'Lançamento realizado via Inttegra Assistente',
+      observation: draft?.description ?? 'Lancamento registrado pelo WhatsApp',
       paymentMethodId: Number(draft.paymentMethod.id) > 0 ? Number(draft.paymentMethod.id) : null,
       businessAreaId: Number(draft?.businessArea?.id ?? 12),
       cultureId: null,
@@ -337,7 +337,7 @@ export class SimplifiedExpenseService extends GenericService<SimplifiedExpenseVa
     }
 
     if (has(SimplifiedExpenseField.Description)) {
-      payload.observation = draft.description ?? 'Lançamento realizado via Inttegra Assistente'
+      payload.observation = draft.description ?? 'Lancamento registrado pelo WhatsApp'
     }
 
     if (has(SimplifiedExpenseField.Value)) {

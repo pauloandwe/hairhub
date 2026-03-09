@@ -8,6 +8,7 @@ import { simplifiedExpenseFunctions } from '../../functions/finances/simplifiedE
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 const COST_CENTER_SEARCH_ACTION_ID = 'SEARCH_COST_CENTER'
 
@@ -22,7 +23,7 @@ export async function promptCostCenterSearch(userId: string, asAsk?: boolean): P
     },
   })
 
-  const message = asAsk ? 'Voce precisa selecionar em centro de custo. Me falo o índice ou o nome do centro de custo para mim buscar.' : 'Digite o índice ou parte do nome do centro de custo que deseja buscar.'
+  const message = asAsk ? 'Me fala o indice ou o nome do centro de custo que eu busco para voce.' : 'Me manda o indice ou parte do nome do centro de custo.'
 
   await sendWhatsAppMessageWithTitle(userId, message)
 }
@@ -31,7 +32,7 @@ export const COST_CENTER_NAMESPACE = 'COST_CENTER_SELECTION'
 
 function formatCostCenterDescription(c: SelectionItem): string {
   if (c.description) return c.description
-  if (!c?.index && !c?.name) return 'Selecionar este centro de custo'
+  if (!c?.index && !c?.name) return 'Escolher esse centro de custo'
   return `${c?.index ? c.index + ' - ' : ''}${c?.name}`
 }
 
@@ -42,23 +43,22 @@ const costCenterFlow = createSelectionFlow<SelectionItem>({
     return simplifiedExpenseService.listCostCenters(phone)
   },
   ui: {
-    header: 'Escolha o Centro de Custo',
+    header: 'Escolha o centro de custo',
     sectionTitle: 'Centro de Custo',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Selecione o centro de custo desejado.',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhum centro de custo encontrado',
+  defaultBody: 'Qual centro de custo voce quer usar?',
+  invalidSelectionMsg: 'Essa opcao nao vale mais. Vou te mandar a lista de novo.',
+  emptyListMessage: 'Nao encontrei centro de custo por aqui.',
   pageLimit: 10,
   titleBuilder: (c, idx, base) => `${base + idx + 1}. ${c.name}`,
   descriptionBuilder: (c) => formatCostCenterDescription(c),
   extraActions: [
     {
       id: COST_CENTER_SEARCH_ACTION_ID,
-      title: 'Pesquisar Centro de Custos',
-      description: 'Buscar por nome ou índice específico',
-      sectionTitle: 'Pesquisar Centros',
+      title: 'Buscar centro',
+      description: 'Procurar por nome ou indice',
+      sectionTitle: 'Buscar',
       onSelected: async ({ userId }) => {
         await promptCostCenterSearch(userId)
       },
@@ -75,7 +75,7 @@ const costCenterFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.SimplifiedExpense) {
       await simplifiedExpenseService.updateDraftField(userId, SimplifiedExpenseField.CostCenter, { id: item.id, name: item.name })
     }
-    await sendWhatsAppMessage(userId, `Centro de custo '${item.name}' selecionado.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('generic', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -98,6 +98,6 @@ const costCenterFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendCostCenterSelectionList(userId: string, bodyMsg = 'Selecione o centro de custo.', offset = 0, itemsOverride?: SelectionItem[]) {
+export async function sendCostCenterSelectionList(userId: string, bodyMsg = 'Qual centro de custo voce quer usar?', offset = 0, itemsOverride?: SelectionItem[]) {
   await costCenterFlow.sendList(userId, bodyMsg, offset, itemsOverride)
 }

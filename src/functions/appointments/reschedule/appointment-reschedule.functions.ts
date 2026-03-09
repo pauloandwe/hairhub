@@ -9,6 +9,7 @@ import { rescheduleFieldEditors, missingFieldHandlers } from './appointment-resc
 import { sendWhatsAppMessage } from '../../../api/meta.api'
 import { customerAppointmentsService } from '../../../services/appointments/customer-appointments.service'
 import { DateFormatter } from '../../../utils/date'
+import { createHumanFlowMessages } from '../../../utils/conversation-copy'
 
 type RescheduleEditField = `${RescheduleField}`
 
@@ -22,28 +23,23 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
       flowType: FlowType.AppointmentReschedule,
       fieldEditors: rescheduleFieldEditors,
       missingFieldHandlers,
-      messages: {
-        confirmation: 'Confira o resumo e confirme a remarcação, por favor.',
-        creationSuccess: 'Agendamento remarquado com sucesso!',
-        creationResponse: 'Tudo certo, agendamento atualizado.',
-        cancelSent: 'Beleza, remarcação cancelada.',
-        cancelResponse: 'Operação cancelada.',
-        missingDataDuringConfirm: 'Faltam alguns dados. Vamos preencher?',
-        invalidField: 'Esse campo não dá pra alterar pelo menu. Me manda uma mensagem com o novo valor.',
-        editModeIntro: 'Bora editar a remarcação. Me diz o que você quer mudar.',
-        editModeExamples: ['"Mudar a data"', '"Trocar o horário"'],
-        editRecordNotFound: 'Não achei a remarcação pra editar.',
-        editFieldUpdateError: 'Não consegui alterar esse campo.',
-        editPromptFallback: 'Qual a informação nova?',
-        editDirectChangeSuccess: 'Dados atualizados.',
-        editUpdateSuccess: 'Remarcação atualizada!',
-        editUpdateError: 'Erro ao atualizar. Tenta de novo?',
-        deleteRecordNotFound: 'Não achei a remarcação pra deletar.',
-        deleteSuccess: 'Remarcação deletada com sucesso!',
-        deleteError: 'Erro ao deletar. Tenta de novo?',
-        buttonHeaderSuccess: 'Agendamento remarquado!',
+      messages: createHumanFlowMessages({
+        confirmation: 'Se estiver tudo certo, posso confirmar essa remarcacao?',
+        creationSuccess: 'Pronto, seu horario foi remarcado.',
+        creationResponse: 'Perfeito, ja ajustei sua remarcacao por aqui.',
+        cancelSent: 'Tudo bem, parei a remarcacao por aqui.',
+        cancelResponse: 'Certo, nao segui com a remarcacao.',
+        missingDataDuringConfirm: 'Ainda falta um detalhe para remarcar. Vou te pedir agora.',
+        editModeIntro: 'Claro. Me fala o que voce quer ajustar nessa remarcacao.',
+        editModeExamples: ['"Mudar a data"', '"Trocar o horario"'],
+        editRecordNotFound: 'Nao achei essa remarcacao por aqui.',
+        editUpdateSuccess: 'Pronto, ajustei a remarcacao.',
+        deleteRecordNotFound: 'Nao achei essa remarcacao para continuar.',
+        deleteSuccess: 'Pronto, essa remarcacao foi removida.',
+        deleteError: 'Nao consegui remover essa remarcacao agora. Tenta de novo?',
+        buttonHeaderSuccess: 'Remarcacao pronta',
         useNaturalLanguage: false,
-      },
+      }),
       accessControl: {
         deniedMessage: 'Esse plano ainda não tem essa funcionalidade.',
       },
@@ -115,7 +111,7 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
 
   protected async sendConfirmation(phone: string, draft: RescheduleDraft, summary: string): Promise<void> {
     await sendWhatsAppMessage(phone, summary)
-    await sendWhatsAppMessage(phone, 'Confirma a remarcação?')
+    await sendWhatsAppMessage(phone, 'Se estiver tudo certo, eu sigo com essa remarcacao.')
   }
 
   protected async sendEditDeleteOptions(phone: string, _draft: RescheduleDraft, summary: string, _recordId: string): Promise<void> {
@@ -135,9 +131,9 @@ class AppointmentRescheduleFlowService extends GenericCrudFlow<RescheduleDraft, 
     await sendEditCancelButtonsAfterCreationError({
       namespace: `${this.editCancelCreationErrorNamespace}_${Date.now()}`,
       userId: phone,
-      message: 'O que você quer fazer?',
+      message: 'O que voce quer fazer agora?',
       editLabel: 'Editar',
-      cancelLabel: 'Cancelar',
+      cancelLabel: 'Parar por aqui',
       summaryText: summary,
       header: this.options.messages.buttonHeaderEdit || 'Ops!',
       errorMessage,

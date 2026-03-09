@@ -9,6 +9,7 @@ import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const DATE_NAMESPACE = 'DATE_GROUP'
 
@@ -22,7 +23,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
     if (!serviceId) {
       console.warn('[dateSelectionFlow] Serviço não selecionado para buscar dias disponíveis', { phone })
-      await sendWhatsAppMessage(phone, 'Ops! Você precisa selecionar um serviço antes de escolher a data.')
+      await sendWhatsAppMessage(phone, 'Antes me fala qual servico voce quer, ai eu te mostro as datas.')
       return []
     }
 
@@ -36,7 +37,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
         if (!days || days.length === 0) {
           console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado (agregado)', { phone, serviceId })
-          await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias. Tente novamente mais tarde.')
+          await sendWhatsAppMessage(phone, 'Nao achei datas disponiveis para os proximos dias agora. Tenta mais tarde?')
           return []
         }
 
@@ -51,29 +52,28 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
       if (!days || days.length === 0) {
         console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, professionalId, serviceId })
-        await sendWhatsAppMessage(phone, 'Infelizmente não há datas disponíveis para os próximos dias com o professional selecionado. Tente novamente mais tarde ou escolha outro professional.')
+        await sendWhatsAppMessage(phone, 'Nao achei datas livres com esse barbeiro agora. Se quiser, voce pode escolher outro.')
         return []
       }
 
       return days
     } catch (error) {
       console.error('[dateSelectionFlow] Erro ao buscar dias disponíveis:', error)
-      await sendWhatsAppMessage(phone, 'Erro ao carregar as datas disponíveis. Tente novamente.')
+      await sendWhatsAppMessage(phone, 'Nao consegui carregar as datas agora. Tenta de novo em instantes?')
       return []
     }
   },
   ui: {
-    header: 'Escolha a Data',
+    header: 'Escolha a data',
     sectionTitle: 'Datas Disponíveis',
-    footer: 'Inttegra Assistente',
     buttonLabel: 'Ver opções',
   },
-  defaultBody: 'Qual data você prefere?',
-  invalidSelectionMsg: 'Seleção inválida ou expirada. Reenviando a lista.',
-  emptyListMessage: 'Nenhuma data disponível para os próximos dias',
+  defaultBody: 'Qual dia fica melhor pra voce?',
+  invalidSelectionMsg: 'Essa data nao esta mais disponivel. Vou te mostrar as opcoes de novo.',
+  emptyListMessage: 'Nao encontrei datas disponiveis para os proximos dias.',
   pageLimit: 10,
   titleBuilder: (item, idx, base) => `${base + idx + 1}. ${item.name}${item.description ? ` - ${item.description}` : ''}`,
-  descriptionBuilder: () => 'Selecionar esta data',
+  descriptionBuilder: () => 'Escolher essa data',
   onSelected: async ({ userId, item }) => {
     await getUserContext(userId)
 
@@ -84,7 +84,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
       await appointmentService.updateDraftField(userId, AppointmentFields.APPOINTMENT_DATE as keyof UpsertAppointmentArgs, item.id)
     }
-    await sendWhatsAppMessage(userId, `Data '${item.name}' selecionada.`)
+    await sendWhatsAppMessage(userId, getSelectionAck('date', item.name))
     await tryContinueRegistration(userId)
   },
   onEditModeSelected: async ({ userId, item }) => {
@@ -100,6 +100,6 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendDateSelectionList(userId: string, bodyMsg = 'Qual data você prefere?', offset = 0) {
+export async function sendDateSelectionList(userId: string, bodyMsg = 'Qual dia fica melhor pra voce?', offset = 0) {
   await dateSelectionFlow.sendList(userId, bodyMsg, offset)
 }
