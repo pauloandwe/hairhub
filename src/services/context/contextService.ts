@@ -16,6 +16,7 @@ import { AppointmentCancellationContextService } from '../appointments/appointme
 import { AppointmentRescheduleContextService } from '../appointments/appointmentReschedule.context'
 import { appointmentIntentService } from '../appointments/appointment-intent.service'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { registerPanelClientQuickActionHandler } from '../../interactives/clientQuickActions'
 
 export class ContextService {
   private static instance: ContextService
@@ -36,6 +37,10 @@ export class ContextService {
     [FlowType.Appointment]: this.appointmentContext,
     [FlowType.AppointmentCancellation]: this.appointmentCancellationContext,
     [FlowType.AppointmentReschedule]: this.appointmentRescheduleContext,
+  }
+
+  private constructor() {
+    registerPanelClientQuickActionHandler()
   }
 
   static getInstance(): ContextService {

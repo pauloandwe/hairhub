@@ -27,6 +27,14 @@ export interface SendWhatsAppMessageOptions {
   suppressConversationEvent?: boolean
 }
 
+export interface SendWhatsAppInteractiveOptions {
+  source?: 'BOT' | 'SYSTEM' | 'HUMAN_PANEL' | 'OUTREACH' | 'REMINDER'
+  businessId?: string | number
+  businessPhone?: string
+  metadata?: Record<string, any>
+  suppressConversationEvent?: boolean
+}
+
 export async function sendWhatsAppMessage(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
   cancelTypingIndicatorForUser(to)
 
@@ -279,8 +287,15 @@ export async function sendWhatsAppInteractiveList(params: {
   }
 }
 
-export async function sendWhatsAppInteractiveButtons(params: { to: string; body: string; header?: string; footer?: string; buttons: { id: string; title: string }[] }): Promise<void> {
-  const { to, body, header, footer, buttons } = params
+export async function sendWhatsAppInteractiveButtons(params: {
+  to: string
+  body: string
+  header?: string
+  footer?: string
+  buttons: { id: string; title: string }[]
+  options?: SendWhatsAppInteractiveOptions
+}): Promise<string> {
+  const { to, body, header, footer, buttons, options } = params
 
   cancelTypingIndicatorForUser(to)
 
@@ -347,16 +362,19 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
     })
 
     const messageId = response.data?.messages?.[0]?.id
-    if (messageId) {
+    if (messageId && !options?.suppressConversationEvent) {
       try {
         await ConversationEventsClient.emitOutboundMessage({
           clientPhone: to,
           text: sanitizedBody,
-          source: 'BOT',
+          source: options?.source || 'BOT',
+          businessId: options?.businessId,
+          businessPhone: options?.businessPhone,
           providerMessageId: String(messageId),
           providerStatus: 'SENT',
           rawPayload: response.data || null,
           metadata: {
+            ...(options?.metadata || {}),
             interactiveType: 'button',
             header: sanitizedHeader || null,
             footer: sanitizedFooter || null,
@@ -367,6 +385,8 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
         whatsappLogger.warn({ receiver: to, messageId, error: emitError?.message }, 'Falha ao emitir evento de botões interativos')
       }
     }
+
+    return messageId || 'unknown'
   } catch (error: any) {
     whatsappLogger.error(
       {
