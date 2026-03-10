@@ -287,14 +287,7 @@ export async function sendWhatsAppInteractiveList(params: {
   }
 }
 
-export async function sendWhatsAppInteractiveButtons(params: {
-  to: string
-  body: string
-  header?: string
-  footer?: string
-  buttons: { id: string; title: string }[]
-  options?: SendWhatsAppInteractiveOptions
-}): Promise<string> {
+export async function sendWhatsAppInteractiveButtons(params: { to: string; body: string; header?: string; footer?: string; buttons: { id: string; title: string }[]; options?: SendWhatsAppInteractiveOptions }): Promise<string> {
   const { to, body, header, footer, buttons, options } = params
 
   cancelTypingIndicatorForUser(to)
