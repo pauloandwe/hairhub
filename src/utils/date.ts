@@ -1,9 +1,5 @@
 import { addMinutes, format, isValid, parse, parseISO } from 'date-fns'
-import {
-  formatDateInTimeZone,
-  formatDayMonthInTimeZone,
-  formatTimeInTimeZone,
-} from './timezone'
+import { formatDateInTimeZone, formatDayMonthInTimeZone, formatTimeInTimeZone } from './timezone'
 
 export class DateFormatter {
   static toISODate(date: Date | string): string {

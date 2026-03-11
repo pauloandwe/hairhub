@@ -56,8 +56,7 @@ export function getZonedParts(date: Date | string, timeZone?: string | null): Zo
   })
 
   const parts = formatter.formatToParts(dateObject)
-  const read = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number.parseInt(parts.find((part) => part.type === type)?.value || '0', 10)
+  const read = (type: Intl.DateTimeFormatPartTypes): number => Number.parseInt(parts.find((part) => part.type === type)?.value || '0', 10)
 
   return {
     year: read('year'),
@@ -83,39 +82,11 @@ export function zonedDateTimeToUtcDate(
   const resolvedTimeZone = resolveTimeZone(timeZone)
   const second = localDateTime.second ?? 0
 
-  let guess = new Date(
-    Date.UTC(
-      localDateTime.year,
-      localDateTime.month - 1,
-      localDateTime.day,
-      localDateTime.hour,
-      localDateTime.minute,
-      second,
-      0,
-    ),
-  )
+  let guess = new Date(Date.UTC(localDateTime.year, localDateTime.month - 1, localDateTime.day, localDateTime.hour, localDateTime.minute, second, 0))
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const actual = getZonedParts(guess, resolvedTimeZone)
-    const diff =
-      Date.UTC(
-        localDateTime.year,
-        localDateTime.month - 1,
-        localDateTime.day,
-        localDateTime.hour,
-        localDateTime.minute,
-        second,
-        0,
-      ) -
-      Date.UTC(
-        actual.year,
-        actual.month - 1,
-        actual.day,
-        actual.hour,
-        actual.minute,
-        actual.second,
-        0,
-      )
+    const diff = Date.UTC(localDateTime.year, localDateTime.month - 1, localDateTime.day, localDateTime.hour, localDateTime.minute, second, 0) - Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, actual.second, 0)
 
     if (diff === 0) {
       return guess
@@ -127,11 +98,7 @@ export function zonedDateTimeToUtcDate(
   return guess
 }
 
-export function combineDateAndTimeInTimeZone(
-  date: string,
-  time: string,
-  timeZone?: string | null,
-): Date {
+export function combineDateAndTimeInTimeZone(date: string, time: string, timeZone?: string | null): Date {
   const [year, month, day] = date.split('-').map(Number)
   const [hour, minute] = time.split(':').map(Number)
 

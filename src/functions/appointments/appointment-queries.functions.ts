@@ -1,8 +1,5 @@
 import { DateFormatter } from '../../utils/date'
-import {
-  AppointmentRescheduleAppointment,
-  getBusinessTimezoneForPhone,
-} from '../../env.config'
+import { AppointmentRescheduleAppointment, getBusinessTimezoneForPhone } from '../../env.config'
 import { customerAppointmentsService } from '../../services/appointments/customer-appointments.service'
 import { professionalService } from '../../services/appointments/professional.service'
 import { serviceService } from '../../services/appointments/service.service'
@@ -116,10 +113,7 @@ export const appointmentQueryFunctions = {
 
   getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number }): Promise<any> => {
     const { phone, date, professionalId } = args
-    const normalizedDate =
-      date ||
-      formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) ||
-      new Date().toISOString().split('T')[0]
+    const normalizedDate = date || formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) || new Date().toISOString().split('T')[0]
 
     logger.info({ date: normalizedDate, professionalId }, 'Consultando horários disponíveis')
 

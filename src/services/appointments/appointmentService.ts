@@ -355,12 +355,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     ]
   }
 
-  private parseDateAndTime(
-    dateStr: string,
-    timeStr: string,
-    durationMinutes?: number | null,
-    businessTimezone?: string | null,
-  ): { startDate: Date; endDate: Date } {
+  private parseDateAndTime(dateStr: string, timeStr: string, durationMinutes?: number | null, businessTimezone?: string | null): { startDate: Date; endDate: Date } {
     const startDate = combineDateAndTimeInTimeZone(dateStr, timeStr, businessTimezone)
     const duration = durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = new Date(startDate.getTime() + duration * 60 * 1000)
@@ -379,14 +374,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     const serviceDuration = draft.service?.duration ?? null
-    const businessTimezone =
-      context.businessTimezone ?? (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
-    const { startDate, endDate } = this.parseDateAndTime(
-      draft.appointmentDate as string,
-      draft.appointmentTime as string,
-      serviceDuration,
-      businessTimezone,
-    )
+    const businessTimezone = context.businessTimezone ?? (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
+    const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string, serviceDuration, businessTimezone)
 
     const assignmentStrategy = draft.professional?.id ? 'manual' : 'least_appointments'
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : undefined

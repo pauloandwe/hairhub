@@ -1,13 +1,5 @@
 import api from '../../config/api.config'
-import {
-  env,
-  getBusinessIdForPhone,
-  getBusinessTimezoneForPhone,
-  getUserContextSync,
-  setUserContext,
-  AppointmentRescheduleAppointment,
-  AppointmentRescheduleState,
-} from '../../env.config'
+import { env, getBusinessIdForPhone, getBusinessTimezoneForPhone, getUserContextSync, setUserContext, AppointmentRescheduleAppointment, AppointmentRescheduleState } from '../../env.config'
 import { customerAppointmentsService } from './customer-appointments.service'
 import { combineDateAndTimeInTimeZone } from '../../utils/timezone'
 
@@ -159,13 +151,8 @@ class AppointmentRescheduleService {
       throw new Error('Não consegui identificar sua business para remarcar o agendamento.')
     }
 
-    const businessTimezone =
-      appointment.businessTimezone ?? getBusinessTimezoneForPhone(phone)
-    const startDate = combineDateAndTimeInTimeZone(
-      state.selectedDate,
-      state.selectedTime,
-      businessTimezone,
-    )
+    const businessTimezone = appointment.businessTimezone ?? getBusinessTimezoneForPhone(phone)
+    const startDate = combineDateAndTimeInTimeZone(state.selectedDate, state.selectedTime, businessTimezone)
     const durationMinutes = appointment.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 

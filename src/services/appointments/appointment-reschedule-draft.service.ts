@@ -1,8 +1,4 @@
-import {
-  AppointmentRescheduleAppointment,
-  getBusinessIdForPhone,
-  getBusinessTimezoneForPhone,
-} from '../../env.config'
+import { AppointmentRescheduleAppointment, getBusinessIdForPhone, getBusinessTimezoneForPhone } from '../../env.config'
 import { GenericService } from '../generic/generic.service'
 import { DraftStatus, IBaseEntity, SelectionItem, SummarySections } from '../generic/generic.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
@@ -165,10 +161,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
         label: 'Agendamento',
         value: (draft: RescheduleDraft) => {
           if (!draft.selectedAppointment) return null
-          const when = DateFormatter.formatToDateTimeLabel(
-            draft.selectedAppointment.startDate,
-            draft.selectedAppointment.businessTimezone,
-          )
+          const when = DateFormatter.formatToDateTimeLabel(draft.selectedAppointment.startDate, draft.selectedAppointment.businessTimezone)
           const service = draft.selectedAppointment.serviceName ? ` ${draft.selectedAppointment.serviceName}` : ''
           const professional = draft.selectedAppointment.professionalName ? ` com ${draft.selectedAppointment.professionalName}` : ''
           return `${service}${professional}${when ? ` para ${when}` : ''}`
@@ -185,22 +178,13 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     ]
   }
 
-  protected transformToApiPayload = (
-    draft: RescheduleDraft,
-    context: { farmId: number; phone?: string },
-  ): RescheduleCreationPayload => {
+  protected transformToApiPayload = (draft: RescheduleDraft, context: { farmId: number; phone?: string }): RescheduleCreationPayload => {
     if (!draft.appointmentId || !draft.newDate || !draft.newTime) {
       throw new Error('Faltam dados para remarcar o agendamento.')
     }
 
-    const businessTimezone =
-      draft.selectedAppointment?.businessTimezone ??
-      (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
-    const startDate = combineDateAndTimeInTimeZone(
-      draft.newDate,
-      draft.newTime,
-      businessTimezone,
-    )
+    const businessTimezone = draft.selectedAppointment?.businessTimezone ?? (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
+    const startDate = combineDateAndTimeInTimeZone(draft.newDate, draft.newTime, businessTimezone)
     const durationMinutes = draft.selectedAppointment?.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 
@@ -248,11 +232,7 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     if (has(RescheduleField.AppointmentId) || has(RescheduleField.NewDate) || has(RescheduleField.NewTime)) {
       if (draft.appointmentId && draft.newDate && draft.newTime) {
         const businessTimezone = draft.selectedAppointment?.businessTimezone ?? null
-        const startDate = combineDateAndTimeInTimeZone(
-          draft.newDate,
-          draft.newTime,
-          businessTimezone,
-        )
+        const startDate = combineDateAndTimeInTimeZone(draft.newDate, draft.newTime, businessTimezone)
         const durationMinutes = draft.selectedAppointment?.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
         const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 

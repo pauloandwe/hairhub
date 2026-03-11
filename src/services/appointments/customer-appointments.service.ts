@@ -1,13 +1,6 @@
 import api from '../../config/api.config'
 import { ensureUserApiToken } from '../auth-token.service'
-import {
-  AppointmentRescheduleAppointment,
-  BusinessSettings,
-  env,
-  getBusinessIdForPhone,
-  getBusinessPhoneForPhone,
-  getUserContextSync,
-} from '../../env.config'
+import { AppointmentRescheduleAppointment, BusinessSettings, env, getBusinessIdForPhone, getBusinessPhoneForPhone, getUserContextSync } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
 export type CustomerAppointmentAction = 'cancellation' | 'reschedule'
@@ -35,10 +28,7 @@ const normalizeString = (value: unknown): string | null => {
   return converted.length ? converted : null
 }
 
-const mapAppointment = (
-  raw: any,
-  businessTimezone?: string | null,
-): AppointmentRescheduleAppointment | null => {
+const mapAppointment = (raw: any, businessTimezone?: string | null): AppointmentRescheduleAppointment | null => {
   const id = toNumberOrNull(raw?.id)
   const startDate = normalizeString(raw?.startDate)
 
@@ -72,17 +62,12 @@ const compareDescending = (a: AppointmentRescheduleAppointment, b: AppointmentRe
 }
 
 class CustomerAppointmentsService {
-  private async ensureBusinessContext(
-    phone: string,
-  ): Promise<{ businessId: string; settings: BusinessSettings | null; businessTimezone: string | null }> {
+  private async ensureBusinessContext(phone: string): Promise<{ businessId: string; settings: BusinessSettings | null; businessTimezone: string | null }> {
     const runtimeContext = getUserContextSync(phone)
     const businessPhone = runtimeContext?.businessPhone ? String(runtimeContext.businessPhone).trim() : String(getBusinessPhoneForPhone(phone) || '').trim()
     const businessId = runtimeContext?.businessId ? String(runtimeContext.businessId).trim() : String(getBusinessIdForPhone(phone) || '').trim()
     const settings = runtimeContext?.settings ?? null
-    const businessTimezone =
-      typeof runtimeContext?.businessTimezone === 'string' && runtimeContext.businessTimezone.trim().length > 0
-        ? runtimeContext.businessTimezone
-        : null
+    const businessTimezone = typeof runtimeContext?.businessTimezone === 'string' && runtimeContext.businessTimezone.trim().length > 0 ? runtimeContext.businessTimezone : null
 
     if (businessId && settings) {
       return { businessId, settings, businessTimezone }
@@ -98,11 +83,7 @@ class CustomerAppointmentsService {
     return {
       businessId: refreshedContext?.businessId ? String(refreshedContext.businessId).trim() : '',
       settings: refreshedContext?.settings ?? null,
-      businessTimezone:
-        typeof refreshedContext?.businessTimezone === 'string' &&
-        refreshedContext.businessTimezone.trim().length > 0
-          ? refreshedContext.businessTimezone
-          : null,
+      businessTimezone: typeof refreshedContext?.businessTimezone === 'string' && refreshedContext.businessTimezone.trim().length > 0 ? refreshedContext.businessTimezone : null,
     }
   }
 
@@ -124,9 +105,7 @@ class CustomerAppointmentsService {
       return []
     }
 
-    return payload
-      .map((item) => mapAppointment(item, businessTimezone))
-      .filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
+    return payload.map((item) => mapAppointment(item, businessTimezone)).filter((item: AppointmentRescheduleAppointment | null): item is AppointmentRescheduleAppointment => item !== null)
   }
 
   private isUpcoming(appointment: AppointmentRescheduleAppointment): boolean {

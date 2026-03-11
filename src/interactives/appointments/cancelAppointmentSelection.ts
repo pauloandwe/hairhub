@@ -9,15 +9,8 @@ import { getSelectionAck } from '../../utils/conversation-copy'
 import { AppointmentRescheduleAppointment } from '../../env.config'
 
 const buildTitle = (appointment: AppointmentRescheduleAppointment): string => {
-  const dayMonth =
-    DateFormatter.formatToDayMonth(
-      appointment.startDate,
-      appointment.businessTimezone,
-    ) ?? 'Data indefinida'
-  const time = DateFormatter.formatToHourMinute(
-    appointment.startDate,
-    appointment.businessTimezone,
-  )
+  const dayMonth = DateFormatter.formatToDayMonth(appointment.startDate, appointment.businessTimezone) ?? 'Data indefinida'
+  const time = DateFormatter.formatToHourMinute(appointment.startDate, appointment.businessTimezone)
   return time ? `${dayMonth} às ${time}` : dayMonth
 }
 
