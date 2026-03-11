@@ -10,6 +10,7 @@ import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationD
 import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
+import { setUserContext } from '../../env.config'
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
@@ -154,6 +155,9 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
 
   protected async afterDraftPrepared(phone: string, draft: IAppointmentValidationDraft): Promise<{ draft: IAppointmentValidationDraft; response?: FlowResponse<IAppointmentValidationDraft> | null }> {
     const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
+    if (availability.contextUpdates) {
+      await setUserContext(phone, availability.contextUpdates)
+    }
 
     if (availability.status === 'ok') {
       return { draft: availability.draft }
@@ -182,6 +186,9 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     }
 
     const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
+    if (availability.contextUpdates) {
+      await setUserContext(phone, availability.contextUpdates)
+    }
     if (availability.status === 'ok') {
       return null
     }
@@ -313,6 +320,14 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       await sendWhatsAppMessage(phone, 'Esse horario expirou por aqui. Pode me pedir de novo?')
       return
     }
+
+    console.info('[AppointmentFlow] Pending offer accepted. Starting registration with preserved slot.', {
+      phone,
+      appointmentDate: resolvedOffer.appointmentDate,
+      appointmentTime: resolvedOffer.appointmentTime,
+      serviceId: resolvedOffer.service?.id ?? null,
+      professionalId: resolvedOffer.professional?.id ?? null,
+    })
 
     const startArgs = appointmentIntentService.buildStartArgsFromOffer(resolvedOffer)
     await this.startAppointmentRegistration({

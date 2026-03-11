@@ -2,7 +2,7 @@ import { format, isValid, parse, parseISO } from 'date-fns'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
-import { AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
+import { AppointmentAvailabilityContextUpdates, AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone, getBusinessTimezoneForPhone } from '../../env.config'
@@ -507,10 +507,39 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       const stillCompatible = eligibleProfessionals.some((professional) => this.extractValidId(professional.id) === professionalId)
 
       if (!stillCompatible) {
+        const preservedSlotResolution = await this.tryPreserveTimeSlotWithAnotherProfessional(phone, draft, serviceId, date)
+        if (preservedSlotResolution) {
+          const compatibleProfessionalIds = 'compatibleProfessionalIds' in preservedSlotResolution ? preservedSlotResolution.compatibleProfessionalIds ?? null : null
+          console.info('[AppointmentService] Reconciled availability after service change by keeping the original slot.', {
+            phone,
+            serviceId,
+            date,
+            time: draft.appointmentTime,
+            previousProfessionalId: professionalId,
+            resolutionStatus: preservedSlotResolution.status,
+            compatibleProfessionalIds,
+          })
+          return preservedSlotResolution
+        }
+
+        console.info('[AppointmentService] Reconciled availability by clearing the incompatible professional.', {
+          phone,
+          serviceId,
+          date,
+          time: draft.appointmentTime,
+          previousProfessionalId: professionalId,
+          resolutionStatus: 'reset-professional',
+        })
         return {
           status: 'reset-professional',
           draft: this.withAvailabilityFallback(draft, 'reset-professional'),
           message: draft.professional?.name ? `${draft.professional.name} nao atende esse servico. Vou te mostrar outros profissionais.` : 'Esse profissional nao atende esse servico. Vou te mostrar outras opcoes.',
+          contextUpdates: {
+            professionalId: null,
+            professionalName: null,
+            availableProfessionalIdsForSlot: null,
+            autoAssignedProfessional: false,
+          },
         }
       }
 
@@ -522,18 +551,44 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       })
 
       if (!slots.length) {
+        console.info('[AppointmentService] Reconciled availability by resetting the date because no slot exists for the selected professional.', {
+          phone,
+          serviceId,
+          date,
+          time: draft.appointmentTime,
+          professionalId,
+          resolutionStatus: 'reset-date',
+        })
         return {
           status: 'reset-date',
           draft: this.withAvailabilityFallback(draft, 'reset-date'),
           message: AVAILABILITY_FALLBACK_MESSAGE,
+          contextUpdates: {
+            availableProfessionalIdsForSlot: null,
+            autoAssignedProfessional: false,
+            timeSlot: null,
+          },
         }
       }
 
       if (draft.appointmentTime && !slots.includes(draft.appointmentTime)) {
+        console.info('[AppointmentService] Reconciled availability by resetting the time for the selected professional.', {
+          phone,
+          serviceId,
+          date,
+          time: draft.appointmentTime,
+          professionalId,
+          resolutionStatus: 'reset-time',
+        })
         return {
           status: 'reset-time',
           draft: this.withAvailabilityFallback(draft, 'reset-time'),
           message: AVAILABILITY_FALLBACK_MESSAGE,
+          contextUpdates: {
+            availableProfessionalIdsForSlot: null,
+            autoAssignedProfessional: false,
+            timeSlot: null,
+          },
         }
       }
 
@@ -548,18 +603,42 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       })
 
       if (!slots.length) {
+        console.info('[AppointmentService] Reconciled aggregated availability by resetting the date.', {
+          phone,
+          serviceId,
+          date,
+          time: draft.appointmentTime,
+          resolutionStatus: 'reset-date',
+        })
         return {
           status: 'reset-date',
           draft: this.withAvailabilityFallback(draft, 'reset-date'),
           message: AVAILABILITY_FALLBACK_MESSAGE,
+          contextUpdates: {
+            availableProfessionalIdsForSlot: null,
+            autoAssignedProfessional: false,
+            timeSlot: null,
+          },
         }
       }
 
       if (draft.appointmentTime && !slots.some((slot) => slot.start === draft.appointmentTime)) {
+        console.info('[AppointmentService] Reconciled aggregated availability by resetting the time.', {
+          phone,
+          serviceId,
+          date,
+          time: draft.appointmentTime,
+          resolutionStatus: 'reset-time',
+        })
         return {
           status: 'reset-time',
           draft: this.withAvailabilityFallback(draft, 'reset-time'),
           message: AVAILABILITY_FALLBACK_MESSAGE,
+          contextUpdates: {
+            availableProfessionalIdsForSlot: null,
+            autoAssignedProfessional: false,
+            timeSlot: null,
+          },
         }
       }
     }
@@ -654,6 +733,81 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   private extractValidId(id: unknown): number | undefined {
     const numId = Number(id)
     return Number.isFinite(numId) && numId > 0 ? numId : undefined
+  }
+
+  private buildAvailabilityContextUpdates(updates: AppointmentAvailabilityContextUpdates = {}): AppointmentAvailabilityContextUpdates {
+    return {
+      professionalId: updates.professionalId ?? null,
+      professionalName: updates.professionalName ?? null,
+      availableProfessionalIdsForSlot: updates.availableProfessionalIdsForSlot ?? null,
+      autoAssignedProfessional: updates.autoAssignedProfessional ?? false,
+      timeSlot: updates.timeSlot ?? null,
+    }
+  }
+
+  private async tryPreserveTimeSlotWithAnotherProfessional(
+    phone: string,
+    draft: IAppointmentValidationDraft,
+    serviceId: number,
+    date: string,
+  ): Promise<AppointmentAvailabilityResolution | null> {
+    const time = draft.appointmentTime ?? null
+    if (!time) {
+      return null
+    }
+
+    const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
+      phone,
+      date,
+      serviceId,
+    })
+    const matchingSlot = aggregatedSlots.find((slot) => slot.start === time)
+    if (!matchingSlot || !matchingSlot.professionals.length) {
+      return null
+    }
+
+    const compatibleProfessionalIds = matchingSlot.professionals.map((professional) => String(professional.id))
+    if (matchingSlot.professionals.length === 1) {
+      const [singleProfessional] = matchingSlot.professionals
+      return {
+        status: 'ok',
+        draft: {
+          ...draft,
+          service: draft.service ? { ...draft.service } : null,
+          professional: {
+            id: String(singleProfessional.id),
+            name: singleProfessional.name ?? null,
+          },
+        },
+        contextUpdates: this.buildAvailabilityContextUpdates({
+          professionalId: String(singleProfessional.id),
+          professionalName: singleProfessional.name ?? null,
+          availableProfessionalIdsForSlot: null,
+          autoAssignedProfessional: true,
+          timeSlot: time,
+        }),
+      }
+    }
+
+    return {
+      status: 'reselect-professional-keep-slot',
+      draft: {
+        ...draft,
+        service: draft.service ? { ...draft.service } : null,
+        professional: { id: null, name: null },
+      },
+      message: draft.professional?.name
+        ? `${draft.professional.name} nao atende esse servico nesse horario, mas ${time} segue disponivel. Vou te mostrar quem consegue te atender.`
+        : `O horario ${time} segue disponivel para esse servico. Vou te mostrar quem consegue te atender.`,
+      compatibleProfessionalIds,
+      contextUpdates: this.buildAvailabilityContextUpdates({
+        professionalId: null,
+        professionalName: null,
+        availableProfessionalIdsForSlot: compatibleProfessionalIds,
+        autoAssignedProfessional: false,
+        timeSlot: time,
+      }),
+    }
   }
 
   private hasUsableRef(ref: IdNameRef | null | undefined): boolean {

@@ -86,10 +86,20 @@ export interface PendingAvailabilityResolution {
   expiresAt: string
 }
 
+export interface AppointmentAvailabilityContextUpdates {
+  professionalId?: string | null
+  professionalName?: string | null
+  availableProfessionalIdsForSlot?: string[] | null
+  autoAssignedProfessional?: boolean
+  timeSlot?: string | null
+}
+
 export type AppointmentAvailabilityResolution =
-  | { status: 'ok'; draft: IAppointmentValidationDraft }
+  | { status: 'ok'; draft: IAppointmentValidationDraft; contextUpdates?: AppointmentAvailabilityContextUpdates }
   | {
-      status: 'reset-time' | 'reset-date' | 'reset-professional'
+      status: 'reset-time' | 'reset-date' | 'reset-professional' | 'reselect-professional-keep-slot'
       draft: IAppointmentValidationDraft
       message: string
+      compatibleProfessionalIds?: string[]
+      contextUpdates?: AppointmentAvailabilityContextUpdates
     }

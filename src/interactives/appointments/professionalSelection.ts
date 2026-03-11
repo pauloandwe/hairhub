@@ -20,11 +20,27 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
     const draft = await appointmentService.loadDraft(phone)
     const serviceId = draft.service?.id ?? null
     const professionals = await professionalService.getProfessionals(phone, serviceId)
-    if (professionals.length === 0) {
+    const allowedProfessionalIds = Array.isArray(getUserContextSync(phone)?.availableProfessionalIdsForSlot)
+      ? new Set(getUserContextSync(phone)?.availableProfessionalIdsForSlot.map((id: string) => String(id)))
+      : null
+    const filteredProfessionals = allowedProfessionalIds && allowedProfessionalIds.size > 0 ? professionals.filter((professional) => allowedProfessionalIds.has(String(professional.id))) : professionals
+
+    if (allowedProfessionalIds && allowedProfessionalIds.size > 0) {
+      console.info('[professionalFlow] Filtering professionals to keep the preserved slot.', {
+        phone,
+        serviceId,
+        appointmentDate: draft.appointmentDate,
+        appointmentTime: draft.appointmentTime,
+        allowedProfessionalIds: Array.from(allowedProfessionalIds),
+        filteredCount: filteredProfessionals.length,
+      })
+    }
+
+    if (filteredProfessionals.length === 0) {
       return []
     }
 
-    return [{ id: 'ANY', name: 'Nenhum específico' }, ...professionals]
+    return [{ id: 'ANY', name: 'Nenhum específico' }, ...filteredProfessionals]
   },
   ui: {
     header: 'Escolha o barbeiro',
