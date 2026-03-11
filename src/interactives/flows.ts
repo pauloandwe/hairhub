@@ -2,7 +2,7 @@ import { markMessageAsRead, sendWhatsAppInteractiveList, sendWhatsAppMessage } f
 import { MORE_ACTION_TOKEN, buildNamespacedId, buildPaginatedListRows, registerPendingListInteraction } from '../utils/interactive'
 import { getInteractiveCopy } from '../utils/conversation-copy'
 import { registerInteractiveSelectionHandler } from './registry'
-import { getUserContextSync } from '../env.config'
+import { getUserContextSync, setUserContext } from '../env.config'
 import { UiDefaults } from './types'
 
 export interface SelectionFlowConfig<T extends { id: string; name?: string; description?: string }> {
@@ -70,15 +70,37 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
     console.warn(`[SelectionFlow] Limiting extra actions for ${config.namespace} to ${availableExtraActionSlots}. Received ${configuredExtraActions.length} actions.`)
   }
   const extraActionHandlers = new Map<string, SelectionFlowExtraAction>()
-  const sanitizedExtraActions = registeredExtraActions.map((action) => {
+  registeredExtraActions.forEach((action) => {
     extraActionHandlers.set(action.id, action)
+  })
+
+  const sanitizeExtraAction = (action: SelectionFlowExtraAction) => {
     return {
       id: action.id,
       sectionTitle: sanitizeSectionTitle(action.sectionTitle?.trim() || 'Ações'),
       title: sanitizeRowTitle(action.title),
       description: sanitizeRowDescription(action.description),
     }
-  })
+  }
+
+  async function rememberReplayListCard(userId: string, card: { header?: string; body: string; footer?: string; buttonLabel: string }): Promise<void> {
+    const currentRegistration = getUserContextSync(userId)?.activeRegistration
+    const pendingStep = currentRegistration?.pendingStep
+    if (!pendingStep) return
+
+    await setUserContext(userId, {
+      activeRegistration: {
+        ...currentRegistration,
+        pendingStep: {
+          ...pendingStep,
+          replayUi: {
+            surface: 'list',
+            listCard: card,
+          },
+        },
+      },
+    })
+  }
 
   async function handleFlowError(userId: string, error: unknown, stage: 'list' | 'selection'): Promise<boolean> {
     if (!config.onError) return false
@@ -117,7 +139,8 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
         return
       }
 
-      const extraActionCount = sanitizedExtraActions.length
+      const visibleExtraActions = registeredExtraActions.map(sanitizeExtraAction)
+      const extraActionCount = visibleExtraActions.length
       const availableRowSlots = MAX_WHATSAPP_LIST_ROWS - extraActionCount
       if (availableRowSlots <= 0) {
         console.error(`[SelectionFlow] Unable to render list for ${config.namespace}: no row slots available after reserving extra actions.`)
@@ -136,58 +159,66 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
         (item: T, idx: number) => config.descriptionBuilder?.(item, idx, offset),
       )
 
-      const extraSections: { title: string; rows: { id: string; title: string; description?: string }[] }[] = []
+      const groupedSections = new Map<string, { title: string; rows: { id: string; title: string; description?: string }[] }>()
 
       if (actionRows.length) {
-        extraSections.push({
+        groupedSections.set('Ações', {
           title: 'Ações',
-          rows: actionRows,
+          rows: [...actionRows],
         })
       }
 
-      if (sanitizedExtraActions.length > 0) {
-        const groupedSections = new Map<string, { title: string; rows: { id: string; title: string; description?: string }[] }>()
+      visibleExtraActions.forEach((action) => {
+        const sectionKey = action.sectionTitle
+        const existing = groupedSections.get(sectionKey)
+        const row = {
+          id: buildNamespacedId(config.namespace, action.id),
+          title: action.title,
+          description: action.description,
+        }
 
-        sanitizedExtraActions.forEach((action) => {
-          const sectionKey = action.sectionTitle
-          const existing = groupedSections.get(sectionKey)
-          const row = {
-            id: buildNamespacedId(config.namespace, action.id),
-            title: action.title,
-            description: action.description,
-          }
+        if (existing) {
+          existing.rows.push(row)
+        } else {
+          groupedSections.set(sectionKey, {
+            title: sectionKey,
+            rows: [row],
+          })
+        }
+      })
 
-          if (existing) {
-            existing.rows.push(row)
-          } else {
-            groupedSections.set(sectionKey, {
-              title: sectionKey,
-              rows: [row],
-            })
-          }
-        })
+      const extraSections: { title: string; rows: { id: string; title: string; description?: string }[] }[] = []
 
-        groupedSections.forEach((section) => {
-          if (!section.rows.length) return
-          extraSections.push(section)
-        })
-      }
+      groupedSections.forEach((section) => {
+        if (!section.rows.length) return
+        extraSections.push(section)
+      })
+
+      const listBody = bodyMsg || config.defaultBody || getInteractiveCopy('chooseOption')
+      const listButtonLabel = config.ui.buttonLabel ?? 'Ver opções'
 
       await sendWhatsAppInteractiveList({
         to: userId,
         header: config.ui.header,
-        body: bodyMsg || config.defaultBody || getInteractiveCopy('chooseOption'),
+        body: listBody,
         footer: config.ui.footer,
-        buttonLabel: config.ui.buttonLabel ?? 'Ver opções',
+        buttonLabel: listButtonLabel,
         sectionTitle: config.ui.sectionTitle,
         rows,
         extraSections: extraSections.length ? extraSections : undefined,
       })
 
+      await rememberReplayListCard(userId, {
+        header: config.ui.header,
+        body: listBody,
+        footer: config.ui.footer,
+        buttonLabel: listButtonLabel,
+      })
+
       const historyMessage = `Enviei a lista de "${config.ui.sectionTitle}" para você escolher`
 
       console.log(`[SelectionFlow] ${historyMessage} (userId: ${userId})`)
-      const extraActionIds = sanitizedExtraActions.map((action) => action.id)
+      const extraActionIds = visibleExtraActions.map((action) => action.id)
       const ids = [...visibleIds, ...extraActionIds, ...(nextOffset !== undefined ? [`${MORE_ACTION_TOKEN}:${nextOffset}`] : [])]
 
       registerPendingListInteraction({

@@ -27,8 +27,20 @@ export class SellingContextService extends GenericContextService<ISellingsValida
     return await sellingService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: ISellingsValidationDraft): Promise<void> => {
+    await sellingService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: ISellingsValidationDraft): Promise<string[]> => {
+    return (await sellingService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await sellingService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await saleFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

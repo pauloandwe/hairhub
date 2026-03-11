@@ -27,8 +27,20 @@ export class AppointmentContextService extends GenericContextService<IAppointmen
     return await appointmentService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: IAppointmentValidationDraft): Promise<void> => {
+    await appointmentService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: IAppointmentValidationDraft): Promise<string[]> => {
+    return (await appointmentService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await appointmentService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await appointmentFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

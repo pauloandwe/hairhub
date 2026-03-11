@@ -23,8 +23,20 @@ export class AppointmentCancellationContextService extends GenericContextService
     return appointmentCancellationDraftService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: AppointmentCancellationDraft): Promise<void> => {
+    await appointmentCancellationDraftService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: AppointmentCancellationDraft): Promise<string[]> => {
+    return (await appointmentCancellationDraftService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return appointmentCancellationDraftService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await appointmentCancellationFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

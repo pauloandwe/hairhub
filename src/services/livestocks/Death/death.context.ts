@@ -25,8 +25,20 @@ export class DeathContextService extends GenericContextService<DeathValidationDr
     return await loadDeathDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: DeathValidationDraft): Promise<void> => {
+    await deathDraftService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: DeathValidationDraft): Promise<string[]> => {
+    return (await deathDraftService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await deathDraftService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await deathFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

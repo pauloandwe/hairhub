@@ -8,7 +8,7 @@ export interface PendingListInteraction {
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000
 
-const pendingByUser: Record<string, PendingListInteraction> = {}
+const pendingByUser: Record<string, Record<string, PendingListInteraction>> = {}
 
 export function buildNamespacedId(namespace: string, rawId: string) {
   return `${namespace}:${rawId}`
@@ -33,7 +33,11 @@ interface RegisterParams {
 }
 
 export function registerPendingListInteraction({ userId, type, namespace, ids, ttlMs }: RegisterParams): void {
-  pendingByUser[userId] = {
+  if (!pendingByUser[userId]) {
+    pendingByUser[userId] = {}
+  }
+
+  pendingByUser[userId][namespace] = {
     type,
     namespace,
     validIds: new Set(ids.map(String)),
@@ -55,18 +59,22 @@ export type ConsumeResult = ConsumeResultAccepted | ConsumeResultRejected
 
 export function consumePendingListInteraction(userId: string, namespace: string, value: string): ConsumeResult {
   cleanupExpired(userId)
-  const pending = pendingByUser[userId]
+  const pending = pendingByUser[userId]?.[namespace]
   if (!pending) return { accepted: false, reason: 'none' }
-  if (pending.namespace !== namespace) return { accepted: false, reason: 'namespace' }
   if (!pending.validIds.has(value)) return { accepted: false, reason: 'value' }
-  delete pendingByUser[userId]
+  delete pendingByUser[userId][namespace]
+  if (Object.keys(pendingByUser[userId]).length === 0) {
+    delete pendingByUser[userId]
+  }
   return { accepted: true, pending }
 }
 
 export function hasPendingInteraction(userId: string, namespace?: string): boolean {
   cleanupExpired(userId)
-  const p = pendingByUser[userId]
-  return !!p && (!namespace || p.namespace === namespace)
+  const pending = pendingByUser[userId]
+  if (!pending) return false
+  if (namespace) return !!pending[namespace]
+  return Object.keys(pending).length > 0
 }
 
 export type ListRow = { id: string; title: string; description?: string }
@@ -136,8 +144,18 @@ export function buildPaginatedListRows<T extends { id: string; name?: string; de
 }
 
 function cleanupExpired(userId: string): void {
-  const p = pendingByUser[userId]
-  if (p && isExpired(p)) delete pendingByUser[userId]
+  const pending = pendingByUser[userId]
+  if (!pending) return
+
+  for (const [namespace, interaction] of Object.entries(pending)) {
+    if (isExpired(interaction)) {
+      delete pending[namespace]
+    }
+  }
+
+  if (Object.keys(pending).length === 0) {
+    delete pendingByUser[userId]
+  }
 }
 
 function isExpired(p: PendingListInteraction): boolean {

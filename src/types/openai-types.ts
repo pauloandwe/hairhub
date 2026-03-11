@@ -4,4 +4,5 @@ export type OpenAITool = OpenAI.ChatCompletionTool
 export interface AIResponseResult {
   text: string
   suppress: boolean
+  skipUserHistory?: boolean
 }

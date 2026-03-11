@@ -30,8 +30,20 @@ export class SimplifiedExpenseContextService extends GenericContextService<Simpl
     return await simplifiedExpenseService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: SimplifiedExpenseValidationDraft): Promise<void> => {
+    await simplifiedExpenseService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: SimplifiedExpenseValidationDraft): Promise<string[]> => {
+    return (await simplifiedExpenseService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await simplifiedExpenseService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await simplifiedExpenseFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

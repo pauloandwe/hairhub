@@ -15,10 +15,40 @@ const metaApi = axios.create({
   baseURL: `https://graph.facebook.com/${WHATSAPP_API_VERSION}`,
 })
 
+type BufferedOperation = () => Promise<void>
+const outboundCaptureByUser = new Map<string, BufferedOperation[]>()
+
 interface ResolvePhoneNumberIdOptions {
   businessPhone?: string
   phoneNumberId?: string
   contextPhone?: string
+}
+
+export function beginOutboundCapture(userId: string): void {
+  if (!userId) return
+  outboundCaptureByUser.set(userId, [])
+}
+
+export function clearOutboundCapture(userId: string): void {
+  if (!userId) return
+  outboundCaptureByUser.delete(userId)
+}
+
+export async function flushOutboundCapture(userId: string): Promise<void> {
+  const operations = outboundCaptureByUser.get(userId)
+  if (!operations) return
+
+  outboundCaptureByUser.delete(userId)
+  for (const operation of operations) {
+    await operation()
+  }
+}
+
+function enqueueOutboundCapture(userId: string, operation: BufferedOperation): boolean {
+  const queue = outboundCaptureByUser.get(userId)
+  if (!queue) return false
+  queue.push(operation)
+  return true
 }
 
 async function resolvePhoneNumberId(options?: ResolvePhoneNumberIdOptions): Promise<{ phoneNumberId: string; businessPhone?: string }> {
@@ -110,6 +140,14 @@ export interface SendWhatsAppInteractiveOptions {
 }
 
 export async function sendWhatsAppMessage(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
+  if (
+    enqueueOutboundCapture(to, async () => {
+      await sendWhatsAppMessage(to, text, options)
+    })
+  ) {
+    return 'buffered'
+  }
+
   cancelTypingIndicatorForUser(to)
 
   try {
@@ -238,6 +276,14 @@ export async function sendWhatsAppInteractiveList(params: {
 }): Promise<void> {
   const { to, header, body, footer, buttonLabel = 'Selecionar', rows, sectionTitle = 'Itens', extraSections, options } = params
 
+  if (
+    enqueueOutboundCapture(to, async () => {
+      await sendWhatsAppInteractiveList(params)
+    })
+  ) {
+    return
+  }
+
   cancelTypingIndicatorForUser(to)
 
   const formatOptional = (value: string | undefined, maxLength: number): string | undefined => {
@@ -356,6 +402,14 @@ export async function sendWhatsAppInteractiveList(params: {
 
 export async function sendWhatsAppInteractiveButtons(params: { to: string; body: string; header?: string; footer?: string; buttons: { id: string; title: string }[]; options?: SendWhatsAppInteractiveOptions }): Promise<string> {
   const { to, body, header, footer, buttons, options } = params
+
+  if (
+    enqueueOutboundCapture(to, async () => {
+      await sendWhatsAppInteractiveButtons(params)
+    })
+  ) {
+    return 'buffered'
+  }
 
   cancelTypingIndicatorForUser(to)
 

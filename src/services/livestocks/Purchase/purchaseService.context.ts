@@ -27,8 +27,20 @@ export class PurchaseContextService extends GenericContextService<IPurchaseValid
     return await purchaseService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: IPurchaseValidationDraft): Promise<void> => {
+    await purchaseService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: IPurchaseValidationDraft): Promise<string[]> => {
+    return (await purchaseService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await purchaseService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await purchaseFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

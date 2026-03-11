@@ -27,8 +27,20 @@ export class BirthContextService extends GenericContextService<IBirthValidationD
     return await birthService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: IBirthValidationDraft): Promise<void> => {
+    await birthService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: IBirthValidationDraft): Promise<string[]> => {
+    return (await birthService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await birthService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await birthFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

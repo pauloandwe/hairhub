@@ -24,8 +24,20 @@ export class AppointmentRescheduleContextService extends GenericContextService<R
     return await appointmentRescheduleDraftService.loadDraft(phone)
   }
 
+  protected saveDraft = async (phone: string, draft: RescheduleDraft): Promise<void> => {
+    await appointmentRescheduleDraftService.saveDraft(phone, draft)
+  }
+
+  protected getMissingFields = async (draft: RescheduleDraft): Promise<string[]> => {
+    return (await appointmentRescheduleDraftService.hasMissingFields(draft)).map(String)
+  }
+
   protected getDraftHistory = async (userId: string): Promise<ChatMessage[]> => {
     return await appointmentRescheduleDraftService.getDraftHistory(userId)
+  }
+
+  protected replayPendingStep = async (userId: string): Promise<void> => {
+    await appointmentRescheduleFunctions.replayPendingStep({ phone: userId })
   }
 
   protected getFlowConfig = (): Required<FlowConfig> => {

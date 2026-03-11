@@ -117,6 +117,20 @@ export interface OutreachReplyContext {
   metadata: Record<string, any>
 }
 
+export interface ActiveRegistrationPendingStep {
+  field: string
+  mode: 'creating' | 'editing'
+  replayUi?: {
+    surface?: 'list'
+    listCard?: {
+      header?: string
+      body: string
+      footer?: string
+      buttonLabel: string
+    }
+  }
+}
+
 export interface UserRuntimeContext {
   phone: string
   workingHours: BusinessWorkingHour[]
@@ -148,6 +162,7 @@ export interface UserRuntimeContext {
     step?: string
     editingField?: string
     awaitingInputForField?: string
+    pendingStep?: ActiveRegistrationPendingStep
     lastCreatedRecordId?: string
     editMode?: boolean
     [key: string]: any
@@ -274,6 +289,7 @@ export async function resetActiveRegistration(phone: string) {
       step: FlowStep.Initial,
       editingField: undefined,
       awaitingInputForField: undefined,
+      pendingStep: undefined,
       lastCreatedRecordId: undefined,
     },
   })

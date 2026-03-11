@@ -344,3 +344,87 @@ export async function sendSingleActionButton({ namespace, userId, message, butto
     )
   })
 }
+
+type ReplayListGateButtonOptions = {
+  namespace?: string
+  userId: string
+  body: string
+  header?: string
+  footer?: string
+  viewOptionsLabel?: string
+  cancelLabel?: string
+  onViewOptions: (userId: string) => Promise<void>
+  onCancel: (userId: string) => Promise<void>
+}
+
+export async function sendReplayListGateButtons({ namespace = `REPLAY_LIST_GATE_${Date.now()}`, userId, body, header, footer, viewOptionsLabel = 'Ver opções', cancelLabel = 'Cancelar fluxo', onViewOptions, onCancel }: ReplayListGateButtonOptions) {
+  const viewId = buildNamespacedId(namespace, 'VIEW')
+  const cancelId = buildNamespacedId(namespace, 'CANCEL')
+
+  await sendWhatsAppInteractiveButtons({
+    to: userId,
+    header,
+    body,
+    footer,
+    buttons: [
+      { id: viewId, title: viewOptionsLabel },
+      { id: cancelId, title: cancelLabel },
+    ],
+  })
+
+  registerPendingListInteraction({
+    userId,
+    type: 'replayListGateInteraction',
+    namespace,
+    ids: ['VIEW', 'CANCEL'],
+  })
+
+  registerInteractiveSelectionHandler(namespace, async ({ userId, value, accepted }) => {
+    if (!accepted) {
+      await sendReplayListGateButtons({
+        userId,
+        body,
+        header,
+        footer,
+        viewOptionsLabel,
+        cancelLabel,
+        onViewOptions,
+        onCancel,
+      })
+      return
+    }
+
+    if (value === 'VIEW') {
+      await onViewOptions(userId)
+      return
+    }
+
+    if (value === 'CANCEL') {
+      await onCancel(userId)
+      return
+    }
+
+    systemLogger.warn(
+      {
+        namespace,
+        value,
+      },
+      'Unexpected value received on replay list gate buttons.',
+    )
+  })
+}
+
+export async function sendCancelFlowButton(args: { userId: string; namespace?: string; message?: string; buttonLabel?: string }) {
+  const namespace = args.namespace ?? `CANCEL_ACTIVE_FLOW_${Date.now()}`
+
+  await sendSingleActionButton({
+    namespace,
+    userId: args.userId,
+    message: args.message ?? 'Se quiser sair desse fluxo, pode cancelar por aqui.',
+    buttonLabel: args.buttonLabel ?? 'Cancelar fluxo',
+    onAction: async (userId: string) => {
+      const { cancelActiveRegistration } = await import('./followup')
+      await cancelActiveRegistration(userId)
+    },
+  })
+}

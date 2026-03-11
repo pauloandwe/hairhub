@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { AppErrorCodes } from '../../enums/constants'
 import { FlowStep, FlowType } from '../../enums/generic.enum'
-import { getUserContext, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
+import { ActiveRegistrationPendingStep, getUserContext, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
 import { GenericService } from '../../services/generic/generic.service'
 import { DraftStatus, IBaseEntity, RegistrationDraftBase } from '../../services/generic/generic.types'
 import { clearAllUserIntents } from '../../services/intent-history.service'
@@ -36,6 +36,7 @@ type ActiveRegistrationState<TDraft extends RegistrationDraftBase> = {
   step?: FlowStep
   editingField?: string
   awaitingInputForField?: string
+  pendingStep?: ActiveRegistrationPendingStep
   lastCreatedRecordId?: string
   editMode?: boolean
   status?: DraftStatus
@@ -234,6 +235,28 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     return editor(phone)
   }
 
+  async replayPendingStep(args: { phone: string }): Promise<void> {
+    const { phone } = args
+    const currentRegistration = (getUserContextSync(phone)?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    const pendingStep = currentRegistration.pendingStep
+    const pendingField = pendingStep?.field ?? currentRegistration.awaitingInputForField
+
+    if (!pendingField) {
+      return
+    }
+
+    if (pendingStep?.mode === 'editing' || currentRegistration.editMode) {
+      await this.editRecordField({
+        phone,
+        field: pendingField,
+        promptMessage: this.options.messages.editPromptFallback,
+      })
+      return
+    }
+
+    await this.continueRegistration({ phone })
+  }
+
   protected async changeRegistrationWithValue(args: { phone: string; field: TEditableField; value?: TUpsertArgs[TEditableField] | null; logContext?: string }): Promise<FlowResponse<TDraft>> {
     const { phone, field, value, logContext } = args
     const context = getUserContextSync(phone)
@@ -352,6 +375,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         step: FlowStep.Editing,
         status: 'collecting',
         awaitingInputForField: undefined,
+        pendingStep: undefined,
       },
     })
 
@@ -454,6 +478,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       phone,
       {
         awaitingInputForField: field,
+        pendingStep: {
+          field,
+          mode: 'editing',
+        },
         status: 'collecting',
       },
       FlowStep.Editing,
@@ -563,6 +591,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
           status: 'completed',
           step: undefined,
           awaitingInputForField: undefined,
+          pendingStep: undefined,
           editMode: undefined,
           lastCreatedRecordId: recordId,
           completedDraftSnapshot,
@@ -843,6 +872,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         status: 'completed',
         step: undefined,
         awaitingInputForField: undefined,
+        pendingStep: undefined,
         editMode: undefined,
         lastCreatedRecordId: recordId,
         completedDraftSnapshot,
@@ -871,6 +901,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         status: 'completed',
         step: undefined,
         awaitingInputForField: undefined,
+        pendingStep: undefined,
         editMode: undefined,
         completedDraftSnapshot,
         snapshotSessionId: currentSessionId,
@@ -918,6 +949,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         step: FlowStep.Editing,
         status: 'collecting',
         awaitingInputForField: undefined,
+        pendingStep: undefined,
       },
     })
 
@@ -936,6 +968,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         step: FlowStep.Editing,
         status: 'collecting',
         awaitingInputForField: undefined,
+        pendingStep: undefined,
       },
     })
 
@@ -991,6 +1024,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         status: 'collecting',
         sessionId: newSessionId,
         completedDraftSnapshot: undefined,
+        pendingStep: undefined,
         lastCreatedRecordId: undefined,
       },
     })
@@ -1000,13 +1034,18 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
   }
 
   private async setAwaitingInputForField(phone: string, field: string, expectedStep?: FlowStep): Promise<void> {
+    const step = expectedStep ?? FlowStep.Creating
     await this.setUserContextWithFlowStep(
       phone,
       {
         awaitingInputForField: field,
+        pendingStep: {
+          field,
+          mode: step === FlowStep.Editing ? 'editing' : 'creating',
+        },
         status: 'collecting',
       },
-      expectedStep ?? FlowStep.Creating,
+      step,
     )
   }
 
@@ -1017,6 +1056,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       phone,
       {
         awaitingInputForField: undefined,
+        pendingStep: undefined,
       },
       currentRegistration.step ?? FlowStep.Creating,
     )

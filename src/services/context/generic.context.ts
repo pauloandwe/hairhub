@@ -1,6 +1,19 @@
 import { randomUUID } from 'crypto'
-import { sendWhatsAppMessage } from '../../api/meta.api'
-import { env, getAssistantContextForPhone, getBusinessIdForPhone, getBusinessNameForPhone, getBusinessPhoneForPhone, getBusinessTypeForPhone, getClientPersonalizationContextForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
+import { beginOutboundCapture, clearOutboundCapture, flushOutboundCapture, sendWhatsAppMessage } from '../../api/meta.api'
+import {
+  ActiveRegistrationPendingStep,
+  env,
+  getAssistantContextForPhone,
+  getBusinessIdForPhone,
+  getBusinessNameForPhone,
+  getBusinessPhoneForPhone,
+  getBusinessTypeForPhone,
+  getClientPersonalizationContextForPhone,
+  getUserContextSync,
+  resetActiveRegistration,
+  setUserContext,
+  UserRuntimeContext,
+} from '../../env.config'
 import { formatAssistantReply } from '../../utils/message'
 import { appendIntentHistory, clearIntentHistory, ChatMessage } from '../intent-history.service'
 import { draftHistoryService } from '../drafts/draft-history'
@@ -8,6 +21,15 @@ import { FlowConfig, SILENT_FUNCTIONS } from '../openai.config'
 import OpenAI from 'openai'
 import { FlowStep, FlowType, FlowTypeTranslation } from '../../enums/generic.enum'
 import { AIResponseResult, OpenAITool } from '../../types/openai-types'
+import { sendCancelFlowButton, sendReplayListGateButtons } from '../../interactives/genericConfirmation'
+
+type FieldFlowSnapshot<TDraft> = {
+  draft: TDraft
+  activeRegistration: NonNullable<UserRuntimeContext['activeRegistration']>
+  awaitingField?: string
+  pendingStep?: ActiveRegistrationPendingStep
+  missingFieldsBefore: string[]
+}
 
 export abstract class GenericContextService<TDraft> {
   private openai = new OpenAI({
@@ -178,8 +200,11 @@ export abstract class GenericContextService<TDraft> {
   protected abstract getFlowConfig: () => Required<FlowConfig>
   protected abstract getFunctionToCall: (functionName: string) => any
   protected abstract getDraft: (phone: string) => Promise<TDraft>
+  protected abstract saveDraft: (phone: string, draft: TDraft) => Promise<void>
+  protected abstract getMissingFields: (draft: TDraft) => Promise<string[]>
   protected abstract getDraftHistory: (userId: string) => Promise<ChatMessage[]>
   protected abstract getTools: () => Promise<OpenAITool[]>
+  protected abstract replayPendingStep: (userId: string) => Promise<void>
 
   protected getToolsForField = async (): Promise<OpenAITool[]> => {
     const flowConfig = this.getFlowConfig()
@@ -249,20 +274,184 @@ export abstract class GenericContextService<TDraft> {
     }
   }
 
+  private cloneJson<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  private captureFieldFlowSnapshot = async (userId: string): Promise<FieldFlowSnapshot<TDraft>> => {
+    const draft = await this.getDraft(userId)
+    const currentRegistration = this.cloneJson((getUserContextSync(userId)?.activeRegistration ?? {}) as UserRuntimeContext['activeRegistration'])
+    const missingFieldsBefore = await this.getMissingFields(draft)
+
+    return {
+      draft: this.cloneJson(draft),
+      activeRegistration: currentRegistration,
+      awaitingField: currentRegistration.awaitingInputForField,
+      pendingStep: currentRegistration.pendingStep,
+      missingFieldsBefore,
+    }
+  }
+
+  private getDraftFieldValue(draft: TDraft, field?: string): unknown {
+    if (!field || typeof field !== 'string') return undefined
+    return (draft as Record<string, unknown>)?.[field]
+  }
+
+  private areEquivalent(a: unknown, b: unknown): boolean {
+    return JSON.stringify(a) === JSON.stringify(b)
+  }
+
+  private hasFieldFlowProgress(args: { snapshot: FieldFlowSnapshot<TDraft>; currentDraft: TDraft; currentContext?: UserRuntimeContext; missingFieldsAfter: string[] }): boolean {
+    const { snapshot, currentDraft, currentContext, missingFieldsAfter } = args
+    const currentRegistration = currentContext?.activeRegistration ?? {}
+    const previousField = snapshot.awaitingField
+    const currentField = currentRegistration.awaitingInputForField
+    const pendingMode = snapshot.pendingStep?.mode ?? (snapshot.activeRegistration.editMode ? 'editing' : 'creating')
+
+    if (currentRegistration.status === 'completed') return true
+    if (snapshot.activeRegistration.type && !currentRegistration.type) return true
+
+    if (pendingMode === 'creating') {
+      const missingBefore = new Set(snapshot.missingFieldsBefore)
+      const missingAfter = new Set(missingFieldsAfter)
+
+      if (previousField && !missingAfter.has(previousField)) {
+        return true
+      }
+
+      if (currentField && currentField !== previousField && !missingAfter.has(currentField)) {
+        return true
+      }
+
+      if (currentField !== previousField) {
+        return true
+      }
+
+      for (const field of missingBefore) {
+        if (!missingAfter.has(field)) {
+          return true
+        }
+      }
+
+      return false
+    }
+
+    if (currentRegistration.pendingStep && !this.areEquivalent(currentRegistration.pendingStep, snapshot.pendingStep)) {
+      return true
+    }
+
+    if (currentField !== previousField) {
+      return true
+    }
+
+    if (!currentField && previousField) {
+      return true
+    }
+
+    const previousValue = this.getDraftFieldValue(snapshot.draft, previousField)
+    const currentValue = this.getDraftFieldValue(currentDraft, previousField)
+    return !this.areEquivalent(previousValue, currentValue)
+  }
+
+  private async restoreFieldFlowSnapshot(userId: string, snapshot: FieldFlowSnapshot<TDraft>): Promise<void> {
+    await this.saveDraft(userId, this.cloneJson(snapshot.draft))
+    await setUserContext(userId, {
+      activeRegistration: {
+        ...snapshot.activeRegistration,
+      },
+    })
+  }
+
+  private async handleOutOfFlowFallback(userId: string, snapshot: FieldFlowSnapshot<TDraft>): Promise<AIResponseResult> {
+    await this.restoreFieldFlowSnapshot(userId, snapshot)
+    if (!snapshot.pendingStep && snapshot.awaitingField) {
+      await setUserContext(userId, {
+        activeRegistration: {
+          ...getUserContextSync(userId)?.activeRegistration,
+          pendingStep: {
+            field: snapshot.awaitingField,
+            mode: snapshot.activeRegistration.editMode ? 'editing' : 'creating',
+          },
+        },
+      })
+    }
+
+    await sendWhatsAppMessage(userId, 'Essa mensagem está fora do fluxo atual. Vou te reenviar a etapa para continuarmos.')
+
+    const replayUi = getUserContextSync(userId)?.activeRegistration?.pendingStep?.replayUi
+    if (replayUi?.surface === 'list' && replayUi.listCard) {
+      await sendReplayListGateButtons({
+        userId,
+        header: replayUi.listCard.header,
+        body: replayUi.listCard.body,
+        footer: replayUi.listCard.footer,
+        viewOptionsLabel: replayUi.listCard.buttonLabel,
+        onViewOptions: async (currentUserId) => {
+          await this.replayPendingStep(currentUserId)
+        },
+        onCancel: async (currentUserId) => {
+          const { cancelActiveRegistration } = await import('../../interactives/followup')
+          await cancelActiveRegistration(currentUserId)
+        },
+      })
+    } else {
+      await this.replayPendingStep(userId)
+      await sendCancelFlowButton({ userId })
+    }
+
+    return {
+      text: '',
+      suppress: true,
+      skipUserHistory: true,
+    }
+  }
+
+  private async finalizeFieldFlowAttempt(args: { userId: string; snapshot: FieldFlowSnapshot<TDraft>; toolResponse: { tool_call_id: string; role: string; content: string }; toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall; cancelFunction?: string }): Promise<AIResponseResult> {
+    const { userId, snapshot, toolResponse, toolCall, cancelFunction } = args
+
+    if (toolCall.type === 'function' && toolCall.function.name === cancelFunction) {
+      await flushOutboundCapture(userId)
+      return { text: '', suppress: true }
+    }
+
+    const currentDraft = await this.getDraft(userId)
+    const currentContext = getUserContextSync(userId)
+    const missingFieldsAfter = await this.getMissingFields(currentDraft)
+    const hasProgress = this.hasFieldFlowProgress({ snapshot, currentDraft, currentContext, missingFieldsAfter })
+
+    if (!hasProgress) {
+      clearOutboundCapture(userId)
+      return this.handleOutOfFlowFallback(userId, snapshot)
+    }
+
+    await flushOutboundCapture(userId)
+
+    try {
+      const parsedToolResponse = JSON.parse(toolResponse.content)
+      if (!parsedToolResponse?.error) {
+        await clearIntentHistory(userId, this.flowType)
+        console.log(`[GenericContext] Histórico da intenção "${this.flowType}" limpo após avanço de etapa`)
+      }
+    } catch (err) {
+      console.warn(`[GenericContext] Erro ao parsear resposta da tool para verificar limpeza de histórico:`, err)
+    }
+
+    return { text: '', suppress: true }
+  }
+
   protected handleEditingFlow = async (args: { userId: string; incomingMessage: string; flowConfig: FlowConfig; editingField: string; userContext: UserRuntimeContext }): Promise<AIResponseResult> => {
     const { userId, incomingMessage, flowConfig, editingField, userContext } = args
     const { activeRegistration } = userContext
     const businessName = getBusinessNameForPhone(userId)
+    const snapshot = await this.captureFieldFlowSnapshot(userId)
 
     try {
       const editFunctionName = flowConfig?.editFunction
       if (!editFunctionName) {
         console.error(`[State] Flow '${this.flowType}' is active but has no 'editFunction' configured.`)
-        await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Editing, awaitingInputForField: undefined } })
+        await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Editing, awaitingInputForField: snapshot.awaitingField, pendingStep: snapshot.pendingStep } })
         return { text: 'Houve um problema ao processar sua solicitação. Vamos tentar novamente?', suppress: false }
       }
-
-      await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Editing, awaitingInputForField: undefined } })
 
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
       console.log(`Handling editing flow for user ${userId}, field: ${editingField}, message: ${incomingMessage}`)
@@ -285,30 +474,21 @@ export abstract class GenericContextService<TDraft> {
       const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
 
       if (!agentHasFoundFunctionCall) {
-        await sendWhatsAppMessage(userId, 'Não consegui entender, vamos tentar novamente?')
-        return { text: '', suppress: true }
+        return this.handleOutOfFlowFallback(userId, snapshot)
       }
 
+      beginOutboundCapture(userId)
       const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
-
-      if (agentHasFoundFunctionCall.type === 'function' && agentHasFoundFunctionCall.function.name === flowConfig.cancelFunction) {
-        console.log(`[GenericContext] Cancelamento de edição detectado para ${this.flowType}`)
-        return { text: '', suppress: true }
-      }
-
-      try {
-        const parsedToolResponse = JSON.parse(toolResponse.content)
-        if (!parsedToolResponse?.error) {
-          await clearIntentHistory(userId, this.flowType)
-          console.log(`[GenericContext] Histórico da intenção "${this.flowType}" limpo após edição bem-sucedida`)
-        }
-      } catch (err) {
-        console.warn(`[GenericContext] Erro ao parsear resposta da tool para verificar limpeza de histórico:`, err)
-      }
-
-      return { text: '', suppress: true }
+      return await this.finalizeFieldFlowAttempt({
+        userId,
+        snapshot,
+        toolResponse,
+        toolCall: agentHasFoundFunctionCall,
+        cancelFunction: flowConfig.cancelFunction,
+      })
     } catch (error) {
-      await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Editing, awaitingInputForField: undefined } })
+      clearOutboundCapture(userId)
+      await this.restoreFieldFlowSnapshot(userId, snapshot)
       console.error('[GenericContextService] Erro ao processar edição:', error)
       return { text: 'Houve um problema ao processar sua solicitação. Vamos tentar novamente?', suppress: false }
     }
@@ -316,11 +496,9 @@ export abstract class GenericContextService<TDraft> {
 
   protected handleCreationFieldFlow = async (args: { userId: string; incomingMessage: string; flowConfig: FlowConfig; awaitingField: string; userContext: UserRuntimeContext }): Promise<AIResponseResult> => {
     const { userId, incomingMessage, flowConfig, awaitingField, userContext } = args
-    const { activeRegistration } = userContext
+    const snapshot = await this.captureFieldFlowSnapshot(userId)
 
     try {
-      await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Creating, awaitingInputForField: undefined } })
-
       const defaultFlowPrompt = await this.buildBasePrompt({}, [], incomingMessage, undefined, userId, awaitingField, true)
 
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
@@ -338,37 +516,21 @@ export abstract class GenericContextService<TDraft> {
       const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
 
       if (!agentHasFoundFunctionCall) {
-        const messageInvalidResponse = 'Não consegui entender, vamos tentar novamente?'
-        await sendWhatsAppMessage(userId, messageInvalidResponse)
-        return { text: '', suppress: true }
+        return this.handleOutOfFlowFallback(userId, snapshot)
       }
 
+      beginOutboundCapture(userId)
       const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
-
-      if (agentHasFoundFunctionCall.type === 'function' && agentHasFoundFunctionCall.function.name === flowConfig.cancelFunction) {
-        console.log(`[GenericContext] Cancelamento de cadastro detectado durante field collection para ${this.flowType}`)
-        return {
-          text: '',
-          suppress: true,
-        }
-      }
-
-      try {
-        const parsedToolResponse = JSON.parse(toolResponse.content)
-        if (!parsedToolResponse?.error) {
-          await clearIntentHistory(userId, this.flowType)
-          console.log(`[GenericContext] Histórico da intenção \"${this.flowType}\" limpo após field collection`)
-        }
-      } catch (err) {
-        console.warn(`[GenericContext] Erro ao parsear resposta da tool para verificar limpeza de histórico:`, err)
-      }
-
-      return {
-        text: '',
-        suppress: true,
-      }
+      return await this.finalizeFieldFlowAttempt({
+        userId,
+        snapshot,
+        toolResponse,
+        toolCall: agentHasFoundFunctionCall,
+        cancelFunction: flowConfig.cancelFunction,
+      })
     } catch (error) {
-      await setUserContext(userId, { activeRegistration: { ...activeRegistration, step: FlowStep.Creating, awaitingInputForField: undefined } })
+      clearOutboundCapture(userId)
+      await this.restoreFieldFlowSnapshot(userId, snapshot)
       console.error('[GenericContextService] Erro ao processar field collection:', error)
       return { text: 'Houve um problema ao processar sua solicitação. Vamos tentar novamente?', suppress: false }
     }
@@ -412,6 +574,7 @@ export abstract class GenericContextService<TDraft> {
           step: currentRegistration.step ?? FlowStep.Creating,
           status,
           awaitingInputForField: currentRegistration.awaitingInputForField,
+          pendingStep: currentRegistration.pendingStep,
         },
       })
     }
@@ -504,6 +667,9 @@ export abstract class GenericContextService<TDraft> {
       batchContent.push({ role: 'user', content: incomingMessage })
 
       if (llmResponse.suppress) {
+        if (llmResponse.skipUserHistory) {
+          return
+        }
         await this.saveHistory(userId, batchContent, false)
         return
       }
