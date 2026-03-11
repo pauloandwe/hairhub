@@ -1,10 +1,15 @@
-import { AppointmentRescheduleAppointment, getBusinessIdForPhone } from '../../env.config'
+import {
+  AppointmentRescheduleAppointment,
+  getBusinessIdForPhone,
+  getBusinessTimezoneForPhone,
+} from '../../env.config'
 import { GenericService } from '../generic/generic.service'
 import { DraftStatus, IBaseEntity, SelectionItem, SummarySections } from '../generic/generic.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { DateFormatter } from '../../utils/date'
 import { appointmentRescheduleService } from './appointment-reschedule.service'
 import { customerAppointmentsService } from './customer-appointments.service'
+import { combineDateAndTimeInTimeZone } from '../../utils/timezone'
 
 export enum RescheduleField {
   AppointmentId = 'appointmentId',
@@ -52,22 +57,6 @@ function emptyRescheduleDraft(): RescheduleDraft {
 
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 
-const combineDateAndTime = (date: string, time: string): Date => {
-  const [year, month, day] = date.split('-').map(Number)
-  const [hours, minutes] = time.split(':').map(Number)
-
-  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
-  const offsetMinutes = localDate.getTimezoneOffset()
-
-  const candidate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
-  candidate.setTime(candidate.getTime() + offsetMinutes * 60000)
-
-  if (Number.isNaN(candidate.getTime())) {
-    throw new Error('Data ou horário inválido para remarcar o agendamento.')
-  }
-  return candidate
-}
-
 const addMinutes = (date: Date, minutes: number): Date => {
   return new Date(date.getTime() + minutes * 60_000)
 }
@@ -111,7 +100,10 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     }
 
     const farmIdAsNumber = Number(businessId)
-    const apiPayload = this.transformToApiPayload(hydratedDraft, { farmId: Number.isFinite(farmIdAsNumber) ? farmIdAsNumber : 0 })
+    const apiPayload = this.transformToApiPayload(hydratedDraft, {
+      farmId: Number.isFinite(farmIdAsNumber) ? farmIdAsNumber : 0,
+      phone,
+    })
 
     const patchPayload: Partial<RescheduleCreationPayload> = {
       startDate: apiPayload.startDate,
@@ -173,7 +165,10 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
         label: 'Agendamento',
         value: (draft: RescheduleDraft) => {
           if (!draft.selectedAppointment) return null
-          const when = DateFormatter.formatToDateTimeLabel(draft.selectedAppointment.startDate)
+          const when = DateFormatter.formatToDateTimeLabel(
+            draft.selectedAppointment.startDate,
+            draft.selectedAppointment.businessTimezone,
+          )
           const service = draft.selectedAppointment.serviceName ? ` ${draft.selectedAppointment.serviceName}` : ''
           const professional = draft.selectedAppointment.professionalName ? ` com ${draft.selectedAppointment.professionalName}` : ''
           return `${service}${professional}${when ? ` para ${when}` : ''}`
@@ -190,12 +185,22 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
     ]
   }
 
-  protected transformToApiPayload = (draft: RescheduleDraft, _context: { farmId: number }): RescheduleCreationPayload => {
+  protected transformToApiPayload = (
+    draft: RescheduleDraft,
+    context: { farmId: number; phone?: string },
+  ): RescheduleCreationPayload => {
     if (!draft.appointmentId || !draft.newDate || !draft.newTime) {
       throw new Error('Faltam dados para remarcar o agendamento.')
     }
 
-    const startDate = combineDateAndTime(draft.newDate, draft.newTime)
+    const businessTimezone =
+      draft.selectedAppointment?.businessTimezone ??
+      (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
+    const startDate = combineDateAndTimeInTimeZone(
+      draft.newDate,
+      draft.newTime,
+      businessTimezone,
+    )
     const durationMinutes = draft.selectedAppointment?.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 
@@ -242,7 +247,12 @@ export class AppointmentRescheduleDraftService extends GenericService<Reschedule
 
     if (has(RescheduleField.AppointmentId) || has(RescheduleField.NewDate) || has(RescheduleField.NewTime)) {
       if (draft.appointmentId && draft.newDate && draft.newTime) {
-        const startDate = combineDateAndTime(draft.newDate, draft.newTime)
+        const businessTimezone = draft.selectedAppointment?.businessTimezone ?? null
+        const startDate = combineDateAndTimeInTimeZone(
+          draft.newDate,
+          draft.newTime,
+          businessTimezone,
+        )
         const durationMinutes = draft.selectedAppointment?.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
         const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 

@@ -1,9 +1,13 @@
 import { DateFormatter } from '../../utils/date'
-import { AppointmentRescheduleAppointment } from '../../env.config'
+import {
+  AppointmentRescheduleAppointment,
+  getBusinessTimezoneForPhone,
+} from '../../env.config'
 import { customerAppointmentsService } from '../../services/appointments/customer-appointments.service'
 import { professionalService } from '../../services/appointments/professional.service'
 import { serviceService } from '../../services/appointments/service.service'
 import { aiLogger } from '../../utils/pino'
+import { formatIsoDateInTimeZone } from '../../utils/timezone'
 
 const logger = aiLogger.child({ module: 'appointment-queries' })
 
@@ -52,8 +56,8 @@ const DEFAULT_BARBER_NAME = 'Professional não especificado'
 function formatAppointment(apt: AppointmentRescheduleAppointment): FormattedAppointment {
   return {
     id: apt.id?.toString() || '',
-    date: DateFormatter.formatToBrazilianDate(apt.startDate) || '',
-    time: DateFormatter.formatToHourMinute(apt.startDate) || '',
+    date: DateFormatter.formatToBrazilianDate(apt.startDate, apt.businessTimezone) || '',
+    time: DateFormatter.formatToHourMinute(apt.startDate, apt.businessTimezone) || '',
     service: apt.serviceName || DEFAULT_SERVICE_NAME,
     professional: apt.professionalName || DEFAULT_BARBER_NAME,
     status: apt.status || 'pending',
@@ -112,7 +116,10 @@ export const appointmentQueryFunctions = {
 
   getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number }): Promise<any> => {
     const { phone, date, professionalId } = args
-    const normalizedDate = date || new Date().toISOString().split('T')[0]
+    const normalizedDate =
+      date ||
+      formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) ||
+      new Date().toISOString().split('T')[0]
 
     logger.info({ date: normalizedDate, professionalId }, 'Consultando horários disponíveis')
 

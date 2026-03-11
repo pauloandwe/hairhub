@@ -75,6 +75,7 @@ export interface AppointmentRescheduleAppointment {
   id: number
   startDate: string
   endDate?: string | null
+  businessTimezone?: string | null
   status?: string | null
   serviceId?: number | null
   serviceName?: string | null
@@ -124,6 +125,7 @@ export interface UserRuntimeContext {
   settings: BusinessSettings
   businessId?: string
   businessPhone?: string
+  businessTimezone?: string | null
   phoneNumberId?: string | null
   businessName?: string
   businessType?: string
@@ -190,6 +192,10 @@ export function getBusinessIdForPhone(phone: string): string {
 
 export function getBusinessPhoneForPhone(phone: string): string {
   return userContexts[phone]?.businessPhone || ''
+}
+
+export function getBusinessTimezoneForPhone(phone: string): string {
+  return userContexts[phone]?.businessTimezone || ''
 }
 
 export function getBusinessNameForPhone(phone: string): string {

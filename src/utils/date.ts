@@ -1,4 +1,9 @@
 import { addMinutes, format, isValid, parse, parseISO } from 'date-fns'
+import {
+  formatDateInTimeZone,
+  formatDayMonthInTimeZone,
+  formatTimeInTimeZone,
+} from './timezone'
 
 export class DateFormatter {
   static toISODate(date: Date | string): string {
@@ -33,8 +38,16 @@ export class DateFormatter {
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
   }
 
-  static formatToBrazilianDate(rawDate?: string | Date | null): string | null {
+  static formatToBrazilianDate(rawDate?: string | Date | null, timeZone?: string | null): string | null {
     if (!rawDate) return null
+
+    if (timeZone) {
+      try {
+        return formatDateInTimeZone(rawDate, timeZone)
+      } catch {
+        return null
+      }
+    }
 
     let parsedDate: Date | null = null
 
@@ -138,8 +151,16 @@ export class DateFormatter {
     return formatted
   }
 
-  static formatToHourMinute(rawDate?: string | Date | null): string | null {
+  static formatToHourMinute(rawDate?: string | Date | null, timeZone?: string | null): string | null {
     if (!rawDate) return null
+
+    if (timeZone) {
+      try {
+        return formatTimeInTimeZone(rawDate, timeZone)
+      } catch {
+        return null
+      }
+    }
 
     let parsed: Date | null = null
 
@@ -165,8 +186,16 @@ export class DateFormatter {
     return format(parsed, 'HH:mm')
   }
 
-  static formatToDayMonth(rawDate?: string | Date | null): string | null {
+  static formatToDayMonth(rawDate?: string | Date | null, timeZone?: string | null): string | null {
     if (!rawDate) return null
+
+    if (timeZone) {
+      try {
+        return formatDayMonthInTimeZone(rawDate, timeZone)
+      } catch {
+        return null
+      }
+    }
 
     let parsed: Date | null = null
 
@@ -192,11 +221,11 @@ export class DateFormatter {
     return format(parsed, 'dd/MM')
   }
 
-  static formatToDateTimeLabel(rawDate?: string | Date | null): string | null {
-    const dayMonth = this.formatToDayMonth(rawDate)
+  static formatToDateTimeLabel(rawDate?: string | Date | null, timeZone?: string | null): string | null {
+    const dayMonth = this.formatToDayMonth(rawDate, timeZone)
     if (!dayMonth) return null
 
-    const time = this.formatToHourMinute(rawDate)
+    const time = this.formatToHourMinute(rawDate, timeZone)
     if (!time) return dayMonth
 
     return `${dayMonth} às ${time}`

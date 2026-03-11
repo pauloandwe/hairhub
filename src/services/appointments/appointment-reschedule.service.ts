@@ -1,6 +1,15 @@
 import api from '../../config/api.config'
-import { env, getBusinessIdForPhone, getUserContextSync, setUserContext, AppointmentRescheduleAppointment, AppointmentRescheduleState } from '../../env.config'
+import {
+  env,
+  getBusinessIdForPhone,
+  getBusinessTimezoneForPhone,
+  getUserContextSync,
+  setUserContext,
+  AppointmentRescheduleAppointment,
+  AppointmentRescheduleState,
+} from '../../env.config'
 import { customerAppointmentsService } from './customer-appointments.service'
+import { combineDateAndTimeInTimeZone } from '../../utils/timezone'
 
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
 
@@ -12,22 +21,6 @@ const cloneState = (state: AppointmentRescheduleState | null | undefined): Appoi
     selectedDate: state.selectedDate,
     selectedTime: state.selectedTime,
   }
-}
-
-const combineDateAndTime = (date: string, time: string): Date => {
-  const [year, month, day] = date.split('-').map(Number)
-  const [hours, minutes] = time.split(':').map(Number)
-
-  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
-  const offsetMinutes = localDate.getTimezoneOffset()
-
-  const candidate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
-  candidate.setTime(candidate.getTime() + offsetMinutes * 60000)
-
-  if (Number.isNaN(candidate.getTime())) {
-    throw new Error('Data ou horário inválido para remarcar o agendamento.')
-  }
-  return candidate
 }
 
 const addMinutes = (date: Date, minutes: number): Date => {
@@ -166,7 +159,13 @@ class AppointmentRescheduleService {
       throw new Error('Não consegui identificar sua business para remarcar o agendamento.')
     }
 
-    const startDate = combineDateAndTime(state.selectedDate, state.selectedTime)
+    const businessTimezone =
+      appointment.businessTimezone ?? getBusinessTimezoneForPhone(phone)
+    const startDate = combineDateAndTimeInTimeZone(
+      state.selectedDate,
+      state.selectedTime,
+      businessTimezone,
+    )
     const durationMinutes = appointment.serviceDuration ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = addMinutes(startDate, durationMinutes || DEFAULT_SERVICE_DURATION_MINUTES)
 

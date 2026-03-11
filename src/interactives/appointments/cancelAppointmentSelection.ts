@@ -6,10 +6,18 @@ import { SelectionItem } from '../../services/generic/generic.types'
 import { DateFormatter } from '../../utils/date'
 import { tryContinueRegistration } from '../followup'
 import { getSelectionAck } from '../../utils/conversation-copy'
+import { AppointmentRescheduleAppointment } from '../../env.config'
 
-const buildTitle = (startDate: string): string => {
-  const dayMonth = DateFormatter.formatToDayMonth(startDate) ?? 'Data indefinida'
-  const time = DateFormatter.formatToHourMinute(startDate)
+const buildTitle = (appointment: AppointmentRescheduleAppointment): string => {
+  const dayMonth =
+    DateFormatter.formatToDayMonth(
+      appointment.startDate,
+      appointment.businessTimezone,
+    ) ?? 'Data indefinida'
+  const time = DateFormatter.formatToHourMinute(
+    appointment.startDate,
+    appointment.businessTimezone,
+  )
   return time ? `${dayMonth} às ${time}` : dayMonth
 }
 
@@ -41,7 +49,7 @@ const cancelAppointmentSelectionFlow = createSelectionFlow<SelectionItem & { ser
 
     return appointments.map((appointment) => ({
       id: String(appointment.id),
-      name: buildTitle(appointment.startDate),
+      name: buildTitle(appointment),
       description: appointment.serviceName ?? undefined,
       serviceName: appointment.serviceName ?? undefined,
       professionalName: appointment.professionalName ?? undefined,

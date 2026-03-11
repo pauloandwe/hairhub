@@ -119,7 +119,10 @@ export class AppointmentCancellationDraftService extends GenericService<Appointm
         value: (draft: AppointmentCancellationDraft) => {
           if (!draft.selectedAppointment) return null
 
-          const when = DateFormatter.formatToDateTimeLabel(draft.selectedAppointment.startDate)
+          const when = DateFormatter.formatToDateTimeLabel(
+            draft.selectedAppointment.startDate,
+            draft.selectedAppointment.businessTimezone,
+          )
           const service = draft.selectedAppointment.serviceName ? ` ${draft.selectedAppointment.serviceName}` : ''
           const professional = draft.selectedAppointment.professionalName ? ` com ${draft.selectedAppointment.professionalName}` : ''
           return `${service}${professional}${when ? ` para ${when}` : ''}`

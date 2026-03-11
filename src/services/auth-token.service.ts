@@ -59,6 +59,7 @@ export async function ensureUserApiToken(businessPhone: string, phone: string): 
     const clientAiContext = sanitizedData?.clientAiContext || null
     const assistantContext = sanitizedData?.assistantContext || null
     const phoneNumberId = sanitizedData?.phoneNumberId || null
+    const businessTimezone = sanitizedData?.timezone || null
 
     console.log('[AuthToken] Token encontrado para businessPhone:', {
       id: sanitizedData?.id,
@@ -76,6 +77,7 @@ export async function ensureUserApiToken(businessPhone: string, phone: string): 
       ...sanitizedData,
       businessId: sanitizedData.id,
       businessPhone: sanitizedData.phone,
+      businessTimezone,
       phoneNumberId,
       businessName: sanitizedData.name,
       businessType: sanitizedData.type,
@@ -95,6 +97,7 @@ export async function ensureUserApiToken(businessPhone: string, phone: string): 
         businessPhone,
         token: sanitizedData?.token,
         phoneNumberId,
+        businessTimezone,
         assistantContext,
         clientName,
         clientNickname,
@@ -109,6 +112,7 @@ export async function ensureUserApiToken(businessPhone: string, phone: string): 
 
     return {
       ...sanitizedData,
+      businessTimezone,
       phoneNumberId,
       assistantContext,
       clientName,

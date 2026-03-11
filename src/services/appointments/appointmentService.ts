@@ -5,13 +5,14 @@ import { GenericService } from '../generic/generic.service'
 import { AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
-import { getBusinessIdForPhone } from '../../env.config'
+import { getBusinessIdForPhone, getBusinessTimezoneForPhone } from '../../env.config'
 import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
 import { professionalService } from './professional.service'
 import { ApiError } from '../../errors/api-error'
 import { getAppErrorMessage } from '../../utils/error-messages'
 import { AppErrorCodes } from '../../enums/constants'
+import { combineDateAndTimeInTimeZone } from '../../utils/timezone'
 
 const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
@@ -26,6 +27,7 @@ interface AppointmentPayloadContext {
   businessId?: number | string
   clientId?: number
   phone?: string
+  businessTimezone?: string | null
 }
 
 export class AppointmentService extends GenericService<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs> {
@@ -353,16 +355,13 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     ]
   }
 
-  private parseDateAndTime(dateStr: string, timeStr: string, durationMinutes?: number | null): { startDate: Date; endDate: Date } {
-    const [year, month, day] = dateStr.split('-').map(Number)
-    const [hours, minutes] = timeStr.split(':').map(Number)
-
-    const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
-    const offsetMinutes = localDate.getTimezoneOffset()
-
-    const startDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0))
-    startDate.setTime(startDate.getTime() + offsetMinutes * 60000)
-
+  private parseDateAndTime(
+    dateStr: string,
+    timeStr: string,
+    durationMinutes?: number | null,
+    businessTimezone?: string | null,
+  ): { startDate: Date; endDate: Date } {
+    const startDate = combineDateAndTimeInTimeZone(dateStr, timeStr, businessTimezone)
     const duration = durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES
     const endDate = new Date(startDate.getTime() + duration * 60 * 1000)
 
@@ -380,7 +379,14 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     const serviceDuration = draft.service?.duration ?? null
-    const { startDate, endDate } = this.parseDateAndTime(draft.appointmentDate as string, draft.appointmentTime as string, serviceDuration)
+    const businessTimezone =
+      context.businessTimezone ?? (context.phone ? getBusinessTimezoneForPhone(context.phone) : null)
+    const { startDate, endDate } = this.parseDateAndTime(
+      draft.appointmentDate as string,
+      draft.appointmentTime as string,
+      serviceDuration,
+      businessTimezone,
+    )
 
     const assignmentStrategy = draft.professional?.id ? 'manual' : 'least_appointments'
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : undefined
