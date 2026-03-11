@@ -1,6 +1,6 @@
 import api from '../../config/api.config'
 import { ensureUserApiToken } from '../auth-token.service'
-import { AppointmentRescheduleAppointment, BusinessSettings, env, getBusinessIdForPhone, getUserContextSync } from '../../env.config'
+import { AppointmentRescheduleAppointment, BusinessSettings, env, getBusinessIdForPhone, getBusinessPhoneForPhone, getUserContextSync } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
 export type CustomerAppointmentAction = 'cancellation' | 'reschedule'
@@ -63,6 +63,7 @@ const compareDescending = (a: AppointmentRescheduleAppointment, b: AppointmentRe
 class CustomerAppointmentsService {
   private async ensureBusinessContext(phone: string): Promise<{ businessId: string; settings: BusinessSettings | null }> {
     const runtimeContext = getUserContextSync(phone)
+    const businessPhone = runtimeContext?.businessPhone ? String(runtimeContext.businessPhone).trim() : String(getBusinessPhoneForPhone(phone) || '').trim()
     const businessId = runtimeContext?.businessId ? String(runtimeContext.businessId).trim() : String(getBusinessIdForPhone(phone) || '').trim()
     const settings = runtimeContext?.settings ?? null
 
@@ -70,11 +71,11 @@ class CustomerAppointmentsService {
       return { businessId, settings }
     }
 
-    if (!businessId) {
+    if (!businessPhone) {
       throw new Error('Não consegui identificar sua business no momento.')
     }
 
-    await ensureUserApiToken(businessId, phone)
+    await ensureUserApiToken(businessPhone, phone)
 
     const refreshedContext = getUserContextSync(phone)
     return {

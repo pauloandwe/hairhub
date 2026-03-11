@@ -18,7 +18,7 @@ export const env = {
   OPENAI_API_KEY: getEnvVar('OPENAI_API_KEY'),
   META_VERIFY_TOKEN: getEnvVar('META_VERIFY_TOKEN'),
   META_ACCESS_TOKEN: getEnvVar('META_ACCESS_TOKEN'),
-  PHONE_NUMBER_ID: getEnvVar('PHONE_NUMBER_ID'),
+  PHONE_NUMBER_ID: process.env.PHONE_NUMBER_ID,
   API_URL: getEnvVar('API_URL'),
   BACKEND_URL: process.env.BACKEND_URL || getEnvVar('API_URL'),
   WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION || 'v24.0',
@@ -124,8 +124,10 @@ export interface UserRuntimeContext {
   settings: BusinessSettings
   businessId?: string
   businessPhone?: string
+  phoneNumberId?: string | null
   businessName?: string
   businessType?: string
+  assistantContext?: string | null
   userName?: string
   clientName?: string | null
   clientNickname?: string | null
@@ -183,8 +185,6 @@ export function getUserContextSync(phone: string): UserRuntimeContext | undefine
 }
 
 export function getBusinessIdForPhone(phone: string): string {
-  console.log('asdasdasdasdasdasdasdas', userContexts[phone])
-
   return userContexts[phone]?.businessId || ''
 }
 
@@ -196,8 +196,16 @@ export function getBusinessNameForPhone(phone: string): string {
   return userContexts[phone]?.businessName || ''
 }
 
+export function getPhoneNumberIdForPhone(phone: string): string {
+  return userContexts[phone]?.phoneNumberId || ''
+}
+
 export function getBusinessTypeForPhone(phone: string): string {
   return userContexts[phone]?.businessType || ''
+}
+
+export function getAssistantContextForPhone(phone: string): string {
+  return userContexts[phone]?.assistantContext || ''
 }
 
 export function getUserNameForPhone(phone: string): string {
@@ -247,9 +255,9 @@ export function getClientPersonalizationContextForPhone(phone: string): string {
   return chunks.join('\n')
 }
 
-export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string, businessPhone?: string) {
+export async function setBusinessInfoForPhone(phone: string, businessId: string, businessName: string, businessType: string, businessPhone?: string, assistantContext?: string | null, phoneNumberId?: string | null) {
   if (phone && businessId) {
-    await setUserContext(phone, { businessId, businessName, businessType, businessPhone })
+    await setUserContext(phone, { businessId, businessName, businessType, businessPhone, assistantContext, phoneNumberId })
   }
 }
 

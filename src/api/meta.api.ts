@@ -1,17 +1,89 @@
 import axios from 'axios'
 import { env } from '../env.config'
+import { getBusinessPhoneForPhone, getPhoneNumberIdForPhone, getUserContextSync, setUserContext } from '../env.config'
 import type { ListRow } from '../utils/interactive'
 import { withAssistantTitlePhone } from '../utils/message'
 import { whatsappLogger } from '../utils/pino'
 import { cancelTypingIndicatorForUser } from '../utils/typingIndicatorManager'
 import { ConversationEventsClient } from '../services/conversations/conversation-events.client'
+import { usersService } from '../services/users/users.service'
+import { unwrapApiResponse } from '../utils/http'
 
 const WHATSAPP_API_VERSION = env.WHATSAPP_API_VERSION
-const PHONE_NUMBER_ID = env.PHONE_NUMBER_ID
 const META_ACCESS_TOKEN = env.META_ACCESS_TOKEN
 const metaApi = axios.create({
   baseURL: `https://graph.facebook.com/${WHATSAPP_API_VERSION}`,
 })
+
+interface ResolvePhoneNumberIdOptions {
+  businessPhone?: string
+  phoneNumberId?: string
+  contextPhone?: string
+}
+
+async function resolvePhoneNumberId(options?: ResolvePhoneNumberIdOptions): Promise<{ phoneNumberId: string; businessPhone?: string }> {
+  const providedPhoneNumberId = String(options?.phoneNumberId || '').trim()
+  if (providedPhoneNumberId) {
+    return {
+      phoneNumberId: providedPhoneNumberId,
+      businessPhone: options?.businessPhone,
+    }
+  }
+
+  const contextPhone = String(options?.contextPhone || '').trim()
+  const context = contextPhone ? getUserContextSync(contextPhone) : undefined
+  const contextPhoneNumberId = contextPhone ? String(getPhoneNumberIdForPhone(contextPhone) || '').trim() : ''
+  if (contextPhoneNumberId) {
+    return {
+      phoneNumberId: contextPhoneNumberId,
+      businessPhone: String(options?.businessPhone || context?.businessPhone || '').trim() || undefined,
+    }
+  }
+
+  const businessPhone = String(options?.businessPhone || context?.businessPhone || (contextPhone ? getBusinessPhoneForPhone(contextPhone) : '') || '').trim()
+
+  if (!businessPhone) {
+    throw new Error('Não consegui identificar o businessPhone para resolver o phoneNumberId.')
+  }
+
+  const clientPhone = contextPhone || businessPhone
+  const responseBusiness = await usersService.getBusinessByPhone(businessPhone, clientPhone)
+  const payload = unwrapApiResponse<any>(responseBusiness)
+  const resolvedPhoneNumberId = String(payload?.phoneNumberId || '').trim()
+
+  if (!resolvedPhoneNumberId) {
+    throw new Error(`A business com telefone ${businessPhone} não possui phoneNumberId cadastrado.`)
+  }
+
+  if (contextPhone) {
+    await setUserContext(contextPhone, {
+      businessPhone,
+      phoneNumberId: resolvedPhoneNumberId,
+      businessId: payload?.id ? String(payload.id) : undefined,
+      businessName: payload?.name,
+      businessType: payload?.type,
+      assistantContext: payload?.assistantContext ?? undefined,
+    })
+  }
+
+  return {
+    phoneNumberId: resolvedPhoneNumberId,
+    businessPhone,
+  }
+}
+
+async function postToWhatsApp(phoneNumberId: string, payload: Record<string, any>) {
+  if (!META_ACCESS_TOKEN) {
+    throw new Error('Variável de ambiente META_ACCESS_TOKEN é obrigatória.')
+  }
+
+  return metaApi.post(`/${phoneNumberId}/messages`, payload, {
+    headers: {
+      Authorization: `Bearer ${META_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+  })
+}
 
 export function sendWhatsAppMessageWithTitle(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
   const message = withAssistantTitlePhone(text, to)
@@ -23,6 +95,7 @@ export interface SendWhatsAppMessageOptions {
   source?: 'BOT' | 'SYSTEM' | 'HUMAN_PANEL' | 'OUTREACH' | 'REMINDER'
   businessId?: string | number
   businessPhone?: string
+  phoneNumberId?: string
   metadata?: Record<string, any>
   suppressConversationEvent?: boolean
 }
@@ -31,6 +104,7 @@ export interface SendWhatsAppInteractiveOptions {
   source?: 'BOT' | 'SYSTEM' | 'HUMAN_PANEL' | 'OUTREACH' | 'REMINDER'
   businessId?: string | number
   businessPhone?: string
+  phoneNumberId?: string
   metadata?: Record<string, any>
   suppressConversationEvent?: boolean
 }
@@ -38,36 +112,31 @@ export interface SendWhatsAppInteractiveOptions {
 export async function sendWhatsAppMessage(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {
   cancelTypingIndicatorForUser(to)
 
-  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
-  }
-
   try {
+    const resolved = await resolvePhoneNumberId({
+      businessPhone: options?.businessPhone,
+      phoneNumberId: options?.phoneNumberId,
+      contextPhone: to,
+    })
+
     whatsappLogger.info(
       {
         receiver: to,
         message: text,
+        businessPhone: resolved.businessPhone,
+        phoneNumberId: resolved.phoneNumberId,
       },
       'Sending message to WhatsApp receiver',
     )
 
-    const response = await metaApi.post(
-      `/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to: to,
-        type: 'text',
-        text: {
-          body: text,
-        },
+    const response = await postToWhatsApp(resolved.phoneNumberId, {
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'text',
+      text: {
+        body: text,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    )
+    })
     whatsappLogger.info(
       {
         receiver: to,
@@ -84,7 +153,7 @@ export async function sendWhatsAppMessage(to: string, text: string, options?: Se
           text,
           source: options?.source || 'BOT',
           businessId: options?.businessId,
-          businessPhone: options?.businessPhone,
+          businessPhone: options?.businessPhone || resolved.businessPhone,
           providerMessageId: messageId,
           providerStatus: 'SENT',
           rawPayload: response.data || null,
@@ -119,14 +188,15 @@ export async function sendWhatsAppMessage(to: string, text: string, options?: Se
   }
 }
 
-export async function sendWhatsAppTypingIndicator(params: { messageId: string; typingType?: 'text' | 'audio' | 'image' | 'video' | 'document' | 'sticker' }): Promise<void> {
+export async function sendWhatsAppTypingIndicator(params: { messageId: string; typingType?: 'text' | 'audio' | 'image' | 'video' | 'document' | 'sticker'; businessPhone?: string; phoneNumberId?: string; contextPhone?: string }): Promise<void> {
   const { messageId, typingType = 'text' } = params
 
-  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
-  }
-
   try {
+    const resolved = await resolvePhoneNumberId({
+      businessPhone: params.businessPhone,
+      phoneNumberId: params.phoneNumberId,
+      contextPhone: params.contextPhone,
+    })
     const payload = {
       messaging_product: 'whatsapp',
       status: 'read' as const,
@@ -138,12 +208,7 @@ export async function sendWhatsAppTypingIndicator(params: { messageId: string; t
 
     whatsappLogger.info({ messageId, typingType, payload }, 'Sending typing indicator to WhatsApp receiver')
 
-    await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
-      headers: {
-        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-    })
+    await postToWhatsApp(resolved.phoneNumberId, payload)
   } catch (error: any) {
     whatsappLogger.error(
       {
@@ -169,14 +234,11 @@ export async function sendWhatsAppInteractiveList(params: {
     title: string
     rows: ListRow[]
   }[]
+  options?: SendWhatsAppInteractiveOptions
 }): Promise<void> {
-  const { to, header, body, footer, buttonLabel = 'Selecionar', rows, sectionTitle = 'Itens', extraSections } = params
+  const { to, header, body, footer, buttonLabel = 'Selecionar', rows, sectionTitle = 'Itens', extraSections, options } = params
 
   cancelTypingIndicatorForUser(to)
-
-  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
-  }
 
   const formatOptional = (value: string | undefined, maxLength: number): string | undefined => {
     if (typeof value !== 'string') return undefined
@@ -232,10 +294,17 @@ export async function sendWhatsAppInteractiveList(params: {
   }
 
   try {
+    const resolved = await resolvePhoneNumberId({
+      businessPhone: options?.businessPhone,
+      phoneNumberId: options?.phoneNumberId,
+      contextPhone: to,
+    })
     whatsappLogger.info(
       {
         receiver: to,
         message: sanitizedBody,
+        businessPhone: resolved.businessPhone,
+        phoneNumberId: resolved.phoneNumberId,
         button: sanitizedButtonLabel,
         rows: sanitizedRows.map((r) => ({
           id: r?.id,
@@ -244,12 +313,7 @@ export async function sendWhatsAppInteractiveList(params: {
       },
       'Sending interactive list to WhatsApp receiver',
     )
-    const response = await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
-      headers: {
-        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await postToWhatsApp(resolved.phoneNumberId, payload)
 
     const messageId = response.data?.messages?.[0]?.id
     if (messageId) {
@@ -257,11 +321,14 @@ export async function sendWhatsAppInteractiveList(params: {
         await ConversationEventsClient.emitOutboundMessage({
           clientPhone: to,
           text: sanitizedBody,
-          source: 'BOT',
+          source: options?.source || 'BOT',
+          businessId: options?.businessId,
+          businessPhone: options?.businessPhone || resolved.businessPhone,
           providerMessageId: String(messageId),
           providerStatus: 'SENT',
           rawPayload: response.data || null,
           metadata: {
+            ...(options?.metadata || {}),
             interactiveType: 'list',
             header: sanitizedHeader || null,
             footer: sanitizedFooter || null,
@@ -291,10 +358,6 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
   const { to, body, header, footer, buttons, options } = params
 
   cancelTypingIndicatorForUser(to)
-
-  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
-  }
 
   const formatOptional = (value: string | undefined, maxLength: number): string | undefined => {
     if (typeof value !== 'string') return undefined
@@ -336,10 +399,17 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
   }
 
   try {
+    const resolved = await resolvePhoneNumberId({
+      businessPhone: options?.businessPhone,
+      phoneNumberId: options?.phoneNumberId,
+      contextPhone: to,
+    })
     whatsappLogger.info(
       {
         receiver: to,
         message: sanitizedBody,
+        businessPhone: resolved.businessPhone,
+        phoneNumberId: resolved.phoneNumberId,
         buttons: sanitizedButtons.map((b) => ({
           id: b.id,
           title: b.title,
@@ -347,12 +417,7 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
       },
       'Sending interactive buttons to WhatsApp receiver',
     )
-    const response = await metaApi.post(`/${PHONE_NUMBER_ID}/messages`, payload, {
-      headers: {
-        Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await postToWhatsApp(resolved.phoneNumberId, payload)
 
     const messageId = response.data?.messages?.[0]?.id
     if (messageId && !options?.suppressConversationEvent) {
@@ -362,7 +427,7 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
           text: sanitizedBody,
           source: options?.source || 'BOT',
           businessId: options?.businessId,
-          businessPhone: options?.businessPhone,
+          businessPhone: options?.businessPhone || resolved.businessPhone,
           providerMessageId: String(messageId),
           providerStatus: 'SENT',
           rawPayload: response.data || null,
@@ -394,26 +459,14 @@ export async function sendWhatsAppInteractiveButtons(params: { to: string; body:
   }
 }
 
-export async function markMessageAsRead(messageId: string): Promise<void> {
-  if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-    throw new Error('Variáveis de ambiente PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórias.')
-  }
-
+export async function markMessageAsRead(messageId: string, options?: ResolvePhoneNumberIdOptions): Promise<void> {
   try {
-    await metaApi.post(
-      `/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        status: 'read',
-        message_id: messageId,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    )
+    const resolved = await resolvePhoneNumberId(options)
+    await postToWhatsApp(resolved.phoneNumberId, {
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId,
+    })
     whatsappLogger.info(
       {
         context: 'WhatsApp',

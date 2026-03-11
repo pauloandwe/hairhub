@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { sendWhatsAppMessage } from '../../api/meta.api'
-import { env, getBusinessIdForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
+import { env, getAssistantContextForPhone, getBusinessIdForPhone, getBusinessNameForPhone, getBusinessPhoneForPhone, getBusinessTypeForPhone, getClientPersonalizationContextForPhone, getUserContextSync, resetActiveRegistration, setUserContext, UserRuntimeContext } from '../../env.config'
 import { formatAssistantReply } from '../../utils/message'
 import { appendIntentHistory, clearIntentHistory, ChatMessage } from '../intent-history.service'
 import { draftHistoryService } from '../drafts/draft-history'
@@ -38,8 +38,29 @@ export abstract class GenericContextService<TDraft> {
           `
   }
 
+  private buildBusinessAssistantGuidance(userId?: string): string {
+    if (!userId) return ''
+
+    const businessName = getBusinessNameForPhone(userId)
+    const businessPhone = getBusinessPhoneForPhone(userId)
+    const businessType = getBusinessTypeForPhone(userId)
+    const assistantContext = getAssistantContextForPhone(userId)
+
+    if (!businessName && !businessPhone && !assistantContext) return ''
+
+    return `
+            **Business identificada automaticamente pelo número que recebeu a mensagem:**
+            ${businessName ? `- Nome: ${businessName}` : ''}
+            ${businessType ? `- Tipo: ${businessType}` : ''}
+            ${businessPhone ? `- Telefone de destino: ${businessPhone}` : ''}
+
+            ${assistantContext ? `**Contexto configurado da IA para este estabelecimento:**\n${assistantContext}` : ''}
+          `
+  }
+
   protected async buildBasePrompt(draft: any, history: ChatMessage[], incomingMessage: string, businessName?: string, userId?: string, awaitingField?: string, isEditingExistingRecord?: boolean): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
     const personalizationSection = this.buildClientPersonalizationGuidance(userId)
+    const businessAssistantSection = this.buildBusinessAssistantGuidance(userId)
 
     if (awaitingField) {
       if (isEditingExistingRecord) {
@@ -74,6 +95,7 @@ export abstract class GenericContextService<TDraft> {
             - Não faça perguntas, apenas extraia e execute
 
             ${businessName ? `Business: ${businessName}` : ''}
+            ${businessAssistantSection}
             ${personalizationSection}`,
           },
           { role: 'user', content: incomingMessage },
@@ -109,6 +131,7 @@ export abstract class GenericContextService<TDraft> {
           - Não faça perguntas, apenas extraia e execute
 
           ${businessName ? `Business: ${businessName}` : ''}
+          ${businessAssistantSection}
           ${personalizationSection}`,
         },
         { role: 'user', content: incomingMessage },
@@ -142,6 +165,7 @@ export abstract class GenericContextService<TDraft> {
         - Valores monetários: remova "R$" e converta para número
 
         ${businessName ? `Business: ${businessName}` : ''}
+        ${businessAssistantSection}
         ${personalizationSection}
 
         Não explique, não pergunte. Apenas extraia e chame a ferramenta.`,

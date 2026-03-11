@@ -1,6 +1,6 @@
 import { downloadMedia, sendWhatsAppMessage, sendWhatsAppMessageWithTitle } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { getUserContext, setUserContext } from '../../env.config'
+import { getBusinessPhoneForPhone, getUserContext, setUserContext } from '../../env.config'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
 import { ensureUserApiToken } from '../auth-token.service'
 import { clientsService } from '../clients/clients.service'
@@ -75,11 +75,11 @@ export class ContextService {
     }
   }
 
-  private verifyUserClearance = async (businessId: string, userId: string) => {
-    return await ensureUserApiToken(businessId, userId)
+  private verifyUserClearance = async (businessPhone: string, userId: string) => {
+    return await ensureUserApiToken(businessPhone, userId)
   }
 
-  private handleClientNameCollection = async (businessId: string, userId: string, incomingMessage: string, skipClearanceCheck = false): Promise<boolean> => {
+  private handleClientNameCollection = async (businessPhone: string, userId: string, incomingMessage: string): Promise<boolean> => {
     const currentContext = await getUserContext(userId)
     const awaitingClientName = currentContext?.awaitingClientName
 
@@ -91,22 +91,23 @@ export class ContextService {
           return false
         }
 
-        const resolvedBusinessId = currentContext?.businessId ?? businessId
+        let resolvedBusinessId = currentContext?.businessId ? String(currentContext.businessId).trim() : ''
         if (!resolvedBusinessId) {
-          console.error('[ContextService] Missing business identifier when saving client name.', {
-            businessId,
-            contextBusinessId: currentContext?.businessId,
-          })
-          await sendWhatsAppMessage(userId, 'Desculpe, não consegui identificar o estabelecimento. Tente novamente em instantes.')
-          return false
-        }
-
-        if (!skipClearanceCheck) {
-          const clearance = await this.verifyUserClearance(String(resolvedBusinessId), userId)
+          const clearance = await this.verifyUserClearance(businessPhone, userId)
+          resolvedBusinessId = clearance?.id ? String(clearance.id).trim() : ''
           if (!clearance) {
             await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
             return false
           }
+        }
+
+        if (!resolvedBusinessId) {
+          console.error('[ContextService] Missing business identifier when saving client name.', {
+            businessPhone,
+            contextBusinessId: currentContext?.businessId,
+          })
+          await sendWhatsAppMessage(userId, 'Desculpe, não consegui identificar o estabelecimento. Tente novamente em instantes.')
+          return false
         }
 
         const savedClient = await clientsService.createOrUpdateClientName(String(resolvedBusinessId), userId, clientName)
@@ -175,7 +176,7 @@ export class ContextService {
     return false
   }
 
-  handleIncomingMessage = async (messageData: any, businessId?: string) => {
+  handleIncomingMessage = async (messageData: any, businessPhone?: string, phoneNumberId?: string) => {
     const { from: userId } = messageData
 
     let runtimeContext = await getUserContext(userId)
@@ -187,11 +188,21 @@ export class ContextService {
 
       if (!incomingMessage) return
 
-      if (!businessId) {
+      const resolvedBusinessPhone = String(businessPhone || runtimeContext?.businessPhone || getBusinessPhoneForPhone(userId) || '').trim()
+      const resolvedPhoneNumberId = String(phoneNumberId || runtimeContext?.phoneNumberId || '').trim()
+
+      if (!resolvedBusinessPhone) {
         return await sendWhatsAppMessage(userId, 'Não consegui identificar o estabelecimento. Tente novamente em instantes.')
       }
 
-      const hasClearance = await this.verifyUserClearance(businessId, userId)
+      if (resolvedBusinessPhone || resolvedPhoneNumberId) {
+        await setUserContext(userId, {
+          businessPhone: resolvedBusinessPhone || undefined,
+          phoneNumberId: resolvedPhoneNumberId || undefined,
+        })
+      }
+
+      const hasClearance = await this.verifyUserClearance(resolvedBusinessPhone, userId)
 
       if (!hasClearance) {
         return await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
@@ -221,7 +232,7 @@ export class ContextService {
       }
 
       if (runtimeContext?.awaitingClientName) {
-        const nameCollected = await this.handleClientNameCollection(businessId, userId, incomingMessage, true)
+        const nameCollected = await this.handleClientNameCollection(resolvedBusinessPhone, userId, incomingMessage)
         if (!nameCollected) return
         runtimeContext = await getUserContext(userId)
       }

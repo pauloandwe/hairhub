@@ -2,7 +2,7 @@ import OpenAI from 'openai'
 import { env } from 'process'
 import { ChatMessage } from './drafts/types'
 import { appendIntentHistory, clearIntentHistory, getIntentHistory } from './intent-history.service'
-import { getBusinessIdForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone, resetActiveRegistration, getUserContextSync, setUserContext } from '../env.config'
+import { getAssistantContextForPhone, getBusinessIdForPhone, getBusinessNameForPhone, getBusinessPhoneForPhone, getBusinessTypeForPhone, getClientPersonalizationContextForPhone, resetActiveRegistration, getUserContextSync, setUserContext } from '../env.config'
 import { formatAssistantReply } from '../utils/message'
 import { sendWhatsAppMessage } from '../api/meta.api'
 
@@ -96,6 +96,24 @@ export class DefaultContextService {
         `
   }
 
+  private buildBusinessAssistantSection(userId: string): string {
+    const businessName = getBusinessNameForPhone(userId)
+    const businessPhone = getBusinessPhoneForPhone(userId)
+    const businessType = getBusinessTypeForPhone(userId)
+    const assistantContext = getAssistantContextForPhone(userId)
+
+    if (!businessName && !businessPhone && !assistantContext) return ''
+
+    return `
+          **Business identificada automaticamente pelo número que recebeu a mensagem:**
+          ${businessName ? `- Nome: ${businessName}` : ''}
+          ${businessType ? `- Tipo: ${businessType}` : ''}
+          ${businessPhone ? `- Telefone de destino: ${businessPhone}` : ''}
+
+          ${assistantContext ? `**Contexto configurado da IA para este estabelecimento:**\n${assistantContext}` : ''}
+        `
+  }
+
   protected buildBasePrompt(history: ChatMessage[], incomingMessage: string, userId: string): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
     const clientPersonalization = getClientPersonalizationContextForPhone(userId)
     const personalizationSection = clientPersonalization
@@ -111,6 +129,7 @@ export class DefaultContextService {
       : ''
 
     const outreachSection = this.buildOutreachSection(userId)
+    const businessAssistantSection = this.buildBusinessAssistantSection(userId)
 
     const array: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
@@ -163,6 +182,8 @@ export class DefaultContextService {
           - Faça apenas **uma pergunta por vez**.
 
           ${personalizationSection}
+
+          ${businessAssistantSection}
 
           ${outreachSection}
         `,

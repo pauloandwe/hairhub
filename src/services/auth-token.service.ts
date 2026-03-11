@@ -30,6 +30,8 @@ interface CachedUserTokenData {
   farmId?: string
   farmName?: string
   userName?: string
+  assistantContext?: string | null
+  phoneNumberId?: string | null
   clientName?: string | null
   clientNickname?: string | null
   clientBirthDate?: string | null
@@ -39,9 +41,9 @@ interface CachedUserTokenData {
   [key: string]: any
 }
 
-export async function ensureUserApiToken(businessId: string, phone: string): Promise<CachedUserTokenData | null> {
+export async function ensureUserApiToken(businessPhone: string, phone: string): Promise<CachedUserTokenData | null> {
   try {
-    const responseBusiness = await usersService.getBusiness(businessId, phone)
+    const responseBusiness = await usersService.getBusinessByPhone(businessPhone, phone)
     const payload = unwrapApiResponse<any>(responseBusiness)
     if (!payload) return null
 
@@ -55,12 +57,16 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
     const clientServicePreferences = sanitizedData?.clientServicePreferences || null
     const clientRestrictions = sanitizedData?.clientRestrictions || null
     const clientAiContext = sanitizedData?.clientAiContext || null
+    const assistantContext = sanitizedData?.assistantContext || null
+    const phoneNumberId = sanitizedData?.phoneNumberId || null
 
-    console.log('[AuthToken] Token encontrado para businessId:', {
+    console.log('[AuthToken] Token encontrado para businessPhone:', {
       id: sanitizedData?.id,
       name: sanitizedData?.name,
       phone: sanitizedData?.phone,
+      phoneNumberId,
       type: sanitizedData?.type,
+      assistantContext,
       clientName,
       clientNickname,
       clientBirthDate,
@@ -70,8 +76,10 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
       ...sanitizedData,
       businessId: sanitizedData.id,
       businessPhone: sanitizedData.phone,
+      phoneNumberId,
       businessName: sanitizedData.name,
       businessType: sanitizedData.type,
+      assistantContext,
       clientName,
       clientNickname,
       clientBirthDate,
@@ -84,8 +92,10 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
       {
         context: 'System',
         phone,
-        businessId,
+        businessPhone,
         token: sanitizedData?.token,
+        phoneNumberId,
+        assistantContext,
         clientName,
         clientNickname,
         clientBirthDate,
@@ -99,6 +109,8 @@ export async function ensureUserApiToken(businessId: string, phone: string): Pro
 
     return {
       ...sanitizedData,
+      phoneNumberId,
+      assistantContext,
       clientName,
       clientNickname,
       clientBirthDate,

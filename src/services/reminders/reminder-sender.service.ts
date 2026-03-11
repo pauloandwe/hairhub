@@ -2,6 +2,7 @@ import axios from 'axios'
 import { whatsappLogger } from '../../utils/pino'
 import { env } from '../../env.config'
 import { ConversationEventsClient } from '../conversations/conversation-events.client'
+import { sendWhatsAppMessage } from '../../api/meta.api'
 
 export interface SendReminderPayload {
   businessPhone: string
@@ -45,7 +46,7 @@ export class ReminderSenderService {
           `Tentando enviar lembrete (${type}) - Tentativa ${attempt}/${MAX_RETRIES}`,
         )
 
-        const messageId = await this.sendMessageViaMetaAPI(clientPhone, message)
+        const messageId = await this.sendMessageViaMetaAPI(clientPhone, message, businessPhone)
 
         try {
           await ConversationEventsClient.emitOutboundMessage({
@@ -145,36 +146,13 @@ export class ReminderSenderService {
     return 'BOT'
   }
 
-  private static async sendMessageViaMetaAPI(to: string, text: string): Promise<string> {
-    const PHONE_NUMBER_ID = env.PHONE_NUMBER_ID
-    const META_ACCESS_TOKEN = env.META_ACCESS_TOKEN
-    const WHATSAPP_API_VERSION = env.WHATSAPP_API_VERSION
-
-    if (!PHONE_NUMBER_ID || !META_ACCESS_TOKEN) {
-      throw new Error('PHONE_NUMBER_ID e META_ACCESS_TOKEN são obrigatórios')
-    }
-
+  private static async sendMessageViaMetaAPI(to: string, text: string, businessPhone: string): Promise<string> {
     try {
-      const response = await axios.post(
-        `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${PHONE_NUMBER_ID}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: to,
-          type: 'text',
-          text: {
-            body: text,
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        },
-      )
-
-      return response.data?.messages?.[0]?.id || 'unknown'
+      return await sendWhatsAppMessage(to, text, {
+        businessPhone,
+        source: 'REMINDER',
+        suppressConversationEvent: true,
+      })
     } catch (error: any) {
       throw new Error(`Falha ao enviar mensagem WhatsApp: ${error?.response?.data?.error?.message || error.message}`)
     }

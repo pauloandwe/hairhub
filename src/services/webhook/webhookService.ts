@@ -4,6 +4,7 @@ import { ContextService } from '../context/contextService'
 import { markMessageAsRead } from '../../api/meta.api'
 import { ConversationEventsClient } from '../conversations/conversation-events.client'
 import { ConversationRuntimeClient } from '../conversations/conversation-runtime.client'
+import { setUserContext } from '../../env.config'
 
 export class WebhookService {
   private static instance: WebhookService
@@ -37,6 +38,7 @@ export class WebhookService {
     const messageData = changeValue?.messages?.[0]
     const statusEvents = Array.isArray(changeValue?.statuses) ? changeValue.statuses : []
     const businessPhone = changeValue?.metadata?.display_phone_number
+    const phoneNumberId = changeValue?.metadata?.phone_number_id
 
     for (const statusEvent of statusEvents) {
       try {
@@ -53,6 +55,11 @@ export class WebhookService {
     if (!messageData?.id || !messageData?.from) return
 
     try {
+      await setUserContext(String(messageData.from), {
+        businessPhone: businessPhone || undefined,
+        phoneNumberId: phoneNumberId || undefined,
+      })
+
       await ConversationEventsClient.emitInboundFromWebhook({
         messageData,
         businessPhone,
@@ -64,7 +71,11 @@ export class WebhookService {
         businessPhone,
       })
 
-      await markMessageAsRead(messageData.id)
+      await markMessageAsRead(messageData.id, {
+        businessPhone,
+        phoneNumberId,
+        contextPhone: String(messageData.from),
+      })
 
       if (aiMode.shouldBlockBotReply) {
         console.log('[WebhookService] Resposta da IA bloqueada (modo manual)', {
@@ -75,7 +86,7 @@ export class WebhookService {
         return
       }
 
-      await this.contextService.handleIncomingMessage(messageData, businessPhone)
+      await this.contextService.handleIncomingMessage(messageData, businessPhone, phoneNumberId)
     } catch (error) {
       console.error('[WebhookService] Erro inesperado ao processar webhook:', error)
       try {
