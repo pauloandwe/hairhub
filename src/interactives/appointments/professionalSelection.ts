@@ -20,9 +20,7 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
     const draft = await appointmentService.loadDraft(phone)
     const serviceId = draft.service?.id ?? null
     const professionals = await professionalService.getProfessionals(phone, serviceId)
-    const allowedProfessionalIds = Array.isArray(getUserContextSync(phone)?.availableProfessionalIdsForSlot)
-      ? new Set(getUserContextSync(phone)?.availableProfessionalIdsForSlot.map((id: string) => String(id)))
-      : null
+    const allowedProfessionalIds = Array.isArray(getUserContextSync(phone)?.availableProfessionalIdsForSlot) ? new Set(getUserContextSync(phone)?.availableProfessionalIdsForSlot.map((id: string) => String(id))) : null
     const filteredProfessionals = allowedProfessionalIds && allowedProfessionalIds.size > 0 ? professionals.filter((professional) => allowedProfessionalIds.has(String(professional.id))) : professionals
 
     if (allowedProfessionalIds && allowedProfessionalIds.size > 0) {

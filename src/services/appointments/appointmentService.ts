@@ -745,12 +745,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
   }
 
-  private async tryPreserveTimeSlotWithAnotherProfessional(
-    phone: string,
-    draft: IAppointmentValidationDraft,
-    serviceId: number,
-    date: string,
-  ): Promise<AppointmentAvailabilityResolution | null> {
+  private async tryPreserveTimeSlotWithAnotherProfessional(phone: string, draft: IAppointmentValidationDraft, serviceId: number, date: string): Promise<AppointmentAvailabilityResolution | null> {
     const time = draft.appointmentTime ?? null
     if (!time) {
       return null
@@ -796,9 +791,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         service: draft.service ? { ...draft.service } : null,
         professional: { id: null, name: null },
       },
-      message: draft.professional?.name
-        ? `${draft.professional.name} nao atende esse servico nesse horario, mas ${time} segue disponivel. Vou te mostrar quem consegue te atender.`
-        : `O horario ${time} segue disponivel para esse servico. Vou te mostrar quem consegue te atender.`,
+      message: draft.professional?.name ? `${draft.professional.name} nao atende esse servico nesse horario, mas ${time} segue disponivel. Vou te mostrar quem consegue te atender.` : `O horario ${time} segue disponivel para esse servico. Vou te mostrar quem consegue te atender.`,
       compatibleProfessionalIds,
       contextUpdates: this.buildAvailabilityContextUpdates({
         professionalId: null,
