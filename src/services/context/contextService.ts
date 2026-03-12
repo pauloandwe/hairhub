@@ -17,6 +17,7 @@ import { AppointmentCancellationContextService } from '../appointments/appointme
 import { AppointmentRescheduleContextService } from '../appointments/appointmentReschedule.context'
 import { appointmentIntentService } from '../appointments/appointment-intent.service'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
+import { sendAppointmentAvailabilityResolutionList } from '../../interactives/appointments/availabilityResolutionSelection'
 import { registerPanelClientQuickActionHandler } from '../../interactives/clientQuickActions'
 
 export class ContextService {
@@ -275,6 +276,8 @@ export class ContextService {
           ...pendingResolutionReply.request,
           intentMode: 'check_then_offer',
         })
+      } else if (pendingResolutionReply.action === 'retry') {
+        await sendAppointmentAvailabilityResolutionList(userId)
       } else if (pendingResolutionReply.action === 'decline') {
         await sendWhatsAppMessage(userId, 'Tudo bem. Quando quiser, me fala o horario que voce quer verificar.')
       }

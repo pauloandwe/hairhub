@@ -42,7 +42,11 @@ type CheckThenOfferResult =
 
 type PendingOfferReplyResult = { handled: false } | { handled: true; action: 'accept' | 'decline'; offer?: PendingAppointmentOffer }
 
-type PendingResolutionReplyResult = { handled: false } | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> } | { handled: true; action: 'decline' }
+type PendingResolutionReplyResult =
+  | { handled: false }
+  | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> }
+  | { handled: true; action: 'decline' }
+  | { handled: true; action: 'retry' }
 
 const AFFIRMATIVE_REPLIES = new Set(['sim', 's', 'quero', 'pode', 'pode sim', 'claro', 'ok', 'okay', 'fechou', 'confirmo', 'pode marcar', 'quero marcar', 'marca', 'marcar', 'agenda', 'agendar'])
 
@@ -350,6 +354,9 @@ class AppointmentIntentService {
 
     const matches = resolution.candidates.filter((candidate) => matchesCandidate(incomingMessage, candidate.name))
     if (matches.length !== 1) {
+      if (resolution.kind === 'professional') {
+        return { handled: true, action: 'retry' }
+      }
       return { handled: false }
     }
 
@@ -376,6 +383,7 @@ class AppointmentIntentService {
     }
 
     let resolvedDraft = await this.resolveSuggestedDraft(phone, normalizedDraft)
+    const requestedProfessionalName = this.extractReferenceName(normalizedStartArgs.professional, resolvedDraft.professional)
 
     const serviceResolution = await this.resolveService(phone, normalizedStartArgs.service, resolvedDraft)
     if (serviceResolution.status === 'ambiguous') {
@@ -399,9 +407,29 @@ class AppointmentIntentService {
     }
 
     if (professionalWasRequested && !extractIdValue(resolvedDraft.professional?.id)) {
+      const professionals = await professionalService.getProfessionals(phone, serviceId ?? undefined)
+      const candidates = professionals.map((professional) => ({
+        id: professional.id,
+        name: professional.name || professional.id,
+        description: professional.description,
+      }))
+
+      if (candidates.length > 0) {
+        const resolution = await this.storeResolution(
+          phone,
+          'professional',
+          normalizedStartArgs,
+          candidates,
+          this.buildProfessionalNotFoundPrompt(requestedProfessionalName),
+        )
+        return { status: 'resolution', resolution }
+      }
+
       return {
         status: 'error',
-        message: 'Nao consegui identificar certinho qual profissional voce quer. Pode me falar o nome completo ou escolher uma opcao?',
+        message: requestedProfessionalName
+          ? `Nao encontrei nenhum ${requestedProfessionalName} aqui e nao achei barbeiros disponiveis agora.`
+          : 'Nao consegui identificar certinho qual profissional voce quer e nao achei barbeiros disponiveis agora.',
       }
     }
 
@@ -652,7 +680,13 @@ class AppointmentIntentService {
     return offer
   }
 
-  private async storeResolution(phone: string, kind: PendingAvailabilityResolution['kind'], request: Omit<StartAppointmentArgs, 'intentMode'>, candidates: AvailabilityResolutionCandidate[]): Promise<PendingAvailabilityResolution> {
+  private async storeResolution(
+    phone: string,
+    kind: PendingAvailabilityResolution['kind'],
+    request: Omit<StartAppointmentArgs, 'intentMode'>,
+    candidates: AvailabilityResolutionCandidate[],
+    promptOverride?: string,
+  ): Promise<PendingAvailabilityResolution> {
     const resolution: PendingAvailabilityResolution = {
       kind,
       request,
@@ -662,7 +696,7 @@ class AppointmentIntentService {
         description: candidate.description,
         duration: candidate.duration ?? null,
       })),
-      prompt: kind === 'service' ? 'Achei mais de um servico parecido. Qual deles voce quer?' : 'Achei mais de um profissional com esse nome. Qual deles voce quer?',
+      prompt: promptOverride ?? (kind === 'service' ? 'Achei mais de um servico parecido. Qual deles voce quer?' : 'Achei mais de um profissional com esse nome. Qual deles voce quer?'),
       createdAt: new Date().toISOString(),
       expiresAt: toIsoTimestamp(OFFER_TTL_MS),
     }
@@ -685,6 +719,14 @@ class AppointmentIntentService {
     }
 
     return `Tenho sim, ${whenText}${withProfessional}${withService}. Se quiser, ja deixo isso encaminhado.`
+  }
+
+  private buildProfessionalNotFoundPrompt(requestedProfessionalName?: string | null): string {
+    if (requestedProfessionalName) {
+      return `Nao encontrei nenhum ${requestedProfessionalName} aqui. Vou te mandar as opcoes dos barbeiros.`
+    }
+
+    return 'Nao consegui identificar qual barbeiro voce quer. Vou te mandar as opcoes dos barbeiros.'
   }
 
   private buildUnavailableMessage(draft: IAppointmentValidationDraft, alternatives: string[]): string {

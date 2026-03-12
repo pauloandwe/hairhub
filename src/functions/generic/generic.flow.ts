@@ -287,43 +287,19 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       await this.clearAwaitingInputForField(phone)
 
       if (isEditMode) {
-        await this.restoreCompletedDraftSnapshot(phone)
-        const recordId = currentRegistration?.lastCreatedRecordId ?? null
-        if (!recordId) {
-          const draftUpdates = { [field]: value } as Partial<TUpsertArgs>
-          const updatedDraft = await this.options.service.updateDraft(phone, draftUpdates)
-          if (updatedDraft) {
-            await this.updateCompletedDraftSnapshot(phone, updatedDraft)
-            return this.continueRegistration({ phone })
-          }
+        const fieldUpdate = { [field]: value } as Partial<TUpsertArgs>
+        const result = await this.applyRecordUpdates({
+          phone,
+          updates: fieldUpdate,
+          successMessage: this.options.messages.editUpdateSuccess,
+          logContext: logContext ?? `Campo ${field} atualizado com valor ${JSON.stringify(value)}`,
+        })
 
-          const failureMessage = this.options.messages.editFieldUpdateError ?? 'Não consegui alterar esse campo.'
-          await sendWhatsAppMessage(phone, failureMessage)
-          return this.buildResponse(failureMessage, false)
-        }
-
-        const updatedDraft = await this.options.service.processFieldEdit(phone, field, value)
-        if (updatedDraft) {
-          const fieldUpdate = { [field]: value } as Partial<TUpsertArgs>
-          const result = await this.finalizeEditOperation({
-            phone,
-            updatedDraft,
-            updates: fieldUpdate,
-            successMessage: this.options.messages.editUpdateSuccess,
-            logContext: logContext ?? `Campo ${field} atualizado com valor ${JSON.stringify(value)}`,
-          })
-
-          if ('updatedDraft' in result) {
-            const successMessage = this.options.messages.editUpdateSuccess ?? 'Registro editado com sucesso.'
-            return this.buildResponse(successMessage, false, result.updatedDraft)
-          }
-
+        if ('error' in result) {
           return this.buildResponse(result.error, false)
         }
 
-        const failureMessage = this.options.messages.editFieldUpdateError ?? 'Não consegui alterar o campo informado.'
-        await sendWhatsAppMessage(phone, failureMessage)
-        return this.buildResponse(failureMessage, false)
+        return result
       }
 
       const successMessage = this.options.messages.editDirectChangeSuccess ?? 'Dados alterados com sucesso.'
@@ -466,11 +442,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         updates: { [field]: value } as Partial<TUpsertArgs>,
         logContext: `Campo ${field} atualizado com valor ${JSON.stringify(value)}`,
       })
-      if (result.error) {
+      if ('error' in result) {
         return { ...this.buildChangeResponse(result.error, false), error: result.error }
       }
-      const message = result.message ?? 'Campo atualizado com sucesso'
-      return this.buildChangeResponse(message, false)
+      return this.buildChangeResponse(result.message, result.interactive)
     }
 
     const currentRegistration = (context?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
@@ -500,7 +475,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     return this.buildChangeResponse(fallbackMessage, false)
   }
 
-  protected async applyRecordUpdates(args: { phone: string; updates: Partial<TUpsertArgs>; successMessage?: string; logContext?: string }): Promise<{ message?: string; error?: string }> {
+  protected async applyRecordUpdates(args: { phone: string; updates: Partial<TUpsertArgs>; successMessage?: string; logContext?: string }): Promise<FlowResponse<TDraft> | { error: string }> {
     const { phone, updates, successMessage, logContext } = args
     const context = getUserContextSync(phone)
     const currentRegistration = (context?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
@@ -510,14 +485,22 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     if (!recordId) {
       if (isEditMode) {
         try {
-          await this.restoreCompletedDraftSnapshot(phone)
-          const updatedDraft = await this.options.service.updateDraft(phone, updates)
-          if (updatedDraft) {
-            await this.updateCompletedDraftSnapshot(phone, updatedDraft)
-            const continueResult = await this.continueRegistration({ phone })
-            return { message: continueResult.message }
+          const draftPreparation = await this.prepareRecordUpdatesDraft({
+            phone,
+            updates,
+            logContext,
+          })
+
+          if ('response' in draftPreparation) {
+            return draftPreparation.response
+          }
+
+          if (draftPreparation.updatedDraft) {
+            await this.updateCompletedDraftSnapshot(phone, draftPreparation.updatedDraft)
+            return this.continueRegistration({ phone })
           }
         } catch (error) {
+          await this.restoreCompletedDraftSnapshot(phone)
           const errorMessage = this.resolveEditErrorMessage(error)
           await sendWhatsAppMessage(phone, errorMessage)
           await this.onEditFailure(phone, null, error, logContext)
@@ -535,12 +518,19 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     }
 
     try {
-      await this.restoreCompletedDraftSnapshot(phone)
+      const draftPreparation = await this.prepareRecordUpdatesDraft({
+        phone,
+        updates,
+        logContext,
+      })
 
-      const updatedDraft = await this.options.service.updateDraft(phone, updates)
+      if ('response' in draftPreparation) {
+        return draftPreparation.response
+      }
+
       const result = await this.finalizeEditOperation({
         phone,
-        updatedDraft,
+        updatedDraft: draftPreparation.updatedDraft,
         updates,
         successMessage: successMessage ?? this.options.messages.editUpdateSuccess,
         logContext,
@@ -550,13 +540,46 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         return result
       }
 
-      return { message: 'Campo atualizado com sucesso' }
+      return this.buildResponse('Campo atualizado com sucesso', false, result.updatedDraft)
     } catch (error) {
+      await this.restoreCompletedDraftSnapshot(phone)
       const errorMessage = this.resolveEditErrorMessage(error)
       await sendWhatsAppMessage(phone, errorMessage)
       await this.onEditFailure(phone, recordId, error, logContext)
       return { error: errorMessage }
     }
+  }
+
+  private async prepareRecordUpdatesDraft(args: { phone: string; updates: Partial<TUpsertArgs>; logContext?: string }): Promise<{ updatedDraft: TDraft } | { response: FlowResponse<TDraft> }> {
+    const { phone, updates } = args
+
+    await this.restoreCompletedDraftSnapshot(phone)
+
+    const updatedDraft = await this.options.service.updateDraft(phone, updates)
+    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft)
+    const draft = preparedDraft.draft
+
+    if (preparedDraft.response) {
+      await this.options.service.saveDraft(phone, draft)
+      return { response: preparedDraft.response }
+    }
+
+    const missingResult = await this.handleNextMissing(phone, draft, FlowStep.Editing)
+    if (missingResult) {
+      await this.options.service.saveDraft(phone, draft)
+      await this.setUserContextWithFlowStep(
+        phone,
+        {
+          editMode: true,
+          type: this.options.flowType,
+          status: 'collecting',
+        },
+        FlowStep.Editing,
+      )
+      return { response: missingResult }
+    }
+
+    return { updatedDraft: draft }
   }
 
   protected async finalizeEditOperation(args: { phone: string; updatedDraft: TDraft; updates: Partial<TUpsertArgs>; successMessage?: string; logContext?: string }): Promise<{ updatedDraft: TDraft } | { error: string }> {
@@ -571,6 +594,14 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     }
 
     try {
+      const payloadPreview = this.options.service.previewPartialUpdatePayload(updatedDraft, updates)
+      console.info(`[GenericCrudFlow:${this.options.flowType}] Persistindo edição de registro.`, {
+        phone,
+        recordId,
+        updates,
+        payloadPreview,
+      })
+
       await this.options.service.update(phone, recordId, updatedDraft, updates)
 
       const summaryTitle = this.options.messages.buttonHeaderSuccess || 'Pronto!'
@@ -610,12 +641,24 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       return { updatedDraft: completedDraft } as const
     } catch (error) {
       const errorMessage = this.resolveEditErrorMessage(error)
+      const restoredDraft = await this.restoreCompletedDraftSnapshot(phone)
+
+      console.error(`[GenericCrudFlow:${this.options.flowType}] Falha ao persistir edição de registro.`, {
+        phone,
+        recordId,
+        updates,
+        payloadPreview: this.options.service.previewPartialUpdatePayload(updatedDraft, updates),
+        errorMessage,
+        error,
+      })
+
       await sendWhatsAppMessage(phone, errorMessage)
 
       try {
         const errorTitle = this.options.messages.buttonHeaderEdit || 'Ops!'
-        const summary = await this.generateSummary(phone, updatedDraft, { title: errorTitle, tone: 'error' })
-        await this.sendEditDeleteOptionsAfterError(phone, updatedDraft, summary, recordId, errorMessage)
+        const fallbackDraft = restoredDraft ?? updatedDraft
+        const summary = await this.generateSummary(phone, fallbackDraft, { title: errorTitle, tone: 'error' })
+        await this.sendEditDeleteOptionsAfterError(phone, fallbackDraft, summary, recordId, errorMessage)
       } catch (buttonError) {
         console.error(`[GenericCrudFlow:${this.options.flowType}] Erro ao enviar botões após falha de edição.`, buttonError)
       }
@@ -708,7 +751,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     })
   }
 
-  protected async handleNextMissing(phone: string, draft: TDraft): Promise<FlowResponse<TDraft> | null> {
+  protected async handleNextMissing(phone: string, draft: TDraft, expectedStep?: FlowStep): Promise<FlowResponse<TDraft> | null> {
     const missing = await this.getMissingFields(draft)
     if (!missing.length) return null
 
@@ -716,7 +759,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const handler = this.options.missingFieldHandlers[field]
     if (!handler) return null
 
-    await this.setAwaitingInputForField(phone, field as string)
+    const currentRegistration = (getUserContextSync(phone)?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    const resolvedStep = expectedStep ?? (currentRegistration.editMode ? FlowStep.Editing : FlowStep.Creating)
+
+    await this.setAwaitingInputForField(phone, field as string, resolvedStep)
 
     return handler(phone, draft)
   }

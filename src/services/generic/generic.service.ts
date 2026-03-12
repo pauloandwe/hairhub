@@ -120,6 +120,10 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     return null
   }
 
+  previewPartialUpdatePayload(draft: TDraft, updates: Partial<TUpsertArgs>): Partial<TCreationPayload> | null {
+    return this.buildPartialUpdatePayload(draft, updates)
+  }
+
   isFieldValid = (editingField: string): boolean => {
     return this.validEditableFields.includes(editingField as keyof TUpsertArgs)
   }

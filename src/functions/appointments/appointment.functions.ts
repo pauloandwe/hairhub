@@ -10,7 +10,17 @@ import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationD
 import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
-import { setUserContext } from '../../env.config'
+import { getUserContextSync, setUserContext } from '../../env.config'
+
+const FIELD_ONLY_VALUE_ALIASES: Record<AppointmentEditField, string[]> = {
+  appointmentDate: ['data', 'mudar data', 'mudar a data', 'alterar data', 'trocar data', 'dia'],
+  appointmentTime: ['horario', 'horário', 'hora', 'mudar horario', 'mudar horário', 'trocar horario', 'trocar horário'],
+  service: ['servico', 'serviço', 'mudar servico', 'mudar serviço', 'trocar servico', 'trocar serviço'],
+  professional: ['profissional', 'professional', 'barbeiro', 'mudar barbeiro', 'trocar barbeiro', 'mudar profissional'],
+  notes: ['observacao', 'observações', 'observacaoes', 'observacoes', 'observação', 'anotacao', 'anotação', 'anotacoes', 'anotações', 'nota', 'notas', 'preferencia', 'preferência', 'preferencias', 'preferências'],
+  clientName: ['nome', 'nome do cliente', 'cliente'],
+  clientPhone: ['telefone', 'telefone do cliente', 'celular', 'numero', 'número'],
+}
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
@@ -55,9 +65,37 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return digits.length ? digits : null
   }
 
+  private normalizeFieldPromptValue(field: AppointmentEditField, value: unknown): unknown {
+    if (value === undefined || value === null || typeof value !== 'string') {
+      return value
+    }
+
+    const normalizedValue = value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+    if (!normalizedValue) {
+      return undefined
+    }
+
+    const aliases = FIELD_ONLY_VALUE_ALIASES[field] ?? []
+    if (aliases.includes(normalizedValue)) {
+      return undefined
+    }
+
+    return value
+  }
+
   startAppointmentRegistration = async (args: { phone: string } & StartAppointmentArgs) => {
     const { phone, date, time, intentMode = 'book', ...rawUpdates } = args
     const updates = { ...rawUpdates } as unknown as UpsertAppointmentArgs
+    const runtimeContext = getUserContextSync(phone)
 
     if (date !== undefined && updates.appointmentDate === undefined) {
       updates.appointmentDate = date
@@ -76,6 +114,10 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       }
     }
 
+    if (!Object.prototype.hasOwnProperty.call(updates, 'clientName') && runtimeContext?.clientName) {
+      updates.clientName = runtimeContext.clientName
+    }
+
     if (intentMode === 'check_then_offer') {
       return this.handleCheckThenOffer(phone, updates)
     }
@@ -89,19 +131,20 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
   }
 
   changeAppointmentRegistrationField = async (args: { phone: string; field: AppointmentEditField | string; value?: any }) => {
-    const { phone, value } = args
+    const { phone } = args
     const normalizedField = this.normalizeEditableField(args.field)
     if (!normalizedField) {
       await this.sendInvalidFieldMessage({ phone, field: String(args.field) })
       return this.buildResponse(this.options.messages.invalidField, false)
     }
 
-    const normalizedValue = normalizedField === 'clientPhone' && value !== undefined ? this.sanitizePhone(value) : value
+    const rawValue = this.normalizeFieldPromptValue(normalizedField, args.value)
+    const normalizedValue = normalizedField === 'clientPhone' && rawValue !== undefined ? this.sanitizePhone(rawValue) : rawValue
     const logContext = normalizedValue !== undefined ? `Campo ${normalizedField} atualizado com valor ${JSON.stringify(normalizedValue)}` : undefined
     return this.changeRegistrationWithValue({
       phone,
       field: normalizedField,
-      value: normalizedValue,
+      value: normalizedValue as UpsertAppointmentArgs[AppointmentEditField] | null | undefined,
       logContext,
     })
   }
@@ -129,7 +172,8 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       return this.buildChangeResponse(this.options.messages.invalidField, false)
     }
 
-    const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
+    const rawValue = this.normalizeFieldPromptValue(normalizedField, args.value)
+    const normalizedValue = normalizedField === 'clientPhone' && rawValue !== undefined ? this.sanitizePhone(rawValue) : rawValue
     return super.editRecordField({
       phone: args.phone,
       field: normalizedField,
@@ -283,6 +327,38 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         await this.cancelAppointmentRegistration({ phone: userId })
       },
     })
+  }
+
+  protected override async afterCreateSuccess(phone: string, draft: IAppointmentValidationDraft, _summary: string): Promise<void> {
+    if (!draft.recordId) {
+      return
+    }
+
+    try {
+      const hydratedDraft = await appointmentService.hydrateDraftFromRecord(phone, draft.recordId, draft)
+      await appointmentService.saveDraft(phone, hydratedDraft)
+      await this.updateCompletedDraftSnapshot(phone, hydratedDraft)
+    } catch (error) {
+      console.error('[AppointmentFlow] Não foi possível hidratar o rascunho após criação.', {
+        phone,
+        recordId: draft.recordId,
+        error,
+      })
+    }
+  }
+
+  protected override async afterEnterEditMode(phone: string, recordId: string, draft: IAppointmentValidationDraft | null): Promise<void> {
+    try {
+      const hydratedDraft = await appointmentService.hydrateDraftFromRecord(phone, recordId, draft ?? undefined)
+      await appointmentService.saveDraft(phone, hydratedDraft)
+      await this.updateCompletedDraftSnapshot(phone, hydratedDraft)
+    } catch (error) {
+      console.error('[AppointmentFlow] Não foi possível hidratar o rascunho ao entrar em modo de edição.', {
+        phone,
+        recordId,
+        error,
+      })
+    }
   }
 
   private normalizeEditableField(field: AppointmentEditField | string | undefined): AppointmentEditField | null {

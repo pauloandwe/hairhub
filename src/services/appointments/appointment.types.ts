@@ -46,6 +46,8 @@ export interface AppointmentRecord extends IAppointmentCreationPayload {
   updatedAt: string
   clientContactId?: number | null
   clientContact?: { id: number; name: string | null; phone: string }
+  service?: { id: number | string; name: string | null; duration?: number | null }
+  professional?: { id: number | string; name: string | null }
 }
 
 export type UpsertAppointmentArgs = Partial<IAppointmentValidationDraft>

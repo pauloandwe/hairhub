@@ -1,18 +1,21 @@
 import { format, isValid, parse, parseISO } from 'date-fns'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
+import api from '../../config/api.config'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
 import { AppointmentAvailabilityContextUpdates, AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
-import { getBusinessIdForPhone, getBusinessTimezoneForPhone } from '../../env.config'
+import { getBusinessIdForPhone, getBusinessTimezoneForPhone, getUserContextSync } from '../../env.config'
 import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
 import { professionalService } from './professional.service'
 import { ApiError } from '../../errors/api-error'
 import { getAppErrorMessage } from '../../utils/error-messages'
 import { AppErrorCodes } from '../../enums/constants'
-import { combineDateAndTimeInTimeZone } from '../../utils/timezone'
+import { combineDateAndTimeInTimeZone, formatIsoDateInTimeZone } from '../../utils/timezone'
+import { unwrapApiResponse } from '../../utils/http'
+import { DateFormatter } from '../../utils/date'
 
 const AUTO_COMPLETE_ENDPOINT = '/appointments/suggest'
 const DEFAULT_SERVICE_DURATION_MINUTES = 30
@@ -183,6 +186,95 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return digits.length ? digits : null
   }
 
+  private normalizeString(value: unknown): string | null {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      return trimmed.length ? trimmed : null
+    }
+
+    if (value === undefined || value === null) {
+      return null
+    }
+
+    const normalized = String(value).trim()
+    return normalized.length ? normalized : null
+  }
+
+  private cloneDraft(draft: IAppointmentValidationDraft): IAppointmentValidationDraft {
+    return JSON.parse(JSON.stringify(draft)) as IAppointmentValidationDraft
+  }
+
+  hydrateDraftWithRuntimeContext(phone: string, draftOverride?: IAppointmentValidationDraft): IAppointmentValidationDraft {
+    const draft = draftOverride ? this.cloneDraft(draftOverride) : emptyAppointmentDraft()
+    const runtimeContext = getUserContextSync(phone)
+
+    if (!draft.clientName && runtimeContext?.clientName) {
+      draft.clientName = this.normalizeString(runtimeContext.clientName)
+    }
+
+    if (!draft.clientPhone) {
+      draft.clientPhone = this.sanitizePhoneInput(phone)
+    }
+
+    return draft
+  }
+
+  async fetchAppointmentRecord(phone: string, recordId: string): Promise<AppointmentRecord | null> {
+    const businessId = this.extractStringValue(getBusinessIdForPhone(phone))
+    const normalizedRecordId = this.extractStringValue(recordId)
+
+    if (!businessId || !normalizedRecordId) {
+      return null
+    }
+
+    const url = `${this.servicePrefix}/appointments/${businessId}/appointments/${normalizedRecordId}`
+    const response = await api.get(url)
+    return unwrapApiResponse<AppointmentRecord>(response) ?? null
+  }
+
+  async hydrateDraftFromRecord(phone: string, recordId: string, draftOverride?: IAppointmentValidationDraft): Promise<IAppointmentValidationDraft> {
+    const baseDraft = this.hydrateDraftWithRuntimeContext(phone, draftOverride ?? (await this.loadDraft(phone)))
+    const record = await this.fetchAppointmentRecord(phone, recordId)
+
+    if (!record) {
+      if (!draftOverride) {
+        await this.saveDraft(phone, baseDraft)
+      }
+      return baseDraft
+    }
+
+    const businessTimezone = getBusinessTimezoneForPhone(phone)
+    const hydratedDraft: IAppointmentValidationDraft = {
+      ...baseDraft,
+      appointmentDate: formatIsoDateInTimeZone(record.startDate, businessTimezone),
+      appointmentTime: this.formatDraftTime(DateFormatter.formatToHourMinute(record.startDate, businessTimezone)),
+      service: record.service
+        ? {
+            id: this.extractStringValue(record.service.id),
+            name: this.normalizeString(record.service.name),
+            duration: typeof record.service.duration === 'number' ? record.service.duration : null,
+          }
+        : baseDraft.service,
+      professional: record.professional
+        ? {
+            id: this.extractStringValue(record.professional.id),
+            name: this.normalizeString(record.professional.name),
+          }
+        : baseDraft.professional,
+      clientName: this.normalizeString(record.clientContact?.name ?? record.clientName) ?? baseDraft.clientName,
+      clientPhone: this.sanitizePhoneInput(record.clientContact?.phone ?? record.clientPhone) ?? baseDraft.clientPhone,
+      notes: this.normalizeString(record.notes),
+      status: baseDraft.status ?? 'completed',
+      recordId: this.extractStringValue(record.id) ?? recordId,
+    }
+
+    if (!draftOverride) {
+      await this.saveDraft(phone, hydratedDraft)
+    }
+
+    return hydratedDraft
+  }
+
   protected validateDraftArgsTypes = (args: Partial<UpsertAppointmentArgs>, currentDraft: IAppointmentValidationDraft): void => {
     const extendedArgs = args as Partial<UpsertAppointmentArgs> & {
       date?: unknown
@@ -343,6 +435,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       {
         label: 'Profissional',
         value: (draft: IAppointmentValidationDraft) => draft.professional?.name ?? null,
+      },
+      {
+        label: 'Nome do Cliente',
+        value: (draft: IAppointmentValidationDraft) => draft.clientName,
       },
       {
         label: 'Observações',
