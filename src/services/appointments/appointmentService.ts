@@ -345,10 +345,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         value: (draft: IAppointmentValidationDraft) => draft.professional?.name ?? null,
       },
       {
-        label: 'Nome do Cliente',
-        value: (draft: IAppointmentValidationDraft) => draft.clientName,
-      },
-      {
         label: 'Observações',
         value: (draft: IAppointmentValidationDraft) => draft.notes,
       },

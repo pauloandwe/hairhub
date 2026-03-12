@@ -1,9 +1,10 @@
 import { downloadMedia, sendWhatsAppMessage, sendWhatsAppMessageWithTitle } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { getBusinessPhoneForPhone, getUserContext, setUserContext } from '../../env.config'
+import { ClientNameCaptureState, getBusinessPhoneForPhone, getUserContext, resetActiveRegistration, setUserContext } from '../../env.config'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
 import { ensureUserApiToken } from '../auth-token.service'
 import { clientsService } from '../clients/clients.service'
+import { clientNameCaptureService } from '../clients/client-name-capture.service'
 import { transcribeAudio } from '../openai.service'
 import { getOutreachContext, clearOutreachContext } from '../outreach/outreach-context.service'
 import { SimplifiedExpenseContextService } from '../finances/simplifiedExpense/simplifiedExpense.context'
@@ -28,6 +29,7 @@ export class ContextService {
   private readonly appointmentContext = AppointmentContextService.getInstance()
   private readonly appointmentCancellationContext = AppointmentCancellationContextService.getInstance()
   private readonly appointmentRescheduleContext = AppointmentRescheduleContextService.getInstance()
+  private readonly clientNameCapture = clientNameCaptureService
 
   private readonly contextMap = {
     [FlowType.SimplifiedExpense]: this.simplifiedExpenseContext,
@@ -79,55 +81,161 @@ export class ContextService {
     return await ensureUserApiToken(businessPhone, userId)
   }
 
-  private handleClientNameCollection = async (businessPhone: string, userId: string, incomingMessage: string): Promise<boolean> => {
+  private buildAwaitingFirstClientNameCaptureState(): ClientNameCaptureState {
+    return {
+      phase: 'AWAITING_FIRST',
+      firstMessageText: null,
+      waitingStartedAt: null,
+      waitingDeadlineAt: null,
+    }
+  }
+
+  private buildAwaitingSecondClientNameCaptureState(firstMessageText: string): ClientNameCaptureState {
+    const now = new Date()
+    return {
+      phase: 'AWAITING_SECOND',
+      firstMessageText,
+      waitingStartedAt: now.toISOString(),
+      waitingDeadlineAt: new Date(now.getTime() + this.clientNameCapture.getWaitWindowMs()).toISOString(),
+    }
+  }
+
+  private normalizeCapturedClientName(rawValue?: string | null): string | null {
+    if (typeof rawValue !== 'string') {
+      return null
+    }
+
+    const normalized = rawValue.replace(/\s+/g, ' ').trim()
+    if (!normalized || /\d/.test(normalized)) {
+      return null
+    }
+
+    const usefulCharacters = normalized.replace(/[\s'-]/g, '')
+    if (usefulCharacters.length < 2) {
+      return null
+    }
+
+    return normalized
+  }
+
+  private async resetClientNameCaptureToFirstStep(userId: string): Promise<void> {
+    this.clientNameCapture.clearPendingSecondMessageTimer(userId)
+    await setUserContext(userId, {
+      awaitingClientName: true,
+      clientNameCapture: this.buildAwaitingFirstClientNameCaptureState(),
+    })
+  }
+
+  private async promptInitialClientName(userId: string): Promise<void> {
+    await this.resetClientNameCaptureToFirstStep(userId)
+    await sendWhatsAppMessageWithTitle(userId, 'Antes de continuar, me fala seu nome rapidinho pra eu te atender melhor 😊')
+  }
+
+  private async promptClientNameAgain(userId: string): Promise<void> {
+    await this.resetClientNameCaptureToFirstStep(userId)
+    await sendWhatsAppMessage(userId, 'Me manda só seu nome rapidinho que eu já continuo por aqui 😊')
+  }
+
+  private scheduleClientNameSecondMessageTimeout(userId: string): void {
+    this.clientNameCapture.schedulePendingSecondMessageTimer(userId, async () => {
+      const latestContext = await getUserContext(userId)
+      if (!latestContext?.awaitingClientName) {
+        return
+      }
+
+      if (latestContext.clientNameCapture?.phase !== 'AWAITING_SECOND') {
+        return
+      }
+
+      await this.promptClientNameAgain(userId)
+    })
+  }
+
+  private async saveResolvedClientName(businessPhone: string, userId: string, clientName: string): Promise<void> {
     const currentContext = await getUserContext(userId)
-    const awaitingClientName = currentContext?.awaitingClientName
 
-    if (awaitingClientName) {
-      try {
-        const clientName = incomingMessage.trim()
-        if (clientName.length < 2) {
-          await sendWhatsAppMessage(userId, 'Por favor, informe um nome válido com pelo menos 2 caracteres.')
-          return false
-        }
-
-        let resolvedBusinessId = currentContext?.businessId ? String(currentContext.businessId).trim() : ''
-        if (!resolvedBusinessId) {
-          const clearance = await this.verifyUserClearance(businessPhone, userId)
-          resolvedBusinessId = clearance?.id ? String(clearance.id).trim() : ''
-          if (!clearance) {
-            await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
-            return false
-          }
-        }
-
-        if (!resolvedBusinessId) {
-          console.error('[ContextService] Missing business identifier when saving client name.', {
-            businessPhone,
-            contextBusinessId: currentContext?.businessId,
-          })
-          await sendWhatsAppMessage(userId, 'Desculpe, não consegui identificar o estabelecimento. Tente novamente em instantes.')
-          return false
-        }
-
-        const savedClient = await clientsService.createOrUpdateClientName(String(resolvedBusinessId), userId, clientName)
-
-        await setUserContext(userId, {
-          clientName: savedClient.name,
-          awaitingClientName: false,
-        })
-
-        await sendWhatsAppMessage(userId, `Ótimo, ${clientName}! Seu nome foi registrado com sucesso.`)
-
-        return true
-      } catch (error) {
-        console.error('[ContextService] Error saving client name:', error)
-        await sendWhatsAppMessage(userId, 'Desculpe, ocorreu um erro ao registrar seu nome. Tente novamente em instantes.')
-        return false
+    let resolvedBusinessId = currentContext?.businessId ? String(currentContext.businessId).trim() : ''
+    if (!resolvedBusinessId) {
+      const clearance = await this.verifyUserClearance(businessPhone, userId)
+      resolvedBusinessId = clearance?.id ? String(clearance.id).trim() : ''
+      if (!clearance) {
+        await sendWhatsAppMessage(userId, 'Não consegui autenticar sua sessão no momento. Tente novamente em instantes.')
+        return
       }
     }
 
-    return true
+    if (!resolvedBusinessId) {
+      console.error('[ContextService] Missing business identifier when saving client name.', {
+        businessPhone,
+        contextBusinessId: currentContext?.businessId,
+      })
+      await sendWhatsAppMessage(userId, 'Desculpe, não consegui identificar o estabelecimento. Tente novamente em instantes.')
+      return
+    }
+
+    const savedClient = await clientsService.createOrUpdateClientName(String(resolvedBusinessId), userId, clientName)
+    const confirmedName = this.normalizeCapturedClientName(savedClient.name ?? clientName) ?? clientName
+
+    this.clientNameCapture.clearPendingSecondMessageTimer(userId)
+    await resetActiveRegistration(userId)
+    await setUserContext(userId, {
+      clientName: confirmedName,
+      awaitingClientName: false,
+      clientNameCapture: null,
+    })
+
+    await sendWhatsAppMessage(userId, `Ótimo, ${confirmedName}! Seu nome foi registrado. Como posso te ajudar hoje?`)
+  }
+
+  private handleClientNameCollection = async (businessPhone: string, userId: string, incomingMessage: string): Promise<void> => {
+    const currentContext = await getUserContext(userId)
+    const awaitingClientName = currentContext?.awaitingClientName
+
+    if (!awaitingClientName) {
+      return
+    }
+
+    try {
+      const cleanedIncomingMessage = incomingMessage.replace(/\s+/g, ' ').trim()
+      if (!cleanedIncomingMessage) {
+        await this.promptClientNameAgain(userId)
+        return
+      }
+
+      const captureState = currentContext?.clientNameCapture ?? this.buildAwaitingFirstClientNameCaptureState()
+
+      if (captureState.phase === 'AWAITING_SECOND') {
+        this.clientNameCapture.clearPendingSecondMessageTimer(userId)
+
+        const extractedFromTwoMessages = await this.clientNameCapture.extractName([captureState.firstMessageText ?? '', cleanedIncomingMessage])
+        const resolvedName = this.normalizeCapturedClientName(extractedFromTwoMessages)
+
+        if (resolvedName) {
+          await this.saveResolvedClientName(businessPhone, userId, resolvedName)
+          return
+        }
+
+        await this.promptClientNameAgain(userId)
+        return
+      }
+
+      const extractedFromSingleMessage = await this.clientNameCapture.extractName([cleanedIncomingMessage])
+      const resolvedName = this.normalizeCapturedClientName(extractedFromSingleMessage)
+
+      if (resolvedName) {
+        await this.saveResolvedClientName(businessPhone, userId, resolvedName)
+        return
+      }
+
+      await setUserContext(userId, {
+        awaitingClientName: true,
+        clientNameCapture: this.buildAwaitingSecondClientNameCaptureState(cleanedIncomingMessage),
+      })
+      this.scheduleClientNameSecondMessageTimeout(userId)
+    } catch (error) {
+      console.error('[ContextService] Error saving client name:', error)
+      await sendWhatsAppMessage(userId, 'Desculpe, ocorreu um erro ao registrar seu nome. Tente novamente em instantes.')
+    }
   }
 
   private async handleFlow(activeFlowType: FlowType | undefined, userId: string, incomingMessage: string) {
@@ -231,17 +339,27 @@ export class ContextService {
         runtimeContext = await getUserContext(userId)
       }
 
-      if (runtimeContext?.awaitingClientName) {
-        const nameCollected = await this.handleClientNameCollection(resolvedBusinessPhone, userId, incomingMessage)
-        if (!nameCollected) return
+      let resolvedClientName = runtimeContext?.clientName ?? hasClearance.clientName ?? null
+
+      if (resolvedClientName !== null && runtimeContext?.awaitingClientName) {
+        this.clientNameCapture.clearPendingSecondMessageTimer(userId)
+        await setUserContext(userId, {
+          clientName: resolvedClientName,
+          awaitingClientName: false,
+          clientNameCapture: null,
+        })
         runtimeContext = await getUserContext(userId)
       }
 
-      const resolvedClientName = runtimeContext?.clientName ?? hasClearance.clientName ?? null
+      if (runtimeContext?.awaitingClientName) {
+        await this.handleClientNameCollection(resolvedBusinessPhone, userId, incomingMessage)
+        return
+      }
+
+      resolvedClientName = runtimeContext?.clientName ?? hasClearance.clientName ?? null
 
       if (resolvedClientName === null && !runtimeContext?.awaitingClientName) {
-        await sendWhatsAppMessageWithTitle(userId, 'Antes de continuar, por favor informe seu nome para o atendimento:')
-        await setUserContext(userId, { awaitingClientName: true })
+        await this.promptInitialClientName(userId)
         return
       }
 

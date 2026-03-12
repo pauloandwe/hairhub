@@ -117,6 +117,15 @@ export interface OutreachReplyContext {
   metadata: Record<string, any>
 }
 
+export type ClientNameCapturePhase = 'AWAITING_FIRST' | 'AWAITING_SECOND'
+
+export interface ClientNameCaptureState {
+  phase: ClientNameCapturePhase
+  firstMessageText?: string | null
+  waitingStartedAt?: string | null
+  waitingDeadlineAt?: string | null
+}
+
 export interface ActiveRegistrationPendingStep {
   field: string
   mode: 'creating' | 'editing'
@@ -152,6 +161,7 @@ export interface UserRuntimeContext {
   clientRestrictions?: string | null
   clientAiContext?: string | null
   awaitingClientName?: boolean
+  clientNameCapture?: ClientNameCaptureState | null
   appointmentReschedule?: AppointmentRescheduleState | null
   appointmentCancellation?: AppointmentCancellationState | null
   pendingAppointmentOffer?: PendingAppointmentOffer | null
