@@ -29,7 +29,7 @@ export interface IAppointmentValidationDraft {
 export interface IAppointmentCreationPayload {
   businessId: number
   serviceId: number
-  professionalId?: number
+  professionalId?: number | null
   startDate: string
   endDate: string
   source: string

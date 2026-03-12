@@ -6,6 +6,11 @@ import { unwrapApiResponse } from '../../utils/http'
 
 export const PUBLIC_SLOT_STEP_MINUTES = 5
 
+function resolveAvailableDaysLookahead(): number {
+  const configured = Number(env.APPOINTMENT_AVAILABLE_DAYS_LOOKAHEAD)
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 62
+}
+
 export class ProfessionalService {
   async getProfessionals(phone: string, serviceId?: string | number | null): Promise<SelectionItem[]> {
     const businessId = getBusinessIdForPhone(phone)
@@ -141,7 +146,7 @@ export class ProfessionalService {
 
     try {
       const params: Record<string, any> = {
-        days: 15,
+        days: resolveAvailableDaysLookahead(),
         stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
       }
 
@@ -202,7 +207,7 @@ export class ProfessionalService {
 
     try {
       const params: Record<string, any> = {
-        days: 15,
+        days: resolveAvailableDaysLookahead(),
         stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
       }
 

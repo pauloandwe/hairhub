@@ -113,7 +113,15 @@ export const appointmentQueryFunctions = {
 
   getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number }): Promise<any> => {
     const { phone, date, professionalId } = args
-    const normalizedDate = date || formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) || new Date().toISOString().split('T')[0]
+    const normalizedDateInput = typeof date === 'string' ? date.trim() : ''
+    if (normalizedDateInput && !DateFormatter.isValidISODate(normalizedDateInput)) {
+      return {
+        status: 'error',
+        error: 'Nao consegui entender essa data. Me fala outra, por favor.',
+      }
+    }
+
+    const normalizedDate = normalizedDateInput || formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) || new Date().toISOString().split('T')[0]
 
     logger.info({ date: normalizedDate, professionalId }, 'Consultando horários disponíveis')
 

@@ -15,6 +15,7 @@ import { DraftPreparationContext, FlowResponse, GenericCrudFlow } from '../gener
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
 import { getUserContextSync, setUserContext } from '../../env.config'
+import { DateFormatter } from '../../utils/date'
 
 const AVAILABILITY_SENSITIVE_FIELDS = new Set<string>(['appointmentDate', 'appointmentTime', 'service', 'professional'])
 
@@ -68,6 +69,12 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
 
     if (date !== undefined && updates.appointmentDate === undefined) {
       updates.appointmentDate = date
+    }
+
+    if (typeof updates.appointmentDate === 'string' && updates.appointmentDate.trim() && !DateFormatter.isValidISODate(updates.appointmentDate.trim())) {
+      return {
+        error: 'Nao consegui entender essa data. Me fala outra, por favor.',
+      }
     }
 
     if (time !== undefined && updates.appointmentTime === undefined) {
@@ -270,8 +277,10 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         await sendDateSelectionList(phone, 'Qual dia fica melhor pra voce?')
         break
       case 'pick_professional':
-        await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
-        break
+        {
+          const professionalSelection = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+          return this.buildResponse(recovery.message, professionalSelection.interactive, recovery.draft)
+        }
     }
 
     return this.buildResponse(recovery.message, true, recovery.draft)

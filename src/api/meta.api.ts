@@ -11,8 +11,24 @@ import { unwrapApiResponse } from '../utils/http'
 
 const WHATSAPP_API_VERSION = env.WHATSAPP_API_VERSION
 const META_ACCESS_TOKEN = env.META_ACCESS_TOKEN
+const SAFE_RETRYABLE_CODES = new Set(['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE'])
+
+function resolvePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+}
+
+function resolveNonNegativeInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback
+}
+
+const WHATSAPP_SEND_TIMEOUT_MS = resolvePositiveInteger(env.WHATSAPP_SEND_TIMEOUT_MS, 10000)
+const WHATSAPP_SEND_SAFE_RETRY_ATTEMPTS = resolveNonNegativeInteger(env.WHATSAPP_SEND_SAFE_RETRY_ATTEMPTS, 1)
+
 const metaApi = axios.create({
   baseURL: `https://graph.facebook.com/${WHATSAPP_API_VERSION}`,
+  timeout: WHATSAPP_SEND_TIMEOUT_MS,
 })
 
 type BufferedOperation = () => Promise<void>
@@ -102,17 +118,95 @@ async function resolvePhoneNumberId(options?: ResolvePhoneNumberIdOptions): Prom
   }
 }
 
-async function postToWhatsApp(phoneNumberId: string, payload: Record<string, any>) {
+type PostToWhatsAppFn = (phoneNumberId: string, payload: Record<string, any>) => Promise<any>
+
+export function shouldRetryWhatsAppSend(error: any): { retry: boolean; reason: string } {
+  if (error?.response) {
+    return { retry: false, reason: 'response_received' }
+  }
+
+  const code = String(error?.code || error?.cause?.code || '').trim().toUpperCase()
+  if (!SAFE_RETRYABLE_CODES.has(code)) {
+    return { retry: false, reason: code ? `non_retryable_code:${code}` : 'missing_retryable_code' }
+  }
+
+  const currentRequest = error?.request?._currentRequest ?? error?.request
+  const bytesWrittenCandidates = [currentRequest?.socket?.bytesWritten, currentRequest?.bytesWritten, error?.request?.socket?.bytesWritten]
+  const bytesWritten = bytesWrittenCandidates.find((value) => Number.isFinite(value))
+  const headerSent = Boolean(currentRequest?._headerSent ?? error?.request?._headerSent)
+  const finished = Boolean(currentRequest?.finished)
+  const ended = Boolean(currentRequest?._ended ?? error?.request?._ended)
+
+  if (Number.isFinite(bytesWritten as number)) {
+    return Number(bytesWritten) === 0 && !finished
+      ? { retry: true, reason: `pre_send_safe:${code}` }
+      : { retry: false, reason: `request_progressed:${code}` }
+  }
+
+  if (!headerSent && !finished && !ended) {
+    return { retry: true, reason: `pre_header_safe:${code}` }
+  }
+
+  return { retry: false, reason: `insufficient_pre_send_evidence:${code}` }
+}
+
+export async function postToWhatsAppWithRetry(
+  phoneNumberId: string,
+  payload: Record<string, any>,
+  options?: {
+    sendFn?: PostToWhatsAppFn
+    maxRetries?: number
+  },
+) {
   if (!META_ACCESS_TOKEN) {
     throw new Error('Variável de ambiente META_ACCESS_TOKEN é obrigatória.')
   }
 
-  return metaApi.post(`/${phoneNumberId}/messages`, payload, {
-    headers: {
-      Authorization: `Bearer ${META_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-  })
+  const sendFn: PostToWhatsAppFn =
+    options?.sendFn ||
+    ((resolvedPhoneNumberId, resolvedPayload) =>
+      metaApi.post(`/${resolvedPhoneNumberId}/messages`, resolvedPayload, {
+        headers: {
+          Authorization: `Bearer ${META_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      }))
+
+  const maxRetries = options?.maxRetries ?? WHATSAPP_SEND_SAFE_RETRY_ATTEMPTS
+  let attempt = 0
+
+  while (true) {
+    try {
+      return await sendFn(phoneNumberId, payload)
+    } catch (error: any) {
+      const retryDecision = shouldRetryWhatsAppSend(error)
+      const canRetry = retryDecision.retry && attempt < maxRetries
+
+      whatsappLogger.warn(
+        {
+          phoneNumberId,
+          payloadType: payload?.type,
+          receiver: payload?.to,
+          attempt: attempt + 1,
+          maxRetries,
+          retryDecision,
+          errorCode: error?.code || error?.cause?.code,
+          responseStatus: error?.response?.status,
+        },
+        canRetry ? 'Retrying WhatsApp send after safe transient failure' : 'WhatsApp send will not be retried',
+      )
+
+      if (!canRetry) {
+        throw error
+      }
+
+      attempt += 1
+    }
+  }
+}
+
+async function postToWhatsApp(phoneNumberId: string, payload: Record<string, any>) {
+  return postToWhatsAppWithRetry(phoneNumberId, payload)
 }
 
 export function sendWhatsAppMessageWithTitle(to: string, text: string, options?: SendWhatsAppMessageOptions): Promise<string> {

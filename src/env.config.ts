@@ -34,6 +34,9 @@ export const env = {
   REDIS_CHAT_HISTORY_TTL_SEC: process.env.REDIS_CHAT_HISTORY_TTL_SEC || String(300),
   REDIS_DRAFT_TTL_SEC: process.env.REDIS_DRAFT_TTL_SEC || String(500),
   REDIS_INTENT_HISTORY_TTL_SEC: process.env.REDIS_INTENT_HISTORY_TTL_SEC || String(3600),
+  APPOINTMENT_AVAILABLE_DAYS_LOOKAHEAD: process.env.APPOINTMENT_AVAILABLE_DAYS_LOOKAHEAD || String(62),
+  WHATSAPP_SEND_TIMEOUT_MS: process.env.WHATSAPP_SEND_TIMEOUT_MS || String(10000),
+  WHATSAPP_SEND_SAFE_RETRY_ATTEMPTS: process.env.WHATSAPP_SEND_SAFE_RETRY_ATTEMPTS || String(1),
 }
 
 export interface BusinessWorkingHour {
@@ -175,6 +178,10 @@ export interface UserRuntimeContext {
     pendingStep?: ActiveRegistrationPendingStep
     lastCreatedRecordId?: string
     editMode?: boolean
+    completedDraftSnapshot?: Record<string, any>
+    editSessionBaseSnapshot?: Record<string, any>
+    editSessionDraftSnapshot?: Record<string, any>
+    editSessionPendingUpdates?: Record<string, any>
     [key: string]: any
   }
   [key: string]: any

@@ -47,6 +47,9 @@ type ActiveRegistrationState<TDraft extends RegistrationDraftBase> = {
   status?: DraftStatus
   sessionId?: string
   completedDraftSnapshot?: TDraft
+  editSessionBaseSnapshot?: TDraft
+  editSessionDraftSnapshot?: TDraft
+  editSessionPendingUpdates?: Record<string, unknown>
   snapshotSessionId?: string
   [key: string]: unknown
 }
@@ -96,6 +99,10 @@ export interface GenericCrudFlowOptions<TDraft extends RegistrationDraftBase, TC
 
 export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCreationPayload, TRecord extends IBaseEntity, TUpsertArgs, TEditableField extends keyof TUpsertArgs & string, TMissingField extends keyof TDraft & string> {
   protected constructor(protected readonly options: GenericCrudFlowOptions<TDraft, TCreationPayload, TRecord, TUpsertArgs, TEditableField, TMissingField>) {}
+
+  private cloneData<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
 
   protected getInvalidFieldNamespace(): string {
     return `${this.options.flowType.toUpperCase()}_INVALID_FIELD`
@@ -309,7 +316,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
     await this.setAwaitingInputForField(phone, field)
     if (isEditMode) {
-      await this.restoreCompletedDraftSnapshot(phone)
+      await this.restoreEditSessionDraftSnapshot(phone)
     }
 
     const changeResponse = await this.changeRegistrationField({ phone, field })
@@ -357,6 +364,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
     if (!completedDraft) {
       completedDraft = await this.restoreCompletedDraftSnapshot(phone)
+    }
+
+    if (completedDraft) {
+      await this.initializeEditSession(phone, completedDraft)
     }
 
     const introMessage = this.buildEditModeIntroMessage()
@@ -500,7 +511,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
             return this.continueRegistration({ phone })
           }
         } catch (error) {
-          await this.restoreCompletedDraftSnapshot(phone)
+          await this.restoreEditSessionDraftSnapshot(phone)
           const errorMessage = this.resolveEditErrorMessage(error)
           await sendWhatsAppMessage(phone, errorMessage)
           await this.onEditFailure(phone, null, error, logContext)
@@ -542,7 +553,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
       return this.buildResponse('Campo atualizado com sucesso', false, result.updatedDraft)
     } catch (error) {
-      await this.restoreCompletedDraftSnapshot(phone)
+      await this.restoreEditSessionDraftSnapshot(phone)
       const errorMessage = this.resolveEditErrorMessage(error)
       await sendWhatsAppMessage(phone, errorMessage)
       await this.onEditFailure(phone, recordId, error, logContext)
@@ -553,7 +564,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
   private async prepareRecordUpdatesDraft(args: { phone: string; updates: Partial<TUpsertArgs>; logContext?: string }): Promise<{ updatedDraft: TDraft } | { response: FlowResponse<TDraft> }> {
     const { phone, updates } = args
 
-    await this.restoreCompletedDraftSnapshot(phone)
+    await this.restoreEditSessionDraftSnapshot(phone)
 
     const updatedDraft = await this.options.service.updateDraft(phone, updates)
     const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft, {
@@ -561,6 +572,8 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       updates,
     })
     const draft = preparedDraft.draft
+
+    await this.syncEditSessionDraft(phone, draft)
 
     if (preparedDraft.response) {
       await this.options.service.saveDraft(phone, draft)
@@ -597,15 +610,16 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     }
 
     try {
-      const payloadPreview = this.options.service.previewPartialUpdatePayload(updatedDraft, updates)
+      const consolidatedUpdates = await this.getConsolidatedEditUpdates(phone, updatedDraft, updates)
+      const payloadPreview = this.options.service.previewPartialUpdatePayload(updatedDraft, consolidatedUpdates)
       console.info(`[GenericCrudFlow:${this.options.flowType}] Persistindo edição de registro.`, {
         phone,
         recordId,
-        updates,
+        updates: consolidatedUpdates,
         payloadPreview,
       })
 
-      await this.options.service.update(phone, recordId, updatedDraft, updates)
+      await this.options.service.update(phone, recordId, updatedDraft, consolidatedUpdates)
 
       const summaryTitle = this.options.messages.buttonHeaderSuccess || 'Pronto!'
       const summary = await this.generateSummary(phone, updatedDraft, { title: summaryTitle, tone: 'success' })
@@ -613,7 +627,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       const completedDraft = { ...updatedDraft, status: 'completed' as const, recordId }
       await this.options.service.saveDraft(phone, completedDraft)
 
-      const completedDraftSnapshot = JSON.parse(JSON.stringify(completedDraft))
+      const completedDraftSnapshot = this.cloneData(completedDraft)
 
       const currentRegistration = (getUserContextSync(phone)?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
       const currentSessionId = currentRegistration.sessionId
@@ -629,6 +643,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
           editMode: undefined,
           lastCreatedRecordId: recordId,
           completedDraftSnapshot,
+          editSessionBaseSnapshot: undefined,
+          editSessionDraftSnapshot: undefined,
+          editSessionPendingUpdates: undefined,
           snapshotSessionId: currentSessionId,
         },
       })
@@ -639,18 +656,19 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
       }
 
       await this.sendEditDeleteOptions(phone, completedDraft, summary, recordId)
-      await this.afterEditSuccess(phone, recordId, updates, logContext)
+      await this.afterEditSuccess(phone, recordId, consolidatedUpdates, logContext)
 
       return { updatedDraft: completedDraft } as const
     } catch (error) {
       const errorMessage = this.resolveEditErrorMessage(error)
-      const restoredDraft = await this.restoreCompletedDraftSnapshot(phone)
+      const restoredDraft = (await this.restoreEditSessionDraftSnapshot(phone)) ?? updatedDraft
+      const consolidatedUpdates = await this.getConsolidatedEditUpdates(phone, updatedDraft, updates)
 
       console.error(`[GenericCrudFlow:${this.options.flowType}] Falha ao persistir edição de registro.`, {
         phone,
         recordId,
-        updates,
-        payloadPreview: this.options.service.previewPartialUpdatePayload(updatedDraft, updates),
+        updates: consolidatedUpdates,
+        payloadPreview: this.options.service.previewPartialUpdatePayload(updatedDraft, consolidatedUpdates),
         errorMessage,
         error,
       })
@@ -914,7 +932,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
   private async finalizeSuccessfulCreation(phone: string, draft: TDraft, summary: string, recordId: string): Promise<TDraft> {
     const completedDraft = { ...draft, status: 'completed' as const, recordId } as TDraft
-    const completedDraftSnapshot = JSON.parse(JSON.stringify(completedDraft)) as TDraft
+    const completedDraftSnapshot = this.cloneData(completedDraft) as TDraft
 
     await this.options.service.saveDraft(phone, completedDraft)
 
@@ -932,6 +950,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         editMode: undefined,
         lastCreatedRecordId: recordId,
         completedDraftSnapshot,
+        editSessionBaseSnapshot: undefined,
+        editSessionDraftSnapshot: undefined,
+        editSessionPendingUpdates: undefined,
         snapshotSessionId: currentSessionId,
       },
     })
@@ -943,7 +964,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
   private async finalizeFailedCreation(phone: string, draft: TDraft): Promise<void> {
     const completedDraft = { ...draft, status: 'completed' as const } as TDraft
-    const completedDraftSnapshot = JSON.parse(JSON.stringify(completedDraft)) as TDraft
+    const completedDraftSnapshot = this.cloneData(completedDraft) as TDraft
 
     await this.options.service.saveDraft(phone, completedDraft)
 
@@ -960,6 +981,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         pendingStep: undefined,
         editMode: undefined,
         completedDraftSnapshot,
+        editSessionBaseSnapshot: undefined,
+        editSessionDraftSnapshot: undefined,
+        editSessionPendingUpdates: undefined,
         snapshotSessionId: currentSessionId,
       },
     })
@@ -969,14 +993,14 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const registration = ((await getUserContext(phone))?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
     const snapshot = registration.completedDraftSnapshot
     if (!snapshot) return null
-    const draftClone = JSON.parse(JSON.stringify(snapshot)) as TDraft
+    const draftClone = this.cloneData(snapshot) as TDraft
     await this.options.service.saveDraft(phone, draftClone)
     return draftClone
   }
 
   protected async updateCompletedDraftSnapshot(phone: string, draft: TDraft): Promise<void> {
     const currentRegistration = ((await getUserContext(phone))?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
-    const draftClone = JSON.parse(JSON.stringify(draft)) as TDraft
+    const draftClone = this.cloneData(draft) as TDraft
     await setUserContext(phone, {
       activeRegistration: {
         ...currentRegistration,
@@ -1080,6 +1104,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         status: 'collecting',
         sessionId: newSessionId,
         completedDraftSnapshot: undefined,
+        editSessionBaseSnapshot: undefined,
+        editSessionDraftSnapshot: undefined,
+        editSessionPendingUpdates: undefined,
         pendingStep: undefined,
         lastCreatedRecordId: undefined,
       },
@@ -1157,6 +1184,85 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         step,
       },
     })
+  }
+
+  private buildEditSessionPendingUpdates(baseDraft: TDraft | null, draft: TDraft): Partial<TUpsertArgs> {
+    if (!baseDraft) {
+      return {}
+    }
+
+    const pendingUpdates: Partial<TUpsertArgs> = {}
+    const candidateKeys = new Set([...Object.keys(baseDraft as object), ...Object.keys(draft as object)])
+
+    for (const key of candidateKeys) {
+      if (!this.options.service.isFieldValid(key)) {
+        continue
+      }
+
+      const baseValue = (baseDraft as Record<string, unknown>)[key]
+      const currentValue = (draft as Record<string, unknown>)[key]
+      if (currentValue === undefined) {
+        continue
+      }
+
+      if (JSON.stringify(baseValue) !== JSON.stringify(currentValue)) {
+        ;(pendingUpdates as Record<string, unknown>)[key] = currentValue
+      }
+    }
+
+    return pendingUpdates
+  }
+
+  private async initializeEditSession(phone: string, baseDraft: TDraft): Promise<void> {
+    const currentRegistration = ((await getUserContext(phone))?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    const baseClone = this.cloneData(baseDraft)
+
+    await setUserContext(phone, {
+      activeRegistration: {
+        ...currentRegistration,
+        editSessionBaseSnapshot: baseClone,
+        editSessionDraftSnapshot: this.cloneData(baseDraft),
+        editSessionPendingUpdates: {},
+      },
+    })
+  }
+
+  private async restoreEditSessionDraftSnapshot(phone: string): Promise<TDraft | null> {
+    const registration = ((await getUserContext(phone))?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    const snapshot = registration.editSessionDraftSnapshot ?? registration.completedDraftSnapshot
+    if (!snapshot) return null
+
+    const draftClone = this.cloneData(snapshot) as TDraft
+    await this.options.service.saveDraft(phone, draftClone)
+    return draftClone
+  }
+
+  private async syncEditSessionDraft(phone: string, draft: TDraft): Promise<Partial<TUpsertArgs>> {
+    const currentRegistration = ((await getUserContext(phone))?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    const baseSnapshot = currentRegistration.editSessionBaseSnapshot ?? currentRegistration.completedDraftSnapshot ?? null
+    const draftClone = this.cloneData(draft)
+    const pendingUpdates = this.buildEditSessionPendingUpdates(baseSnapshot ?? null, draftClone)
+
+    await setUserContext(phone, {
+      activeRegistration: {
+        ...currentRegistration,
+        editSessionBaseSnapshot: baseSnapshot ? this.cloneData(baseSnapshot) : undefined,
+        editSessionDraftSnapshot: draftClone,
+        editSessionPendingUpdates: pendingUpdates,
+      },
+    })
+
+    return pendingUpdates
+  }
+
+  private async getConsolidatedEditUpdates(phone: string, updatedDraft: TDraft, fallbackUpdates: Partial<TUpsertArgs>): Promise<Partial<TUpsertArgs>> {
+    const currentRegistration = (getUserContextSync(phone)?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>
+    if (!currentRegistration.editMode) {
+      return fallbackUpdates
+    }
+
+    const pendingUpdates = await this.syncEditSessionDraft(phone, updatedDraft)
+    return Object.keys(pendingUpdates).length > 0 ? pendingUpdates : fallbackUpdates
   }
 
   private resolveFlowStep(step?: unknown): FlowStep | undefined {

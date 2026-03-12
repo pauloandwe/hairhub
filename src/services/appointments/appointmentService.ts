@@ -862,10 +862,11 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   protected override buildPartialUpdatePayload(draft: IAppointmentValidationDraft, updates: Partial<UpsertAppointmentArgs>): Partial<IAppointmentCreationPayload> {
     const payload: Partial<IAppointmentCreationPayload> = {}
     const has = (field: keyof UpsertAppointmentArgs): boolean => Object.prototype.hasOwnProperty.call(updates, field)
+    const shouldRebuildSchedule = has('appointmentDate') || has('appointmentTime') || has('service')
 
     this.warnAboutInvalidFields(updates)
 
-    if (has('appointmentDate') || has('appointmentTime')) {
+    if (shouldRebuildSchedule) {
       const dateStr = draft.appointmentDate
       const timeStr = draft.appointmentTime
       if (dateStr && timeStr) {
@@ -883,7 +884,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     if (has('professional')) {
       const professionalId = this.extractValidId(draft.professional?.id)
-      if (professionalId) payload.professionalId = professionalId
+      payload.professionalId = professionalId ?? null
+      payload.assignmentStrategy = professionalId ? 'manual' : 'least_appointments'
     }
 
     if (has('clientName')) {

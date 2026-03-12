@@ -34,8 +34,10 @@ const editService: FieldEditor = async (phone) => {
 }
 
 const editProfessional: FieldEditor = async (phone) => {
-  await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
-  return respond(getMenuSentCopy('barbeiros'), true)
+  const result = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+  return result.interactive
+    ? respond(getMenuSentCopy('barbeiros'), true)
+    : respond('Profissional definido automaticamente.', false)
 }
 
 const editNotes: FieldEditor = async (phone) => {
@@ -87,8 +89,12 @@ const askService: MissingFieldHandler = async (phone, draft) => {
 }
 
 const askProfessional: MissingFieldHandler = async (phone, draft) => {
-  await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
-  return { message: getMenuSentCopy('barbeiros'), interactive: true, draft }
+  const result = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+  return {
+    message: result.interactive ? getMenuSentCopy('barbeiros') : 'Profissional definido automaticamente.',
+    interactive: result.interactive,
+    draft,
+  }
 }
 
 export const missingFieldHandlers: Record<AppointmentMissingField, MissingFieldHandler> = {

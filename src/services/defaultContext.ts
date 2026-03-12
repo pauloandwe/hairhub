@@ -23,6 +23,7 @@ import { appointmentQueryFunctions } from '../functions/appointments/appointment
 import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
 import { appointmentRescheduleTools } from '../tools/appointments/appointment-reschedule.tools'
 import { registerAppointmentAvailabilityResolutionHandler } from '../interactives/appointments/availabilityResolutionSelection'
+import { normalizeAppointmentToolArguments } from './appointments/appointment-tool-args'
 
 export class DefaultContextService {
   private static instance: DefaultContextService
@@ -177,7 +178,6 @@ export class DefaultContextService {
             * "Preciso marcar corte + barba amanhã às 15h"
             * "Agenda pra mim amanhã às 15h com o João"
           - Só use getAvailableTimeSlots quando a pessoa estiver pedindo opções de horários, e não um horário exato para possível marcação.
-
           - Se houver ambiguidade, faça **uma única pergunta de esclarecimento**, curta e objetiva, para confirmar a intenção antes de acionar um fluxo.
           - Caso o usuário envie apenas um número ou palavra solta sem contexto → peça de forma curta que ele explique melhor o que deseja.
 
@@ -208,7 +208,7 @@ export class DefaultContextService {
     return this.contextTools
   }
 
-  protected executeToolFunction = async (toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall, phone: string) => {
+  protected executeToolFunction = async (toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall, phone: string, incomingMessage?: string) => {
     if (toolCall.type !== 'function') {
       return {
         tool_call_id: toolCall.id,
@@ -231,15 +231,59 @@ export class DefaultContextService {
     }
 
     try {
-      const args = JSON.parse(toolCall.function.arguments || '{}')
+      const rawArgs = JSON.parse(toolCall.function.arguments || '{}')
+      const runtimeContext = getUserContextSync(phone)
+      const normalized = await normalizeAppointmentToolArguments({
+        functionName,
+        args: rawArgs,
+        incomingMessage,
+        timezone: runtimeContext?.businessTimezone,
+        locale: String((runtimeContext as Record<string, unknown> | undefined)?.locale || (runtimeContext as Record<string, unknown> | undefined)?.language || 'pt-BR'),
+      })
+
+      if (normalized.resolution?.requiresClarification) {
+        aiLogger.info(
+          {
+            userId: phone,
+            toolName: functionName,
+            originalArgs: rawArgs,
+            normalizedArgs: normalized.args,
+            incomingMessage,
+            appointmentDateResolution: normalized.resolution,
+          },
+          '[Tool] Appointment date needs clarification before execution',
+        )
+
+        return {
+          tool_call_id: toolCall.id,
+          role: 'tool' as const,
+          content: JSON.stringify({
+            error: normalized.resolution.clarificationMessage || 'Nao consegui entender essa data. Me fala outra, por favor.',
+          }),
+        }
+      }
+
+      if (normalized.resolution?.normalizedDate) {
+        aiLogger.info(
+          {
+            userId: phone,
+            toolName: functionName,
+            originalArgs: rawArgs,
+            normalizedArgs: normalized.args,
+            incomingMessage,
+            appointmentDateResolution: normalized.resolution,
+          },
+          '[Tool] Appointment date normalized before execution',
+        )
+      }
 
       const storedFarmId = getBusinessIdForPhone(phone)
 
       const result = await functionToCall({
-        ...args,
-        farmId: storedFarmId || args.farmId,
+        ...normalized.args,
+        farmId: storedFarmId || normalized.args.farmId,
         phone,
-      })
+      } as any)
 
       return {
         tool_call_id: toolCall.id,
@@ -321,7 +365,7 @@ export class DefaultContextService {
       },
       'Executando tool call',
     )
-    const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
+    const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId, incomingMessage)
     logToolExecution(logAgentToolCall?.name ?? '', toolResponse, { userId })
 
     try {

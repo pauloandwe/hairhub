@@ -13,27 +13,75 @@ import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const PROFESSIONAL_NAMESPACE = 'BARBER_GROUP'
 
+type ProfessionalSelectionDispatchResult = {
+  interactive: boolean
+  autoSelected: boolean
+}
+
+async function getEligibleProfessionalsForSelection(phone: string): Promise<SelectionItem[]> {
+  const draft = await appointmentService.loadDraft(phone)
+  const serviceId = draft.service?.id ?? null
+  const professionals = await professionalService.getProfessionals(phone, serviceId)
+  const allowedProfessionalIds = Array.isArray(getUserContextSync(phone)?.availableProfessionalIdsForSlot)
+    ? new Set(getUserContextSync(phone)?.availableProfessionalIdsForSlot.map((id: string) => String(id)))
+    : null
+  const filteredProfessionals =
+    allowedProfessionalIds && allowedProfessionalIds.size > 0
+      ? professionals.filter((professional) => allowedProfessionalIds.has(String(professional.id)))
+      : professionals
+
+  if (allowedProfessionalIds && allowedProfessionalIds.size > 0) {
+    console.info('[professionalFlow] Filtering professionals to keep the preserved slot.', {
+      phone,
+      serviceId,
+      appointmentDate: draft.appointmentDate,
+      appointmentTime: draft.appointmentTime,
+      allowedProfessionalIds: Array.from(allowedProfessionalIds),
+      filteredCount: filteredProfessionals.length,
+    })
+  }
+
+  return filteredProfessionals
+}
+
+async function autoSelectSingleProfessional(userId: string, professional: SelectionItem, editMode: boolean): Promise<void> {
+  await setUserContext(userId, {
+    professionalId: professional.id,
+    professionalName: professional.name,
+    autoAssignedProfessional: true,
+    availableProfessionalIdsForSlot: null,
+  })
+
+  if (editMode) {
+    await appointmentFunctions.applyAppointmentRecordUpdates({
+      phone: userId,
+      updates: {
+        professional: {
+          id: professional.id,
+          name: professional.name,
+        },
+      } as Partial<UpsertAppointmentArgs>,
+      logContext: `Professional atualizado automaticamente para ${professional.name}`,
+    })
+    return
+  }
+
+  if (getUserContextSync(userId)?.activeRegistration?.type === FlowType.Appointment) {
+    await appointmentService.updateDraftField(userId, AppointmentFields.PROFESSIONAL as keyof UpsertAppointmentArgs, {
+      id: professional.id,
+      name: professional.name,
+    })
+  }
+
+  await sendWhatsAppMessage(userId, getSelectionAck('professional', professional.name))
+  await tryContinueRegistration(userId)
+}
+
 const professionalFlow = createSelectionFlow<SelectionItem>({
   namespace: PROFESSIONAL_NAMESPACE,
   type: 'selectProfessional',
   fetchItems: async (phone) => {
-    const draft = await appointmentService.loadDraft(phone)
-    const serviceId = draft.service?.id ?? null
-    const professionals = await professionalService.getProfessionals(phone, serviceId)
-    const allowedProfessionalIds = Array.isArray(getUserContextSync(phone)?.availableProfessionalIdsForSlot) ? new Set(getUserContextSync(phone)?.availableProfessionalIdsForSlot.map((id: string) => String(id))) : null
-    const filteredProfessionals = allowedProfessionalIds && allowedProfessionalIds.size > 0 ? professionals.filter((professional) => allowedProfessionalIds.has(String(professional.id))) : professionals
-
-    if (allowedProfessionalIds && allowedProfessionalIds.size > 0) {
-      console.info('[professionalFlow] Filtering professionals to keep the preserved slot.', {
-        phone,
-        serviceId,
-        appointmentDate: draft.appointmentDate,
-        appointmentTime: draft.appointmentTime,
-        allowedProfessionalIds: Array.from(allowedProfessionalIds),
-        filteredCount: filteredProfessionals.length,
-      })
-    }
-
+    const filteredProfessionals = await getEligibleProfessionalsForSelection(phone)
     if (filteredProfessionals.length === 0) {
       return []
     }
@@ -121,6 +169,26 @@ const professionalFlow = createSelectionFlow<SelectionItem>({
   },
 })
 
-export async function sendProfessionalSelectionList(userId: string, bodyMsg = 'Tem preferencia de barbeiro?', offset = 0) {
+export async function sendProfessionalSelectionList(userId: string, bodyMsg = 'Tem preferencia de barbeiro?', offset = 0): Promise<ProfessionalSelectionDispatchResult> {
+  const isEditMode = Boolean(getUserContextSync(userId)?.activeRegistration?.editMode)
+  const draft = await appointmentService.loadDraft(userId)
+  const hasResolvedService = Boolean(draft.service?.id)
+
+  if (offset === 0 && hasResolvedService) {
+    const eligibleProfessionals = await getEligibleProfessionalsForSelection(userId)
+    if (eligibleProfessionals.length === 1) {
+      const [singleProfessional] = eligibleProfessionals
+      console.info('[professionalFlow] Auto-selecting single eligible professional.', {
+        userId,
+        professionalId: singleProfessional.id,
+        professionalName: singleProfessional.name,
+        editMode: isEditMode,
+      })
+      await autoSelectSingleProfessional(userId, singleProfessional, isEditMode)
+      return { interactive: false, autoSelected: true }
+    }
+  }
+
   await professionalFlow.sendList(userId, bodyMsg, offset)
+  return { interactive: true, autoSelected: false }
 }
