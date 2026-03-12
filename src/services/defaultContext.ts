@@ -165,11 +165,17 @@ export class DefaultContextService {
             * Barbeiros/profissionais disponíveis → use getProfessionals
             * Para QUALQUER outra consulta fora desse escopo → use reportUnsupportedQuery
 
-          **REGRA IMPORTANTE PARA CONSULTA COM INTENÇÃO DE MARCAR:**
-          - Se o usuário perguntar disponibilidade e já trouxer data e horário exatos, com ou sem profissional/serviço, trate isso como pré-agendamento.
-          - Nesse caso, use startAppointmentRegistration com intentMode = "check_then_offer".
-          - Exemplo: "Tem horário amanhã às 15h com o João?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD>", appointmentTime: "15:00", professional: "João", intentMode: "check_then_offer" })
-          - Exemplo: "Tem horário sexta às 14h para barba?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD>", appointmentTime: "14:00", service: "Barba", intentMode: "check_then_offer" })
+          **REGRA IMPORTANTE PARA AGENDAMENTO DIRETO VS. CONSULTA DE DISPONIBILIDADE:**
+          - Use startAppointmentRegistration com intentMode = "check_then_offer" SOMENTE quando o usuário estiver realmente PERGUNTANDO se existe um horário exato antes de decidir marcar.
+          - Exemplos de check_then_offer:
+            * "Tem horário amanhã às 15h com o João?"
+            * "Há vaga sexta às 14h para barba?"
+            * "Consegue me encaixar amanhã às 15h?"
+          - Se a frase for um pedido direto para agendar, use startAppointmentRegistration no modo normal ("book"), mesmo que já venha com data e horário exatos.
+          - Exemplos de book:
+            * "Quero agendar um horário para amanhã às 15h com o João"
+            * "Preciso marcar corte + barba amanhã às 15h"
+            * "Agenda pra mim amanhã às 15h com o João"
           - Só use getAvailableTimeSlots quando a pessoa estiver pedindo opções de horários, e não um horário exato para possível marcação.
 
           - Se houver ambiguidade, faça **uma única pergunta de esclarecimento**, curta e objetiva, para confirmar a intenção antes de acionar um fluxo.
@@ -177,7 +183,7 @@ export class DefaultContextService {
 
           **Diretrizes de fluxo**
           - Sempre inicie fluxos usando a ferramenta de *start* apropriada.
-          - Para confirmar ou cancelar, siga as mesmas regras dos fluxos ativos (sim = confirmar, não = cancelar).
+          - Para confirmar ou cancelar, siga as mesmas regras dos fluxos ativos: só confirme com confirmação explícita, só cancele com desistência inequívoca e não trate uma resposta negativa ligada ao campo atual como cancelamento automático.
           - Nunca avance em agendamentos sem que o usuário tenha iniciado o fluxo correspondente.
           - Faça apenas **uma pergunta por vez**.
 

@@ -264,6 +264,8 @@ export class ContextService {
         await appointmentFunctions.acceptPendingOffer(userId, pendingOfferReply.offer)
       } else if (pendingOfferReply.action === 'decline') {
         await appointmentIntentService.notifyOfferDeclined(userId)
+      } else if (pendingOfferReply.action === 'needs_clarification') {
+        await sendWhatsAppMessage(userId, pendingOfferReply.message)
       }
       return true
     }
@@ -276,10 +278,12 @@ export class ContextService {
           ...pendingResolutionReply.request,
           intentMode: 'check_then_offer',
         })
-      } else if (pendingResolutionReply.action === 'retry') {
+      } else if (pendingResolutionReply.action === 'repeat_options') {
         await sendAppointmentAvailabilityResolutionList(userId)
       } else if (pendingResolutionReply.action === 'decline') {
         await sendWhatsAppMessage(userId, 'Tudo bem. Quando quiser, me fala o horario que voce quer verificar.')
+      } else if (pendingResolutionReply.action === 'needs_clarification') {
+        await sendWhatsAppMessage(userId, pendingResolutionReply.message)
       }
       return true
     }

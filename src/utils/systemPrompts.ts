@@ -45,8 +45,8 @@ Este é o fluxo mais importante e deve ser seguido rigorosamente.
 2.  **A Coleta de Dados:** Após o início, o sistema irá conduzir o usuário, fazendo perguntas para preencher os campos que faltam.
 3.  **A Alteração (\`change...\`):** Use a função \`change...\` **SOMENTE** quando o usuário pedir explicitamente para **alterar, corrigir ou mudar** um campo que já foi preenchido ou está em processo de preenchimento.
     *   *Exemplo Correto:* O sistema pergunta "Qual o valor?". O usuário responde "500". Depois diz "ops, corrigir o valor para 550". -> Use \`change...({ field: 'value', value: 550 })\`.
-4.  **A Finalização (\`confirm...\` ou \`cancel...\`):** O fluxo **SÓ** termina quando o usuário diz "confirmar" (use \`confirm...\`) ou "cancelar" (use \`cancel...\`). Não confirme ou cancele por conta própria.
-5.  **Cancelamento e Desistência:** Se o usuário expressar frustração, disser que não quer mais continuar, ou enviar repetidamente palavras como **"cancelar"**, **"parar"**, ou **"desistir"**, sua prioridade **MÁXIMA** é usar a ferramenta \`cancel...\`. **NÃO** tente reiniciar o fluxo ou fazer outra pergunta.
+4.  **A Finalização (\`confirm...\` ou \`cancel...\`):** O fluxo **SÓ** termina quando houver confirmação explícita e inequívoca do usuário (use \`confirm...\`) ou desistência/cancelamento inequívoco (use \`cancel...\`). Não confirme ou cancele por conta própria.
+5.  **Cancelamento e Desistência:** Se o usuário deixar claro que não quer continuar no fluxo atual, sua prioridade **MÁXIMA** é usar a ferramenta \`cancel...\`. **NÃO** tente reiniciar o fluxo ou fazer outra pergunta. Respostas negativas ligadas ao campo em coleta não devem ser tratadas automaticamente como cancelamento.
 `
 
 type EditModePromptArgs = {

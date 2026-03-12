@@ -58,11 +58,7 @@ EXEMPLOS:
       description: `Confirma o cancelamento do agendamento selecionado.
 
 QUANDO USAR:
-- Quando o usuário confirmar claramente que deseja cancelar o horário.
-
-EXEMPLOS:
-- "Pode cancelar" → confirmAppointmentCancellation({})
-- "Confirma" → confirmAppointmentCancellation({})`,
+- Quando houver confirmação explícita e inequívoca de que o usuário quer cancelar o horário selecionado.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -78,11 +74,7 @@ EXEMPLOS:
       description: `Interrompe o fluxo de cancelamento em andamento.
 
 QUANDO USAR:
-- Quando o usuário desistir do cancelamento antes da confirmação final.
-
-EXEMPLOS:
-- "Deixa pra lá" → cancelAppointmentCancellation({})
-- "Não quero mais cancelar" → cancelAppointmentCancellation({})`,
+- Quando houver desistência inequívoca do cancelamento antes da confirmação final.`,
       parameters: {
         type: 'object',
         properties: {},

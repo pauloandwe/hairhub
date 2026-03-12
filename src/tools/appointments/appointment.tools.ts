@@ -8,8 +8,9 @@ export const appointmentTools: OpenAITool[] = [
       name: 'startAppointmentRegistration',
       description: `DISPARADOR (INTENÇÃO):
 - SEMPRE use esta ferramenta quando o usuário mencionar agendar/marcar/fazer agendamento/corte/serviço de business.
-- Se o usuário perguntar sobre disponibilidade de um horário EXATO já pensando em marcar (ex.: "Tem amanhã às 15h com o João?"), use esta função com \`intentMode: "check_then_offer"\`.
+- Use \`intentMode: "check_then_offer"\` SOMENTE quando o usuário estiver perguntando se existe um horário EXATO antes de decidir marcar (ex.: "Tem amanhã às 15h com o João?", "Há vaga sexta às 14h para barba?", "Consegue me encaixar amanhã às 15h?").
 - Use \`intentMode: "book"\` (ou omita o campo) para o fluxo normal de agendamento.
+- Se a frase for um pedido direto para marcar, use \`book\` mesmo que ela já venha com data e horário exatos (ex.: "Quero agendar amanhã às 15h com o João", "Preciso marcar corte + barba amanhã às 15h", "Agenda pra mim amanhã às 15h").
 - Se houver dados na própria frase (ex.: data, horário, serviço, professional, nome, observações), preencha esses campos e envie junto.
 - Os campos canônicos internos são \`appointmentDate\` e \`appointmentTime\`, mas \`date\` e \`time\` continuam aceitos como alias.
 - Se não houver dados explícitos, chame com arguments = {} apenas.
@@ -24,9 +25,12 @@ QUANDO NÃO USAR:
 EXEMPLOS:
 - "Quero agendar um corte para amanhã" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>" })
 - "Agendar corte + barba com João para 15/11/2024 às 14:00" → startAppointmentRegistration({ appointmentDate: "2024-11-15", appointmentTime: "14:00", service: "Corte + Barba", professional: "João" })
+- "Quero agendar amanhã às 15h com o João" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", professional: "João" })
+- "Preciso marcar corte + barba amanhã às 15h" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", service: "Corte + Barba" })
 - "Tem horário amanhã às 15h com o João?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", professional: "João", intentMode: "check_then_offer" })
 - "Tem sexta às 14h para barba?" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD da sexta>", appointmentTime: "14:00", service: "Barba", intentMode: "check_then_offer" })
 - "Agendar um corte e preciso avisar que tenho alergia a alguns produtos" → startAppointmentRegistration({ notes: "Alergia a alguns produtos" })
+- "Quais horários tem amanhã?" → use getAvailableTimeSlots
 - "Quero fazer um agendamento" → startAppointmentRegistration({})`,
       parameters: {
         type: 'object',
@@ -34,7 +38,7 @@ EXEMPLOS:
           intentMode: {
             type: 'string',
             enum: ['book', 'check_then_offer'],
-            description: 'Use "check_then_offer" para verificar um horário exato pensando em marcar e "book" para o fluxo normal de agendamento.',
+            description: 'Use "check_then_offer" apenas para pergunta real sobre um horário exato; use "book" para pedido direto de agendamento.',
           },
           appointmentDate: { type: 'string', format: 'date', description: 'Campo canônico para a data do agendamento (YYYY-MM-DD).' },
           appointmentTime: { type: ['string', 'null'], description: 'Campo canônico para o horário do agendamento (HH:mm).' },
@@ -82,7 +86,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'confirmAppointmentRegistration',
-      description: 'Confirma o agendamento usando o rascunho atual. Use quando o usuário disser claramente que deseja confirmar.',
+      description: 'Confirma o agendamento usando o rascunho atual. Use apenas quando houver confirmação explícita e inequívoca do usuário sobre esse rascunho.',
       parameters: {
         type: 'object',
         properties: {},
@@ -94,7 +98,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'cancelAppointmentRegistration',
-      description: 'Cancela e limpa apenas o rascunho atual de cadastro de agendamento. Use quando o usuário desistir do fluxo em andamento; não use para cancelar um horário já criado.',
+      description: 'Cancela e limpa apenas o rascunho atual de cadastro de agendamento. Use apenas quando houver desistência ou cancelamento inequívoco do fluxo em andamento; não use para cancelar um horário já criado.',
       parameters: {
         type: 'object',
         properties: {},

@@ -99,15 +99,16 @@ export abstract class GenericContextService<TDraft> {
             ${incomingMessage}
 
             **Sua tarefa:**
-            1. Se o usuário disser "cancelar", "parar", "desistir" ou "não quero mais", use a ferramenta de cancelamento IMEDIATAMENTE;
+            1. Se o usuário demonstrar desistência explícita e inequívoca do fluxo atual, use a ferramenta de cancelamento imediatamente;
             2. Extraia APENAS o novo valor que corresponde ao campo "${awaitingField}" da mensagem do usuário;
             3. Normalize o valor conforme necessário (datas em YYYY-MM-DD, números sem símbolos);
             4. Chame a ferramenta de edição com o campo e valor extraído;
 
             **Regras de CANCELAMENTO (PRIORIDADE MÁXIMA):**
-            - Se disser "cancelar", "parar", "desistir", "não quero", "não quero mais" ou "interromper", use a ferramenta de cancelamento
-            - Se a mensagem for apenas uma resposta negativa ("não", "não é", "não tenho"), trate-a como resposta para o campo e siga com a extração
-            - Não pergunte se quer cancelar, apenas execute
+            - Só cancele quando houver desistência explícita e inequívoca do fluxo atual
+            - Se a mensagem for uma resposta negativa que preenche ou esclarece o campo solicitado, trate-a como resposta do campo
+            - Na dúvida entre cancelamento e resposta de campo, priorize a interpretação como resposta do campo
+            - Não pergunte se quer cancelar; apenas execute quando a desistência estiver clara
             - Cancelamento tem PRIORIDADE MÁXIMA sobre qualquer outra extração de dados
 
             **Regras gerais:**
@@ -136,15 +137,16 @@ export abstract class GenericContextService<TDraft> {
           ${incomingMessage}
 
           **Sua tarefa:**
-          1. Se o usuário disser "cancelar", "parar", "desistir" ou "não quero mais", use a ferramenta de cancelamento IMEDIATAMENTE;
+          1. Se o usuário demonstrar desistência explícita e inequívoca do fluxo atual, use a ferramenta de cancelamento imediatamente;
           2. Extraia APENAS o valor que corresponde ao campo "${awaitingField}" da mensagem do usuário;
           3. Normalize o valor conforme necessário (datas em YYYY-MM-DD, números sem símbolos);
           4. Chame a ferramenta com o valor extraído;
 
           **Regras de CANCELAMENTO (PRIORIDADE MÁXIMA):**
-          - Se disser "cancelar", "parar", "desistir", "não quero", "não quero mais" ou "interromper", use a ferramenta de cancelamento
-          - Se a mensagem for apenas uma resposta negativa ("não", "não é", "não tenho"), trate-a como resposta para o campo e siga com a extração
-          - Não pergunte se quer cancelar, apenas execute
+          - Só cancele quando houver desistência explícita e inequívoca do fluxo atual
+          - Se a mensagem for uma resposta negativa que preenche ou esclarece o campo solicitado, trate-a como resposta do campo
+          - Na dúvida entre cancelamento e resposta de campo, priorize a interpretação como resposta do campo
+          - Não pergunte se quer cancelar; apenas execute quando a desistência estiver clara
           - Cancelamento tem PRIORIDADE MÁXIMA sobre qualquer outra extração de dados
 
           **Regras gerais:**
@@ -180,9 +182,9 @@ export abstract class GenericContextService<TDraft> {
 
         **Regras de extração:**
         - Números isolados: geralmente são quantidades ou valores
-        - "sim", "confirmar", "ok": confirmação
-        - Frases com intenção clara de cancelar ("cancelar", "parar", "desistir", "não quero", "não quero mais", "interromper"): cancelamento
-        - "não" ou negativas ligadas ao campo: trate como resposta para o campo solicitado
+        - Confirmação explícita e inequívoca: trate como confirmação
+        - Desistência ou cancelamento inequívoco do fluxo atual: trate como cancelamento
+        - Resposta negativa ligada ao campo atual: trate como resposta para o campo solicitado, não como cancelamento automático
         - Datas: sempre normalize para formato ISO (YYYY-MM-DD)
         - Valores monetários: remova "R$" e converta para número
 

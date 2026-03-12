@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from '../../api/meta.api'
 import { createSelectionFlow } from '../flows'
 import { appointmentRescheduleService } from '../../services/appointments/appointment-reschedule.service'
 import { appointmentRescheduleDraftService } from '../../services/appointments/appointment-reschedule-draft.service'
-import { professionalService } from '../../services/appointments/professional.service'
+import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { tryContinueRegistration } from '../followup'
 import { getSelectionAck } from '../../utils/conversation-copy'
@@ -31,6 +31,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
         phone,
         professionalId: appointment.professionalId,
         serviceId: appointment.serviceId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       if (!days.length) {

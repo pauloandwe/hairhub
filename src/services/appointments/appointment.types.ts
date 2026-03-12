@@ -105,3 +105,17 @@ export type AppointmentAvailabilityResolution =
       compatibleProfessionalIds?: string[]
       contextUpdates?: AppointmentAvailabilityContextUpdates
     }
+
+export type AppointmentCreateConflictNextAction = 'pick_time' | 'pick_date' | 'pick_professional'
+
+export type CreateConflictRecoveryResult =
+  | { handled: false }
+  | {
+      handled: true
+      draft: IAppointmentValidationDraft
+      message: string
+      nextAction: AppointmentCreateConflictNextAction
+      contextUpdates?: AppointmentAvailabilityContextUpdates
+      recoverySource: 'reconcile' | 'forced-from-create-error'
+      availableSlotsPreview?: string[]
+    }

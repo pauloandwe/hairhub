@@ -3,7 +3,7 @@ import { FlowType } from '../../enums/generic.enum'
 import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { getUserContext, setUserContext, getUserContextSync } from '../../env.config'
 import { appointmentService } from '../../services/appointments/appointmentService'
-import { professionalService } from '../../services/appointments/professional.service'
+import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
 import { createSelectionFlow } from '../flows'
 import { tryContinueRegistration } from '../followup'
@@ -37,6 +37,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
       const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
         phone,
         date,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         ...(serviceId !== null ? { serviceId } : {}),
       })
 
@@ -56,6 +57,7 @@ const timeSlotFlow = createSelectionFlow<TimeSlotSelectionItem>({
         professionalId,
         date,
         serviceId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       slots = professionalSlots.map((slot) => ({

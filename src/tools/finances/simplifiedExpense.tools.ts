@@ -78,7 +78,7 @@ export const expenseTools: OpenAITool[] = [
     type: 'function',
     function: {
       name: 'confirmSimpleExpenseRegistration',
-      description: "Confirma e finaliza o registro da despesa atual. Use quando o usuário disser 'confirmar', 'salvar', 'finalizar', 'ok', 'certo' ou 'pode ser'.",
+      description: 'Confirma e finaliza o registro da despesa atual. Use apenas quando houver confirmação explícita e inequívoca do rascunho atual.',
       parameters: {
         type: 'object',
         properties: {},
@@ -90,7 +90,7 @@ export const expenseTools: OpenAITool[] = [
     type: 'function',
     function: {
       name: 'cancelSimplifiedExpenseRegistration',
-      description: "Cancela o rascunho de despesa atual. Use SEMPRE que o usuário disser 'cancelar', 'desistir', 'parar', ou 'não quero mais'.",
+      description: 'Cancela o rascunho de despesa atual. Use apenas quando houver desistência ou cancelamento inequívoco do fluxo atual.',
       parameters: {
         type: 'object',
         properties: {},

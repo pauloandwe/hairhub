@@ -61,7 +61,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'confirmAnimalBirthRegistration',
-      description: 'Confirma o cadastro de nascimento usando o rascunho atual. Use quando o usuário disser claramente que deseja confirmar.',
+      description: 'Confirma o cadastro de nascimento usando o rascunho atual. Use apenas quando houver confirmação explícita e inequívoca do rascunho atual.',
       parameters: {
         type: 'object',
         properties: {},
@@ -73,7 +73,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'cancelAnimalBirthRegistration',
-      description: 'Cancela e limpa o rascunho atual do cadastro de nascimento. Use quando o usuário disser para cancelar ou desistir.',
+      description: 'Cancela e limpa o rascunho atual do cadastro de nascimento. Use apenas quando houver desistência ou cancelamento inequívoco do fluxo atual.',
       parameters: {
         type: 'object',
         properties: {},

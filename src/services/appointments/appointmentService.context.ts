@@ -8,6 +8,7 @@ import { FlowConfig } from '../openai.config'
 import { IAppointmentValidationDraft } from './appointment.types'
 import { appointmentService } from './appointmentService'
 import { registerAppointmentEditDeleteHandler } from '../../interactives/appointments/appointmentInteractives'
+import { getUserContextSync } from '../../env.config'
 
 export class AppointmentContextService extends GenericContextService<IAppointmentValidationDraft> {
   private static instance: AppointmentContextService
@@ -24,6 +25,13 @@ export class AppointmentContextService extends GenericContextService<IAppointmen
   }
 
   protected getDraft = async (phone: string): Promise<IAppointmentValidationDraft> => {
+    const activeRegistration = getUserContextSync(phone)?.activeRegistration
+    const hasActiveAppointmentFlow = activeRegistration?.type === FlowType.Appointment && activeRegistration?.status !== 'completed'
+
+    if (!hasActiveAppointmentFlow) {
+      return appointmentService.buildFreshDraftForNewRegistration(phone)
+    }
+
     return await appointmentService.loadDraft(phone)
   }
 

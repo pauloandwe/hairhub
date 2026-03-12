@@ -3,13 +3,22 @@ import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import api from '../../config/api.config'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
-import { AppointmentAvailabilityContextUpdates, AppointmentAvailabilityResolution, AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
+import {
+  AppointmentAvailabilityContextUpdates,
+  AppointmentAvailabilityResolution,
+  AppointmentRecord,
+  CreateConflictRecoveryResult,
+  IAppointmentCreationPayload,
+  IAppointmentValidationDraft,
+  StartAppointmentArgs,
+  UpsertAppointmentArgs,
+} from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone, getBusinessTimezoneForPhone, getUserContextSync } from '../../env.config'
 import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
-import { professionalService } from './professional.service'
+import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from './professional.service'
 import { ApiError } from '../../errors/api-error'
 import { getAppErrorMessage } from '../../utils/error-messages'
 import { AppErrorCodes } from '../../enums/constants'
@@ -120,6 +129,52 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return TIME_REGEX.test(trimmedTime) ? trimmedTime : null
   }
 
+  private timeToMinutes(value?: string | null): number | null {
+    if (!value || !TIME_REGEX.test(value)) return null
+    const [hour, minute] = value.split(':').map(Number)
+    return hour * 60 + minute
+  }
+
+  private pickNearestAvailableTimes(requestedTime: string, slots: string[], limit = 3): string[] {
+    const requestedMinutes = this.timeToMinutes(requestedTime)
+    const uniqueSlots = Array.from(new Set(slots.filter((slot) => TIME_REGEX.test(slot))))
+
+    if (requestedMinutes === null) {
+      return uniqueSlots.slice(0, limit)
+    }
+
+    return uniqueSlots
+      .map((slot) => ({
+        slot,
+        minutes: this.timeToMinutes(slot),
+      }))
+      .filter((candidate): candidate is { slot: string; minutes: number } => candidate.minutes !== null && candidate.slot !== requestedTime)
+      .sort((left, right) => {
+        const leftDistance = Math.abs(left.minutes - requestedMinutes)
+        const rightDistance = Math.abs(right.minutes - requestedMinutes)
+        if (leftDistance !== rightDistance) return leftDistance - rightDistance
+        return left.minutes - right.minutes
+      })
+      .slice(0, limit)
+      .map((candidate) => candidate.slot)
+  }
+
+  private buildTimeSlotMismatchMessage(draft: IAppointmentValidationDraft, slots: string[]): string {
+    const requestedTime = draft.appointmentTime
+    if (!requestedTime) {
+      return AVAILABILITY_FALLBACK_MESSAGE
+    }
+
+    const alternatives = this.pickNearestAvailableTimes(requestedTime, slots)
+    if (!alternatives.length) {
+      return AVAILABILITY_FALLBACK_MESSAGE
+    }
+
+    const serviceText = draft.service?.name ? ` para ${draft.service.name}` : ''
+    const professionalText = draft.professional?.name ? ` com ${draft.professional.name}` : ''
+    return `${requestedTime} nao esta livre${serviceText}${professionalText}. Posso te oferecer estas opcoes proximas: ${alternatives.join(', ')}.`
+  }
+
   private normalizeRefInput(value: unknown): IdNameRef | null | undefined {
     if (value === undefined) return undefined
     if (value === null) return null
@@ -219,6 +274,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return draft
   }
 
+  buildFreshDraftForNewRegistration(phone: string, args?: Partial<StartAppointmentArgs>): IAppointmentValidationDraft {
+    const freshDraft = this.hydrateDraftWithRuntimeContext(phone, emptyAppointmentDraft())
+    freshDraft.status = 'collecting'
+
+    if (args && Object.keys(args).length > 0) {
+      this.validateDraftArgsTypes(args as Partial<UpsertAppointmentArgs>, freshDraft)
+    }
+
+    return freshDraft
+  }
+
   async fetchAppointmentRecord(phone: string, recordId: string): Promise<AppointmentRecord | null> {
     const businessId = this.extractStringValue(getBusinessIdForPhone(phone))
     const normalizedRecordId = this.extractStringValue(recordId)
@@ -283,13 +349,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       professional?: unknown
     }
 
-    const normalizeIdValue = (value: unknown): string | null => {
-      if (value === undefined || value === null) return null
-      const normalized = String(value).trim()
-      return normalized.length ? normalized : null
-    }
-
-    const previousProfessionalId = normalizeIdValue(currentDraft.professional?.id)
     const previousDate = currentDraft.appointmentDate ?? null
 
     const assignRef = (field: keyof Pick<IAppointmentValidationDraft, 'service' | 'professional'>, incoming: IdNameRef | null | undefined) => {
@@ -320,11 +379,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     const normalizedProfessional = this.normalizeRefInput(extendedArgs.professional)
     if (normalizedProfessional !== undefined) {
-      const incomingProfessionalId = normalizeIdValue(normalizedProfessional?.id)
-      const hasProfessionalChanged = incomingProfessionalId !== previousProfessionalId
-      if (hasProfessionalChanged) {
-        currentDraft.appointmentTime = null
-      }
       assignRef('professional', normalizedProfessional)
     }
 
@@ -605,9 +659,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           console.info('[AppointmentService] Reconciled availability after service change by keeping the original slot.', {
             phone,
             serviceId,
-            date,
-            time: draft.appointmentTime,
-            previousProfessionalId: professionalId,
+            professionalId,
+            appointmentDate: date,
+            appointmentTime: draft.appointmentTime,
+            stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
             resolutionStatus: preservedSlotResolution.status,
             compatibleProfessionalIds,
           })
@@ -617,9 +672,10 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         console.info('[AppointmentService] Reconciled availability by clearing the incompatible professional.', {
           phone,
           serviceId,
-          date,
-          time: draft.appointmentTime,
-          previousProfessionalId: professionalId,
+          professionalId,
+          appointmentDate: date,
+          appointmentTime: draft.appointmentTime,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
           resolutionStatus: 'reset-professional',
         })
         return {
@@ -640,15 +696,19 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         professionalId,
         date,
         serviceId,
+        excludeAppointmentId: draft.recordId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       if (!slots.length) {
         console.info('[AppointmentService] Reconciled availability by resetting the date because no slot exists for the selected professional.', {
           phone,
           serviceId,
-          date,
-          time: draft.appointmentTime,
           professionalId,
+          appointmentDate: date,
+          appointmentTime: draft.appointmentTime,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availableSlotsPreview: this.formatProfessionalSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-date',
         })
         return {
@@ -667,15 +727,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         console.info('[AppointmentService] Reconciled availability by resetting the time for the selected professional.', {
           phone,
           serviceId,
-          date,
-          time: draft.appointmentTime,
           professionalId,
+          appointmentDate: date,
+          appointmentTime: draft.appointmentTime,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availableSlotsPreview: this.formatProfessionalSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-time',
         })
         return {
           status: 'reset-time',
           draft: this.withAvailabilityFallback(draft, 'reset-time'),
-          message: AVAILABILITY_FALLBACK_MESSAGE,
+          message: this.buildTimeSlotMismatchMessage(draft, slots),
           contextUpdates: {
             availableProfessionalIdsForSlot: null,
             autoAssignedProfessional: false,
@@ -692,14 +754,19 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         phone,
         date,
         serviceId,
+        excludeAppointmentId: draft.recordId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       if (!slots.length) {
         console.info('[AppointmentService] Reconciled aggregated availability by resetting the date.', {
           phone,
           serviceId,
-          date,
-          time: draft.appointmentTime,
+          professionalId: null,
+          appointmentDate: date,
+          appointmentTime: draft.appointmentTime,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availableSlotsPreview: this.formatAggregatedSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-date',
         })
         return {
@@ -718,14 +785,20 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         console.info('[AppointmentService] Reconciled aggregated availability by resetting the time.', {
           phone,
           serviceId,
-          date,
-          time: draft.appointmentTime,
+          professionalId: null,
+          appointmentDate: date,
+          appointmentTime: draft.appointmentTime,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availableSlotsPreview: this.formatAggregatedSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-time',
         })
         return {
           status: 'reset-time',
           draft: this.withAvailabilityFallback(draft, 'reset-time'),
-          message: AVAILABILITY_FALLBACK_MESSAGE,
+          message: this.buildTimeSlotMismatchMessage(
+            draft,
+            slots.map((slot) => slot.start),
+          ),
           contextUpdates: {
             availableProfessionalIdsForSlot: null,
             autoAssignedProfessional: false,
@@ -741,6 +814,29 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
   isAvailabilityConflictError(error: unknown): boolean {
     const message = this.extractErrorMessage(error)
     return Boolean(message && AVAILABILITY_ERROR_MESSAGES.has(message))
+  }
+
+  async resolveCreateConflictRecovery(phone: string, draft: IAppointmentValidationDraft, error: unknown): Promise<CreateConflictRecoveryResult> {
+    if (!this.isAvailabilityConflictError(error)) {
+      return { handled: false }
+    }
+
+    const errorMessage = this.extractErrorMessage(error)
+    const reconciled = await this.reconcileDraftAvailability(phone, draft)
+
+    if (reconciled.status !== 'ok') {
+      const recovery = this.mapAvailabilityResolutionToCreateConflictRecovery(reconciled)
+      this.logCreateConflictRecovery(phone, draft, errorMessage, recovery)
+      return recovery
+    }
+
+    const forcedRecovery = await this.forceCreateConflictRecovery(phone, draft, errorMessage)
+    if (!forcedRecovery.handled) {
+      return forcedRecovery
+    }
+
+    this.logCreateConflictRecovery(phone, draft, errorMessage, forcedRecovery)
+    return forcedRecovery
   }
 
   protected formatItemToSelection = (listType: string, item: any): SelectionItem => {
@@ -837,6 +933,189 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
   }
 
+  private formatProfessionalSlotsForLog(slots: string[]): string[] {
+    return [...slots]
+  }
+
+  private formatAggregatedSlotsForLog(slots: { start: string; professionals: { id: string; name: string }[] }[]): Array<{ start: string; professionalIds: string[]; professionalNames: string[] }> {
+    return slots.map((slot) => ({
+      start: slot.start,
+      professionalIds: slot.professionals.map((professional) => String(professional.id)),
+      professionalNames: slot.professionals.map((professional) => professional.name),
+    }))
+  }
+
+  private mapAvailabilityResolutionToCreateConflictRecovery(
+    resolution: Exclude<AppointmentAvailabilityResolution, { status: 'ok' }>,
+  ): Extract<CreateConflictRecoveryResult, { handled: true }> {
+    const nextAction =
+      resolution.status === 'reset-time'
+        ? 'pick_time'
+        : resolution.status === 'reset-date'
+          ? 'pick_date'
+          : 'pick_professional'
+
+    return {
+      handled: true,
+      draft: resolution.draft,
+      message: resolution.message,
+      nextAction,
+      contextUpdates: resolution.contextUpdates,
+      recoverySource: 'reconcile',
+      availableSlotsPreview: undefined,
+    }
+  }
+
+  private async forceCreateConflictRecovery(phone: string, draft: IAppointmentValidationDraft, errorMessage: string | null): Promise<CreateConflictRecoveryResult> {
+    const serviceId = this.extractValidId(draft.service?.id)
+    const date = draft.appointmentDate ?? null
+    const requestedTime = draft.appointmentTime ?? null
+    const professionalId = this.extractValidId(draft.professional?.id)
+
+    if (!serviceId || !date) {
+      return { handled: false }
+    }
+
+    const sameContextSlots = professionalId
+      ? await professionalService.getAvailableSlots({
+          phone,
+          professionalId,
+          date,
+          serviceId,
+          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+        })
+      : (
+          await professionalService.getAvailableSlotsAggregated({
+            phone,
+            date,
+            serviceId,
+            stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          })
+        ).map((slot) => slot.start)
+
+    const alternativeSlots = requestedTime ? sameContextSlots.filter((slot) => slot !== requestedTime) : sameContextSlots
+
+    if (alternativeSlots.length > 0) {
+      return {
+        handled: true,
+        draft: this.withAvailabilityFallback(draft, 'reset-time'),
+        message: this.buildTimeSlotMismatchMessage(draft, sameContextSlots),
+        nextAction: 'pick_time',
+        contextUpdates: {
+          availableProfessionalIdsForSlot: null,
+          autoAssignedProfessional: false,
+          timeSlot: null,
+        },
+        recoverySource: 'forced-from-create-error',
+        availableSlotsPreview: alternativeSlots.slice(0, 10),
+      }
+    }
+
+    if (requestedTime) {
+      const professionalRecovery = await this.buildProfessionalRecoveryForCreateConflict(phone, draft, serviceId, date, professionalId)
+      if (professionalRecovery) {
+        return professionalRecovery
+      }
+    }
+
+    return {
+      handled: true,
+      draft: this.withAvailabilityFallback(draft, 'reset-date'),
+      message: this.buildDateRecoveryMessage(draft, errorMessage),
+      nextAction: 'pick_date',
+      contextUpdates: {
+        availableProfessionalIdsForSlot: null,
+        autoAssignedProfessional: false,
+        timeSlot: null,
+      },
+      recoverySource: 'forced-from-create-error',
+      availableSlotsPreview: [],
+    }
+  }
+
+  private async buildProfessionalRecoveryForCreateConflict(
+    phone: string,
+    draft: IAppointmentValidationDraft,
+    serviceId: number,
+    date: string,
+    currentProfessionalId?: number,
+  ): Promise<CreateConflictRecoveryResult | null> {
+    const time = draft.appointmentTime ?? null
+    if (!time) {
+      return null
+    }
+
+    const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
+      phone,
+      date,
+      serviceId,
+      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+    })
+    const exactSlot = aggregatedSlots.find((slot) => slot.start === time)
+    const compatibleProfessionals = (exactSlot?.professionals ?? []).filter((professional) => Number(professional.id) !== currentProfessionalId)
+
+    if (!compatibleProfessionals.length) {
+      return null
+    }
+
+    const compatibleProfessionalIds = compatibleProfessionals.map((professional) => String(professional.id))
+    const serviceName = draft.service?.name ? ` para ${draft.service.name}` : ''
+    const message = draft.professional?.name
+      ? `${time} segue disponivel${serviceName}, mas nao com ${draft.professional.name}. Vou te mostrar quem consegue te atender nesse horario.`
+      : `${time} segue disponivel${serviceName}. Vou te mostrar quem consegue te atender nesse horario.`
+
+    return {
+      handled: true,
+      draft: {
+        ...draft,
+        service: draft.service ? { ...draft.service } : null,
+        professional: { id: null, name: null },
+      },
+      message,
+      nextAction: 'pick_professional',
+      contextUpdates: {
+        professionalId: null,
+        professionalName: null,
+        availableProfessionalIdsForSlot: compatibleProfessionalIds,
+        autoAssignedProfessional: false,
+        timeSlot: time,
+      },
+      recoverySource: 'forced-from-create-error',
+      availableSlotsPreview: [time],
+    }
+  }
+
+  private buildDateRecoveryMessage(draft: IAppointmentValidationDraft, errorMessage: string | null): string {
+    const professionalText = draft.professional?.name ? ` com ${draft.professional.name}` : ''
+    const serviceText = draft.service?.name ? ` para ${draft.service.name}` : ''
+
+    if (errorMessage === 'Professional unavailable for selected period') {
+      return `Nao achei outros horarios${professionalText}${serviceText} nessa data. Vou te mostrar novas datas.`
+    }
+
+    return `Nao achei outros horarios${professionalText}${serviceText} nessa data. Vou te mostrar outras datas.`
+  }
+
+  private logCreateConflictRecovery(
+    phone: string,
+    draft: IAppointmentValidationDraft,
+    errorMessage: string | null,
+    recovery: Extract<CreateConflictRecoveryResult, { handled: true }>,
+  ): void {
+    console.info('[AppointmentService] Recovered create conflict after backend rejection.', {
+      phone,
+      errorMessage,
+      serviceId: this.extractValidId(draft.service?.id) ?? null,
+      professionalId: this.extractValidId(draft.professional?.id) ?? null,
+      appointmentDate: draft.appointmentDate,
+      appointmentTime: draft.appointmentTime,
+      nextAction: recovery.nextAction,
+      recoverySource: recovery.recoverySource,
+      availableSlotsPreview: recovery.availableSlotsPreview ?? [],
+      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+    })
+  }
+
   private async tryPreserveTimeSlotWithAnotherProfessional(phone: string, draft: IAppointmentValidationDraft, serviceId: number, date: string): Promise<AppointmentAvailabilityResolution | null> {
     const time = draft.appointmentTime ?? null
     if (!time) {
@@ -847,6 +1126,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       phone,
       date,
       serviceId,
+      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
     })
     const matchingSlot = aggregatedSlots.find((slot) => slot.start === time)
     if (!matchingSlot || !matchingSlot.professionals.length) {

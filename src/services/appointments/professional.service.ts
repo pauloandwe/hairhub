@@ -4,6 +4,8 @@ import api from '../../config/api.config'
 import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
+export const PUBLIC_SLOT_STEP_MINUTES = 5
+
 export class ProfessionalService {
   async getProfessionals(phone: string, serviceId?: string | number | null): Promise<SelectionItem[]> {
     const businessId = getBusinessIdForPhone(phone)
@@ -58,8 +60,15 @@ export class ProfessionalService {
     }
   }
 
-  async getAvailableSlots(args: { phone: string; professionalId?: string | number | null; date?: string | null; serviceId?: string | number | null }): Promise<string[]> {
-    const { phone, professionalId, date, serviceId } = args
+  async getAvailableSlots(args: {
+    phone: string
+    professionalId?: string | number | null
+    date?: string | null
+    serviceId?: string | number | null
+    excludeAppointmentId?: string | number | null
+    stepMinutes?: number
+  }): Promise<string[]> {
+    const { phone, professionalId, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
     console.log('Normalized Business Phone:', { normalizedBusinessPhone, businessPhone, phone, professionalId, date, serviceId })
@@ -95,6 +104,14 @@ export class ProfessionalService {
       const params: Record<string, any> = {
         date,
         serviceId: numericServiceId,
+        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      }
+
+      if (excludeAppointmentId !== undefined && excludeAppointmentId !== null && String(excludeAppointmentId).trim() !== '') {
+        const numericExcludeId = Number(excludeAppointmentId)
+        if (Number.isFinite(numericExcludeId)) {
+          params.excludeAppointmentId = numericExcludeId
+        }
       }
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/professionals/${encodeURIComponent(resolvedProfessionalId)}/free-slots`
@@ -113,8 +130,8 @@ export class ProfessionalService {
     }
   }
 
-  async getAvailableDays(args: { phone: string; professionalId: string | number; serviceId?: string | number }): Promise<SelectionItem[]> {
-    const { phone, professionalId, serviceId } = args
+  async getAvailableDays(args: { phone: string; professionalId: string | number; serviceId?: string | number; stepMinutes?: number }): Promise<SelectionItem[]> {
+    const { phone, professionalId, serviceId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
 
@@ -132,6 +149,7 @@ export class ProfessionalService {
     try {
       const params: Record<string, any> = {
         days: 15,
+        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -179,8 +197,8 @@ export class ProfessionalService {
     }
   }
 
-  async getAvailableDaysAggregated(args: { phone: string; serviceId?: string | number }): Promise<SelectionItem[]> {
-    const { phone, serviceId } = args
+  async getAvailableDaysAggregated(args: { phone: string; serviceId?: string | number; stepMinutes?: number }): Promise<SelectionItem[]> {
+    const { phone, serviceId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
 
@@ -192,6 +210,7 @@ export class ProfessionalService {
     try {
       const params: Record<string, any> = {
         days: 15,
+        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -249,8 +268,14 @@ export class ProfessionalService {
     return converted.length ? converted : null
   }
 
-  async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
-    const { phone, date, serviceId } = args
+  async getAvailableSlotsAggregated(args: {
+    phone: string
+    date: string
+    serviceId?: string | number
+    excludeAppointmentId?: string | number | null
+    stepMinutes?: number
+  }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
+    const { phone, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
 
@@ -267,12 +292,20 @@ export class ProfessionalService {
     try {
       const params: Record<string, any> = {
         date,
+        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
       }
 
       if (serviceId !== undefined && serviceId !== null) {
         const numericServiceId = Number(serviceId)
         if (Number.isFinite(numericServiceId)) {
           params.serviceId = numericServiceId
+        }
+      }
+
+      if (excludeAppointmentId !== undefined && excludeAppointmentId !== null && String(excludeAppointmentId).trim() !== '') {
+        const numericExcludeId = Number(excludeAppointmentId)
+        if (Number.isFinite(numericExcludeId)) {
+          params.excludeAppointmentId = numericExcludeId
         }
       }
 

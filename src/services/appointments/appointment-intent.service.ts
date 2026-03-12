@@ -1,14 +1,17 @@
 import { addDays, format, isSameDay, parseISO } from 'date-fns'
+import OpenAI from 'openai'
 import { sendWhatsAppMessage } from '../../api/meta.api'
-import { getUserContextSync, setUserContext } from '../../env.config'
+import { env, getUserContextSync, setUserContext } from '../../env.config'
+import { OpenAITool } from '../../types/openai-types'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { SelectionItem } from '../generic/generic.types'
 import { AvailabilityResolutionCandidate, IAppointmentValidationDraft, PendingAppointmentOffer, PendingAvailabilityResolution, StartAppointmentArgs } from './appointment.types'
 import { appointmentService } from './appointmentService'
-import { professionalService } from './professional.service'
+import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from './professional.service'
 import { serviceService } from './service.service'
 
 const OFFER_TTL_MS = 15 * 60 * 1000
+const TIME_SLOT_REGEX = /^\d{2}:\d{2}$/
 
 export const APPOINTMENT_AVAILABILITY_RESOLUTION_NAMESPACE = 'APPOINTMENT_AVAILABILITY_RESOLUTION'
 
@@ -40,17 +43,9 @@ type CheckThenOfferResult =
       message: string
     }
 
-type PendingOfferReplyResult = { handled: false } | { handled: true; action: 'accept' | 'decline'; offer?: PendingAppointmentOffer }
+type PendingOfferReplyResult = { handled: false } | { handled: true; action: 'accept'; offer: PendingAppointmentOffer } | { handled: true; action: 'decline' } | { handled: true; action: 'needs_clarification'; message: string }
 
-type PendingResolutionReplyResult =
-  | { handled: false }
-  | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> }
-  | { handled: true; action: 'decline' }
-  | { handled: true; action: 'retry' }
-
-const AFFIRMATIVE_REPLIES = new Set(['sim', 's', 'quero', 'pode', 'pode sim', 'claro', 'ok', 'okay', 'fechou', 'confirmo', 'pode marcar', 'quero marcar', 'marca', 'marcar', 'agenda', 'agendar'])
-
-const NEGATIVE_REPLIES = new Set(['nao', 'não', 'n', 'agora nao', 'agora não', 'deixa', 'deixa pra la', 'deixa pra lá', 'deixa quieto', 'cancelar', 'nao quero', 'não quero'])
+type PendingResolutionReplyResult = { handled: false } | { handled: true; action: 'selected'; request: Omit<StartAppointmentArgs, 'intentMode'> } | { handled: true; action: 'decline' } | { handled: true; action: 'repeat_options' } | { handled: true; action: 'needs_clarification'; message: string }
 
 function cloneServiceRef(value: IAppointmentValidationDraft['service']): IAppointmentValidationDraft['service'] {
   if (!value) return null
@@ -201,7 +196,41 @@ function formatConversationalDate(date: string): string {
   }
 }
 
+function timeToMinutes(value: string): number | null {
+  if (!TIME_SLOT_REGEX.test(value)) return null
+  const [hour, minute] = value.split(':').map(Number)
+  return hour * 60 + minute
+}
+
+function pickNearestTimes(requestedTime: string, slots: string[], limit = 3): string[] {
+  const targetMinutes = timeToMinutes(requestedTime)
+  const uniqueSlots = Array.from(new Set(slots.filter((slot) => TIME_SLOT_REGEX.test(slot))))
+
+  if (targetMinutes === null) {
+    return uniqueSlots.slice(0, limit)
+  }
+
+  return uniqueSlots
+    .map((slot) => ({
+      slot,
+      minutes: timeToMinutes(slot),
+    }))
+    .filter((candidate): candidate is { slot: string; minutes: number } => candidate.minutes !== null && candidate.slot !== requestedTime)
+    .sort((left, right) => {
+      const leftDistance = Math.abs(left.minutes - targetMinutes)
+      const rightDistance = Math.abs(right.minutes - targetMinutes)
+      if (leftDistance !== rightDistance) return leftDistance - rightDistance
+      return left.minutes - right.minutes
+    })
+    .slice(0, limit)
+    .map((candidate) => candidate.slot)
+}
+
 class AppointmentIntentService {
+  private openai = new OpenAI({
+    apiKey: env.OPENAI_API_KEY,
+  })
+
   private getPendingOffer(phone: string): PendingAppointmentOffer | null {
     const context = getUserContextSync(phone)
     return cloneOffer(context?.pendingAppointmentOffer)
@@ -286,18 +315,23 @@ class AppointmentIntentService {
       return { handled: false }
     }
 
-    const normalizedMessage = normalizeText(incomingMessage)
-    if (AFFIRMATIVE_REPLIES.has(normalizedMessage)) {
+    const interpretation = await this.interpretPendingOfferReply(offer, incomingMessage)
+
+    if (interpretation.action === 'accept') {
       await this.clearPendingOffer(phone)
       return { handled: true, action: 'accept', offer }
     }
 
-    if (NEGATIVE_REPLIES.has(normalizedMessage)) {
+    if (interpretation.action === 'decline') {
       await this.clearPendingOffer(phone)
       return { handled: true, action: 'decline' }
     }
 
-    return { handled: false }
+    return {
+      handled: true,
+      action: 'needs_clarification',
+      message: this.buildOfferClarificationMessage(),
+    }
   }
 
   async takePendingOffer(phone: string): Promise<PendingAppointmentOffer | null> {
@@ -346,26 +380,35 @@ class AppointmentIntentService {
       return { handled: false }
     }
 
-    const normalizedMessage = normalizeText(incomingMessage)
-    if (NEGATIVE_REPLIES.has(normalizedMessage)) {
+    const interpretation = await this.interpretPendingResolutionReply(resolution, incomingMessage)
+
+    if (interpretation.action === 'decline') {
       await this.clearPendingResolution(phone)
       return { handled: true, action: 'decline' }
     }
 
-    const matches = resolution.candidates.filter((candidate) => matchesCandidate(incomingMessage, candidate.name))
-    if (matches.length !== 1) {
-      if (resolution.kind === 'professional') {
-        return { handled: true, action: 'retry' }
+    if (interpretation.action === 'repeat_options') {
+      return { handled: true, action: 'repeat_options' }
+    }
+
+    if (interpretation.action === 'select_candidate') {
+      const request = await this.consumeResolutionSelection(phone, interpretation.candidateId)
+      if (!request) {
+        return {
+          handled: true,
+          action: 'needs_clarification',
+          message: this.buildResolutionClarificationMessage(resolution.kind),
+        }
       }
-      return { handled: false }
+
+      return { handled: true, action: 'selected', request }
     }
 
-    const request = await this.consumeResolutionSelection(phone, matches[0].id)
-    if (!request) {
-      return { handled: false }
+    return {
+      handled: true,
+      action: 'needs_clarification',
+      message: this.buildResolutionClarificationMessage(resolution.kind),
     }
-
-    return { handled: true, action: 'selected', request }
   }
 
   async handleCheckThenOffer(phone: string, args: Omit<StartAppointmentArgs, 'intentMode'>): Promise<CheckThenOfferResult> {
@@ -382,7 +425,7 @@ class AppointmentIntentService {
       }
     }
 
-    let resolvedDraft = await this.resolveSuggestedDraft(phone, normalizedDraft)
+    const resolvedDraft = await this.resolveSuggestedDraft(phone, normalizedDraft)
     const requestedProfessionalName = this.extractReferenceName(normalizedStartArgs.professional, resolvedDraft.professional)
 
     const serviceResolution = await this.resolveService(phone, normalizedStartArgs.service, resolvedDraft)
@@ -415,21 +458,13 @@ class AppointmentIntentService {
       }))
 
       if (candidates.length > 0) {
-        const resolution = await this.storeResolution(
-          phone,
-          'professional',
-          normalizedStartArgs,
-          candidates,
-          this.buildProfessionalNotFoundPrompt(requestedProfessionalName),
-        )
+        const resolution = await this.storeResolution(phone, 'professional', normalizedStartArgs, candidates, this.buildProfessionalNotFoundPrompt(requestedProfessionalName))
         return { status: 'resolution', resolution }
       }
 
       return {
         status: 'error',
-        message: requestedProfessionalName
-          ? `Nao encontrei nenhum ${requestedProfessionalName} aqui e nao achei barbeiros disponiveis agora.`
-          : 'Nao consegui identificar certinho qual profissional voce quer e nao achei barbeiros disponiveis agora.',
+        message: requestedProfessionalName ? `Nao encontrei nenhum ${requestedProfessionalName} aqui e nao achei barbeiros disponiveis agora.` : 'Nao consegui identificar certinho qual profissional voce quer e nao achei barbeiros disponiveis agora.',
       }
     }
 
@@ -607,27 +642,29 @@ class AppointmentIntentService {
         professionalId,
         date: appointmentDate,
         serviceId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       return {
         available: slots.includes(appointmentTime),
-        alternatives: slots.filter((slot) => slot !== appointmentTime).slice(0, 3),
+        alternatives: pickNearestTimes(appointmentTime, slots),
       }
     }
 
     const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
       phone,
       date: appointmentDate,
+      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       ...(serviceId ? { serviceId } : {}),
     })
 
     const sameProfessionalSlots = professionalId ? aggregatedSlots.filter((slot) => slot.professionals.some((professional) => String(professional.id) === professionalId)) : aggregatedSlots
 
     const exactMatch = sameProfessionalSlots.some((slot) => slot.start === appointmentTime)
-    const alternatives = sameProfessionalSlots
-      .map((slot) => slot.start)
-      .filter((slot) => slot !== appointmentTime)
-      .slice(0, 3)
+    const alternatives = pickNearestTimes(
+      appointmentTime,
+      sameProfessionalSlots.map((slot) => slot.start),
+    )
 
     if (exactMatch || alternatives.length > 0) {
       return {
@@ -647,6 +684,7 @@ class AppointmentIntentService {
       const days = await professionalService.getAvailableDays({
         phone,
         professionalId,
+        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         ...(serviceId ? { serviceId } : {}),
       })
       return days.slice(0, 3).map((day) => day.name || day.id)
@@ -654,6 +692,7 @@ class AppointmentIntentService {
 
     const days = await professionalService.getAvailableDaysAggregated({
       phone,
+      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       ...(serviceId ? { serviceId } : {}),
     })
     return days.slice(0, 3).map((day) => day.name || day.id)
@@ -680,13 +719,7 @@ class AppointmentIntentService {
     return offer
   }
 
-  private async storeResolution(
-    phone: string,
-    kind: PendingAvailabilityResolution['kind'],
-    request: Omit<StartAppointmentArgs, 'intentMode'>,
-    candidates: AvailabilityResolutionCandidate[],
-    promptOverride?: string,
-  ): Promise<PendingAvailabilityResolution> {
+  private async storeResolution(phone: string, kind: PendingAvailabilityResolution['kind'], request: Omit<StartAppointmentArgs, 'intentMode'>, candidates: AvailabilityResolutionCandidate[], promptOverride?: string): Promise<PendingAvailabilityResolution> {
     const resolution: PendingAvailabilityResolution = {
       kind,
       request,
@@ -730,18 +763,217 @@ class AppointmentIntentService {
   }
 
   private buildUnavailableMessage(draft: IAppointmentValidationDraft, alternatives: string[]): string {
-    const intro = draft.professional?.name ? `Nao encontrei esse horario com ${draft.professional.name}.` : 'Nao encontrei esse horario disponivel.'
+    const requestedTime = draft.appointmentTime
+    const serviceText = draft.service?.name ? ` para ${draft.service.name}` : ''
+    const professionalText = draft.professional?.name ? ` com ${draft.professional.name}` : ''
+    const intro = requestedTime ? `${requestedTime} nao esta livre${serviceText}${professionalText}.` : draft.professional?.name ? `Nao encontrei esse horario com ${draft.professional.name}.` : 'Nao encontrei esse horario disponivel.'
 
     if (alternatives.length === 0) {
       return `${intro} Se quiser, posso verificar outra opcao pra voce.`
     }
 
     const suggestionText = alternatives.join(', ')
-    return `${intro} Posso te oferecer estas opcoes: ${suggestionText}.`
+    const alternativesAreTimes = alternatives.every((option) => TIME_SLOT_REGEX.test(option))
+    return alternativesAreTimes ? `${intro} Posso te oferecer estas opcoes proximas: ${suggestionText}.` : `${intro} Posso te oferecer estas opcoes: ${suggestionText}.`
   }
 
   async notifyOfferDeclined(phone: string): Promise<void> {
     await sendWhatsAppMessage(phone, 'Tudo bem, nao segui com esse horario por aqui.')
+  }
+
+  private buildOfferClarificationMessage(): string {
+    return 'Nao entendi se voce quer seguir com esse horario. Me responde se quer marcar ou se prefere deixar pra depois.'
+  }
+
+  private buildResolutionClarificationMessage(kind: PendingAvailabilityResolution['kind']): string {
+    if (kind === 'professional') {
+      return 'Nao entendi qual barbeiro voce quer. Me fala o nome da opcao ou pede para eu te mandar a lista de novo.'
+    }
+
+    return 'Nao entendi qual opcao voce quer. Me fala o nome do servico ou pede para eu te mandar a lista de novo.'
+  }
+
+  private describeOffer(offer: PendingAppointmentOffer): string {
+    const parts = [`- Horario: ${formatConversationalDate(offer.appointmentDate)} as ${offer.appointmentTime}`]
+
+    if (offer.professional?.name) {
+      parts.push(`- Profissional: ${offer.professional.name}`)
+    }
+
+    if (offer.service?.name) {
+      parts.push(`- Servico: ${offer.service.name}`)
+    }
+
+    return parts.join('\n')
+  }
+
+  private describeResolutionCandidates(candidates: AvailabilityResolutionCandidate[]): string {
+    return candidates
+      .map((candidate, index) => {
+        const suffix = candidate.description ? ` (${candidate.description})` : ''
+        return `${index + 1}. ${candidate.name}${suffix} [candidateId=${candidate.id}]`
+      })
+      .join('\n')
+  }
+
+  private async interpretPendingOfferReply(offer: PendingAppointmentOffer, incomingMessage: string): Promise<{ action: 'accept' | 'decline' | 'needs_clarification' }> {
+    const tools: OpenAITool[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'resolve_pending_offer_reply',
+          description: 'Classifica a resposta do usuario sobre uma oferta pendente de horario.',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['accept', 'decline', 'needs_clarification'],
+              },
+            },
+            required: ['action'],
+            additionalProperties: false,
+          },
+        },
+      },
+    ]
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-5-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `
+Você classifica respostas sobre uma oferta pendente de agendamento.
+
+Escolha:
+- accept: quando o usuario deixa explicitamente claro que quer seguir com esse horario.
+- decline: quando o usuario deixa explicitamente claro que nao quer seguir com essa oferta agora.
+- needs_clarification: quando houver duvida, ambiguidade, pergunta paralela ou qualquer mensagem que nao confirme nem recuse de forma inequívoca.
+
+Regras:
+- Nao use accept nem decline por aproximacao.
+- Mensagens vagas, saudações, perguntas paralelas ou mudanca de assunto devem virar needs_clarification.
+- Responda apenas com a chamada da funcao.
+            `.trim(),
+          },
+          {
+            role: 'user',
+            content: `Oferta pendente:\n${this.describeOffer(offer)}\n\nMensagem do usuario:\n${incomingMessage}`,
+          },
+        ],
+        tools,
+        tool_choice: 'required',
+      })
+
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0]
+      if (toolCall?.type !== 'function') {
+        return { action: 'needs_clarification' }
+      }
+
+      const parsed = JSON.parse(toolCall.function.arguments || '{}') as { action?: 'accept' | 'decline' | 'needs_clarification' }
+      if (parsed.action === 'accept' || parsed.action === 'decline' || parsed.action === 'needs_clarification') {
+        return { action: parsed.action }
+      }
+    } catch (error) {
+      console.error('[AppointmentIntentService] Failed to interpret pending offer reply.', {
+        error,
+        incomingMessage,
+      })
+    }
+
+    return { action: 'needs_clarification' }
+  }
+
+  private async interpretPendingResolutionReply(resolution: PendingAvailabilityResolution, incomingMessage: string): Promise<{ action: 'select_candidate'; candidateId: string } | { action: 'decline' | 'repeat_options' | 'needs_clarification' }> {
+    const tools: OpenAITool[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'resolve_pending_resolution_reply',
+          description: 'Classifica a resposta do usuario para uma selecao pendente de opcoes de agendamento.',
+          parameters: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['select_candidate', 'decline', 'repeat_options', 'needs_clarification'],
+              },
+              candidateId: {
+                type: 'string',
+              },
+            },
+            required: ['action'],
+            additionalProperties: false,
+          },
+        },
+      },
+    ]
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-5-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `
+Você classifica respostas sobre uma lista pendente de opcoes de agendamento.
+
+Escolha:
+- select_candidate: quando o usuario identificar de forma segura exatamente uma opcao da lista, por nome, indice, ordinal ou descricao.
+- decline: quando o usuario desistir claramente dessa escolha por agora.
+- repeat_options: quando o usuario pedir para ver a lista/opcoes novamente.
+- needs_clarification: quando houver duvida, mais de uma opcao possivel, pergunta paralela ou mensagem sem escolha inequívoca.
+
+Regras:
+- So use select_candidate quando houver uma unica opcao claramente identificavel.
+- Se action for select_candidate, envie candidateId exatamente como aparece na lista.
+- Nao invente candidateId.
+- Na duvida, use needs_clarification.
+- Responda apenas com a chamada da funcao.
+            `.trim(),
+          },
+          {
+            role: 'user',
+            content: `Tipo de resolucao: ${resolution.kind}\n\nOpcoes disponiveis:\n${this.describeResolutionCandidates(resolution.candidates)}\n\nMensagem do usuario:\n${incomingMessage}`,
+          },
+        ],
+        tools,
+        tool_choice: 'required',
+      })
+
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0]
+      if (toolCall?.type !== 'function') {
+        return { action: 'needs_clarification' }
+      }
+
+      const parsed = JSON.parse(toolCall.function.arguments || '{}') as {
+        action?: 'select_candidate' | 'decline' | 'repeat_options' | 'needs_clarification'
+        candidateId?: string
+      }
+
+      if (parsed.action === 'select_candidate') {
+        const candidateId = extractIdValue(parsed.candidateId)
+        const valid = candidateId && resolution.candidates.some((candidate) => String(candidate.id) === candidateId)
+        if (valid && candidateId) {
+          return { action: 'select_candidate', candidateId }
+        }
+        return { action: 'needs_clarification' }
+      }
+
+      if (parsed.action === 'decline' || parsed.action === 'repeat_options' || parsed.action === 'needs_clarification') {
+        return { action: parsed.action }
+      }
+    } catch (error) {
+      console.error('[AppointmentIntentService] Failed to interpret pending resolution reply.', {
+        error,
+        incomingMessage,
+        kind: resolution.kind,
+      })
+    }
+
+    return { action: 'needs_clarification' }
   }
 }
 

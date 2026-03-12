@@ -100,7 +100,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'confirmSaleRegistration',
-      description: 'Confirma o cadastro de venda usando o rascunho atual. Use quando o usuário disser claramente que deseja confirmar.',
+      description: 'Confirma o cadastro de venda usando o rascunho atual. Use apenas quando houver confirmação explícita e inequívoca do rascunho atual.',
       parameters: {
         type: 'object',
         properties: {},
@@ -112,7 +112,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'cancelSaleRegistration',
-      description: 'Cancela e limpa o rascunho atual do cadastro de venda. Use quando o usuário disser para cancelar ou desistir.',
+      description: 'Cancela e limpa o rascunho atual do cadastro de venda. Use apenas quando houver desistência ou cancelamento inequívoco do fluxo atual.',
       parameters: {
         type: 'object',
         properties: {},

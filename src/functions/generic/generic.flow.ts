@@ -26,6 +26,11 @@ export type FlowResponse<TDraft extends RegistrationDraftBase> = {
   draft?: TDraft
 }
 
+export type DraftPreparationContext<TUpsertArgs> = {
+  trigger: 'start' | 'continue' | 'edit'
+  updates?: Partial<TUpsertArgs>
+}
+
 type DraftPreparationResult<TDraft extends RegistrationDraftBase> = {
   draft: TDraft
   response?: FlowResponse<TDraft> | null
@@ -106,16 +111,11 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const newSessionId = !isEditMode && hasCompletedDraft ? randomUUID() : currentSessionId
 
     if (hasCompletedDraft) {
-      await this.options.service.clearDraft(phone)
-      await this.setUserContextWithFlowStep(
+      await this.resetCompletedDraftForNewSession(
         phone,
-        {
-          status: 'collecting',
-          sessionId: newSessionId,
-          completedDraftSnapshot: undefined,
-          lastCreatedRecordId: undefined,
-        },
-        FlowStep.Creating,
+        (context?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>,
+        rawUpdates as Partial<TUpsertArgs>,
+        newSessionId,
       )
     }
     const accessDenied = await this.ensureFlowAccess(phone, context)
@@ -131,7 +131,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
 
     await this.setFlowContext(phone)
 
-    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft)
+    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft, {
+      trigger: 'start',
+      updates,
+    })
     if (preparedDraft.response) return preparedDraft.response
 
     const missingResult = await this.handleNextMissing(phone, preparedDraft.draft)
@@ -147,7 +150,9 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     await this.setFlowContext(phone)
 
     const draft = await this.options.service.loadDraft(phone)
-    const preparedDraft = await this.afterDraftPrepared(phone, draft)
+    const preparedDraft = await this.afterDraftPrepared(phone, draft, {
+      trigger: 'continue',
+    })
     if (preparedDraft.response) return preparedDraft.response
 
     const missingResult = await this.handleNextMissing(phone, preparedDraft.draft)
@@ -265,7 +270,11 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const hasCompletedDraft = currentRegistration?.status === 'completed'
 
     if (!isEditMode && hasCompletedDraft) {
-      await this.resetCompletedDraftForFieldChange(phone, currentRegistration)
+      await this.resetCompletedDraftForNewSession(
+        phone,
+        currentRegistration,
+        value !== undefined ? ({ [field]: value } as Partial<TUpsertArgs>) : undefined,
+      )
     } else {
       await setUserContext(phone, {
         activeRegistration: {
@@ -556,7 +565,10 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     await this.restoreCompletedDraftSnapshot(phone)
 
     const updatedDraft = await this.options.service.updateDraft(phone, updates)
-    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft)
+    const preparedDraft = await this.afterDraftPrepared(phone, updatedDraft, {
+      trigger: 'edit',
+      updates,
+    })
     const draft = preparedDraft.draft
 
     if (preparedDraft.response) {
@@ -838,9 +850,16 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     void _draft
   }
 
-  protected async afterDraftPrepared(_phone: string, draft: TDraft): Promise<DraftPreparationResult<TDraft>> {
+  protected async afterDraftPrepared(_phone: string, draft: TDraft, _context: DraftPreparationContext<TUpsertArgs>): Promise<DraftPreparationResult<TDraft>> {
     void _phone
+    void _context
     return { draft }
+  }
+
+  protected async buildFreshDraftForRestartedCompletedSession(_phone: string, _updates?: Partial<TUpsertArgs>): Promise<TDraft | null> {
+    void _phone
+    void _updates
+    return null
   }
 
   protected async onAfterConfirmationSent(_phone: string, _draft: TDraft, _summary: string): Promise<void> {
@@ -1058,9 +1077,14 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     console.error(`[GenericCrudFlow:${this.options.flowType}] Erro ao excluir registro ${recordId ?? 'desconhecido'}.`, error)
   }
 
-  private async resetCompletedDraftForFieldChange(phone: string, currentRegistration: ActiveRegistrationState<TDraft>): Promise<void> {
+  private async resetCompletedDraftForNewSession(
+    phone: string,
+    currentRegistration: ActiveRegistrationState<TDraft>,
+    updates?: Partial<TUpsertArgs>,
+    sessionId?: string,
+  ): Promise<void> {
     await this.options.service.clearDraft(phone)
-    const newSessionId = randomUUID()
+    const newSessionId = sessionId ?? randomUUID()
 
     await setUserContext(phone, {
       activeRegistration: {
@@ -1074,6 +1098,12 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
         lastCreatedRecordId: undefined,
       },
     })
+
+    const freshDraft = await this.buildFreshDraftForRestartedCompletedSession(phone, updates)
+    if (freshDraft) {
+      await this.options.service.saveDraft(phone, freshDraft)
+      return
+    }
 
     const emptyDraft = await this.options.service.loadDraft(phone)
     await this.options.service.saveDraft(phone, emptyDraft)

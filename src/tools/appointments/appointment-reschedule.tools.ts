@@ -68,12 +68,8 @@ EXEMPLOS:
       description: `Confirma a remarcação do agendamento com os dados selecionados.
 
 QUANDO USAR:
-- Quando o usuário confirmar que quer remarcar com a data e horário selecionados
-- Após todos os campos obrigatórios (agendamento, data, hora) estarem preenchidos
-
-EXEMPLOS:
-- "Confirma isso aí" → confirmAppointmentReschedule({})
-- "Tá certo, remarca" → confirmAppointmentReschedule({})`,
+- Quando houver confirmação explícita e inequívoca de que o usuário quer remarcar com a data e horário selecionados
+- Após todos os campos obrigatórios (agendamento, data, hora) estarem preenchidos`,
       parameters: {
         type: 'object',
         properties: {},
@@ -89,12 +85,7 @@ EXEMPLOS:
       description: `Cancela o fluxo em andamento de remarcação de agendamento.
 
 QUANDO USAR:
-- Quando o usuário disser que não quer mais remarcar.
-- Se o usuário demonstrar desistência durante o fluxo.
-
-EXEMPLOS:
-- "Deixa pra lá." → cancelAppointmentReschedule({})
-- "Não quero mais remarcar" → cancelAppointmentReschedule({})`,
+- Quando houver desistência inequívoca durante o fluxo de remarcação.`,
       parameters: {
         type: 'object',
         properties: {},

@@ -1,26 +1,22 @@
-import { FlowType } from '../../enums/generic.enum'
+import { FlowStep, FlowType } from '../../enums/generic.enum'
+import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import { sendWhatsAppMessage } from '../../api/meta.api'
 import { sendConfirmationButtons, sendEditDeleteButtons, sendEditDeleteButtonsAfterError, sendEditCancelButtonsAfterCreationError } from '../../interactives/genericConfirmation'
 import { sendAppointmentAvailabilityResolutionList } from '../../interactives/appointments/availabilityResolutionSelection'
+import { sendDateSelectionList } from '../../interactives/appointments/dateSelection'
+import { sendProfessionalSelectionList } from '../../interactives/appointments/professionalSelection'
+import { sendTimeSlotSelectionList } from '../../interactives/appointments/timeSlotSelection'
 import { appendUserTextAuto } from '../../services/history-router.service'
 import { appointmentIntentService } from '../../services/appointments/appointment-intent.service'
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { appointmentCancellationFunctions } from './cancellation/appointment-cancellation.functions'
-import { AppointmentRecord, IAppointmentCreationPayload, IAppointmentValidationDraft, PendingAppointmentOffer, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
-import { FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
+import { AppointmentCreateConflictNextAction, AppointmentRecord, CreateConflictRecoveryResult, IAppointmentCreationPayload, IAppointmentValidationDraft, PendingAppointmentOffer, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
+import { DraftPreparationContext, FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
 import { getUserContextSync, setUserContext } from '../../env.config'
 
-const FIELD_ONLY_VALUE_ALIASES: Record<AppointmentEditField, string[]> = {
-  appointmentDate: ['data', 'mudar data', 'mudar a data', 'alterar data', 'trocar data', 'dia'],
-  appointmentTime: ['horario', 'horário', 'hora', 'mudar horario', 'mudar horário', 'trocar horario', 'trocar horário'],
-  service: ['servico', 'serviço', 'mudar servico', 'mudar serviço', 'trocar servico', 'trocar serviço'],
-  professional: ['profissional', 'professional', 'barbeiro', 'mudar barbeiro', 'trocar barbeiro', 'mudar profissional'],
-  notes: ['observacao', 'observações', 'observacaoes', 'observacoes', 'observação', 'anotacao', 'anotação', 'anotacoes', 'anotações', 'nota', 'notas', 'preferencia', 'preferência', 'preferencias', 'preferências'],
-  clientName: ['nome', 'nome do cliente', 'cliente'],
-  clientPhone: ['telefone', 'telefone do cliente', 'celular', 'numero', 'número'],
-}
+const AVAILABILITY_SENSITIVE_FIELDS = new Set<string>(['appointmentDate', 'appointmentTime', 'service', 'professional'])
 
 class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft, IAppointmentCreationPayload, AppointmentRecord, UpsertAppointmentArgs, AppointmentEditField, AppointmentMissingField> {
   private readonly confirmationNamespace = 'APPOINTMENT_CONFIRMATION'
@@ -63,33 +59,6 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     }
     const digits = String(value).replace(/\D/g, '').trim()
     return digits.length ? digits : null
-  }
-
-  private normalizeFieldPromptValue(field: AppointmentEditField, value: unknown): unknown {
-    if (value === undefined || value === null || typeof value !== 'string') {
-      return value
-    }
-
-    const normalizedValue = value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(Boolean)
-      .join(' ')
-      .trim()
-
-    if (!normalizedValue) {
-      return undefined
-    }
-
-    const aliases = FIELD_ONLY_VALUE_ALIASES[field] ?? []
-    if (aliases.includes(normalizedValue)) {
-      return undefined
-    }
-
-    return value
   }
 
   startAppointmentRegistration = async (args: { phone: string } & StartAppointmentArgs) => {
@@ -138,8 +107,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       return this.buildResponse(this.options.messages.invalidField, false)
     }
 
-    const rawValue = this.normalizeFieldPromptValue(normalizedField, args.value)
-    const normalizedValue = normalizedField === 'clientPhone' && rawValue !== undefined ? this.sanitizePhone(rawValue) : rawValue
+    const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
     const logContext = normalizedValue !== undefined ? `Campo ${normalizedField} atualizado com valor ${JSON.stringify(normalizedValue)}` : undefined
     return this.changeRegistrationWithValue({
       phone,
@@ -172,8 +140,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       return this.buildChangeResponse(this.options.messages.invalidField, false)
     }
 
-    const rawValue = this.normalizeFieldPromptValue(normalizedField, args.value)
-    const normalizedValue = normalizedField === 'clientPhone' && rawValue !== undefined ? this.sanitizePhone(rawValue) : rawValue
+    const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
     return super.editRecordField({
       phone: args.phone,
       field: normalizedField,
@@ -197,7 +164,20 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     })
   }
 
-  protected async afterDraftPrepared(phone: string, draft: IAppointmentValidationDraft): Promise<{ draft: IAppointmentValidationDraft; response?: FlowResponse<IAppointmentValidationDraft> | null }> {
+  private shouldReconcileAvailability(context: DraftPreparationContext<UpsertAppointmentArgs>): boolean {
+    if (context.trigger !== 'edit') {
+      return true
+    }
+
+    const updatedFields = Object.keys(context.updates ?? {})
+    return updatedFields.some((field) => AVAILABILITY_SENSITIVE_FIELDS.has(field))
+  }
+
+  protected async afterDraftPrepared(phone: string, draft: IAppointmentValidationDraft, context: DraftPreparationContext<UpsertAppointmentArgs>): Promise<{ draft: IAppointmentValidationDraft; response?: FlowResponse<IAppointmentValidationDraft> | null }> {
+    if (!this.shouldReconcileAvailability(context)) {
+      return { draft }
+    }
+
     const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
     if (availability.contextUpdates) {
       await setUserContext(phone, availability.contextUpdates)
@@ -224,29 +204,17 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     }
   }
 
+  protected override async buildFreshDraftForRestartedCompletedSession(phone: string, updates?: Partial<UpsertAppointmentArgs>): Promise<IAppointmentValidationDraft | null> {
+    return appointmentService.buildFreshDraftForNewRegistration(phone, updates as Partial<StartAppointmentArgs> | undefined)
+  }
+
   protected async recoverFromCreateError(phone: string, draft: IAppointmentValidationDraft, error: unknown): Promise<FlowResponse<IAppointmentValidationDraft> | null> {
-    if (!appointmentService.isAvailabilityConflictError(error)) {
+    const recovery = await appointmentService.resolveCreateConflictRecovery(phone, draft, error)
+    if (!recovery.handled) {
       return null
     }
 
-    const availability = await appointmentService.reconcileDraftAvailability(phone, draft)
-    if (availability.contextUpdates) {
-      await setUserContext(phone, availability.contextUpdates)
-    }
-    if (availability.status === 'ok') {
-      return null
-    }
-
-    await appointmentService.saveDraft(phone, availability.draft)
-    await this.setFlowContext(phone)
-    await sendWhatsAppMessage(phone, availability.message)
-
-    const nextStep = await this.handleNextMissing(phone, availability.draft)
-    if (nextStep) {
-      return nextStep
-    }
-
-    return this.buildResponse(availability.message, false, availability.draft)
+    return this.presentCreateConflictRecovery(phone, recovery)
   }
 
   protected async sendConfirmation(phone: string, draft: IAppointmentValidationDraft, summary: string): Promise<void> {
@@ -267,6 +235,60 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       },
       loadDraft: appointmentService.loadDraft,
     })
+  }
+
+  private async presentCreateConflictRecovery(
+    phone: string,
+    recovery: Extract<CreateConflictRecoveryResult, { handled: true }>,
+  ): Promise<FlowResponse<IAppointmentValidationDraft>> {
+    if (recovery.contextUpdates) {
+      await setUserContext(phone, recovery.contextUpdates)
+    }
+
+    await appointmentService.saveDraft(phone, recovery.draft)
+
+    const field = this.mapConflictNextActionToField(recovery.nextAction)
+    await this.setUserContextWithFlowStep(
+      phone,
+      {
+        type: FlowType.Appointment,
+        editMode: false,
+        status: 'collecting',
+        awaitingInputForField: field,
+        pendingStep: {
+          field,
+          mode: 'creating',
+        },
+      },
+      FlowStep.Creating,
+    )
+
+    await sendWhatsAppMessage(phone, recovery.message)
+
+    switch (recovery.nextAction) {
+      case 'pick_time':
+        await sendTimeSlotSelectionList(phone, 'Qual horario fica melhor pra voce?')
+        break
+      case 'pick_date':
+        await sendDateSelectionList(phone, 'Qual dia fica melhor pra voce?')
+        break
+      case 'pick_professional':
+        await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+        break
+    }
+
+    return this.buildResponse(recovery.message, true, recovery.draft)
+  }
+
+  private mapConflictNextActionToField(action: AppointmentCreateConflictNextAction): string {
+    switch (action) {
+      case 'pick_time':
+        return AppointmentFields.APPOINTMENT_TIME
+      case 'pick_date':
+        return AppointmentFields.APPOINTMENT_DATE
+      case 'pick_professional':
+        return AppointmentFields.PROFESSIONAL
+    }
   }
 
   protected async sendEditDeleteOptions(phone: string, draft: IAppointmentValidationDraft, summary: string, recordId: string): Promise<void> {

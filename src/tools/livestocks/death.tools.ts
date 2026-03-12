@@ -65,7 +65,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'confirmAnimalDeathRegistration',
-      description: 'Confirma o cadastro de morte usando o rascunho atual. Use quando o usuário disser claramente que deseja confirmar.',
+      description: 'Confirma o cadastro de morte usando o rascunho atual. Use apenas quando houver confirmação explícita e inequívoca do rascunho atual.',
       parameters: {
         type: 'object',
         properties: {},
@@ -77,7 +77,7 @@ EXEMPLOS:
     type: 'function',
     function: {
       name: 'cancelAnimalDeathRegistration',
-      description: 'Cancela e limpa o rascunho atual do cadastro de morte. Use quando o usuário disser para cancelar ou desistir.',
+      description: 'Cancela e limpa o rascunho atual do cadastro de morte. Use apenas quando houver desistência ou cancelamento inequívoco do fluxo atual.',
       parameters: {
         type: 'object',
         properties: {},
