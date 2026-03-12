@@ -130,3 +130,71 @@ test('DefaultContextService stores pending date clarification when the tool need
     appointmentDateInterpreterService.interpretRequestedAppointmentDate = originalInterpreter
   }
 })
+
+test('DefaultContextService resetSession resets registration state deterministically while preserving pending appointment intents', async () => {
+  const { DefaultContextService } = await import('./defaultContext')
+  const { getUserContextSync, setUserContext } = await import('../env.config')
+  const { appendIntentHistory, getIntentHistory } = await import('./intent-history.service')
+
+  const phone = '554477770001'
+  const instance = DefaultContextService.getInstance() as any
+
+  await setUserContext(phone, {
+    activeRegistration: {
+      type: 'appointment',
+      step: 'creating',
+      awaitingInputForField: 'service',
+      status: 'collecting',
+    },
+    serviceId: 'svc-old',
+    serviceName: 'Corte',
+    professionalId: 'pro-old',
+    professionalName: 'João',
+    timeSlot: '17:00',
+    pendingAppointmentOffer: {
+      appointmentDate: '2026-03-13',
+      appointmentTime: '17:00',
+      service: { id: 'svc-1', name: 'Corte', duration: 30 },
+      professional: null,
+      createdAt: new Date().toISOString(),
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    },
+    pendingAvailabilityResolution: {
+      kind: 'service',
+      request: { appointmentDate: '2026-03-13', appointmentTime: '17:00' },
+      candidates: [{ id: 'svc-1', name: 'Corte', duration: 30 }],
+      prompt: 'Qual serviço?',
+      createdAt: new Date().toISOString(),
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    },
+    pendingAppointmentDateClarification: {
+      functionName: 'getAvailableTimeSlots',
+      argsSnapshot: {},
+      originalMessage: 'horários dia 16',
+      partialInterpretation: null,
+      createdAt: new Date().toISOString(),
+      expiresAt: '2999-01-01T00:00:00.000Z',
+    },
+  } as any)
+
+  await appendIntentHistory(phone, 'default', [{ role: 'user', content: 'oi' } as any])
+  await instance.resetSession(phone)
+
+  const context = getUserContextSync(phone)
+  const defaultHistory = await getIntentHistory(phone, 'default')
+
+  assert.equal(context?.activeRegistration?.type, undefined)
+  assert.equal(context?.activeRegistration?.step, '')
+  assert.equal(context?.activeRegistration?.awaitingInputForField, undefined)
+  assert.equal(context?.serviceId, null)
+  assert.equal(context?.serviceName, null)
+  assert.equal(context?.professionalId, null)
+  assert.equal(context?.professionalName, null)
+  assert.equal(context?.timeSlot, null)
+
+  // Pending states from check-then-offer / date clarification are intentionally preserved until resolved or expired.
+  assert.ok(context?.pendingAppointmentOffer)
+  assert.ok(context?.pendingAvailabilityResolution)
+  assert.ok(context?.pendingAppointmentDateClarification)
+  assert.equal(defaultHistory.length, 0)
+})

@@ -111,9 +111,23 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
   async startRegistration(args: { phone: string } & Partial<TUpsertArgs>): Promise<FlowResponse<TDraft>> {
     const { phone, ...rawUpdates } = args
     const context = getUserContextSync(phone)
-    const hasCompletedDraft = context?.activeRegistration?.status === 'completed'
+    let hasCompletedDraft = context?.activeRegistration?.status === 'completed'
     const isEditMode = context?.activeRegistration?.editMode
     const currentSessionId = context?.activeRegistration?.sessionId
+
+    // Defensive reset: after some session resets, activeRegistration.status may be cleared
+    // while the persisted draft is still marked as completed.
+    if (!hasCompletedDraft && !isEditMode) {
+      try {
+        const persistedDraft = await this.options.service.loadDraft(phone)
+        hasCompletedDraft = persistedDraft?.status === 'completed'
+      } catch (error) {
+        console.warn(`[GenericCrudFlow:${this.options.flowType}] Falha ao verificar status do rascunho persistido.`, {
+          phone,
+          error,
+        })
+      }
+    }
 
     const newSessionId = !isEditMode && hasCompletedDraft ? randomUUID() : currentSessionId
 

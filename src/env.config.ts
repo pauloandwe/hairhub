@@ -320,5 +320,12 @@ export async function resetActiveRegistration(phone: string) {
       pendingStep: undefined,
       lastCreatedRecordId: undefined,
     },
+    serviceId: null,
+    serviceName: null,
+    professionalId: null,
+    professionalName: null,
+    availableProfessionalIdsForSlot: null,
+    autoAssignedProfessional: false,
+    timeSlot: null,
   })
 }

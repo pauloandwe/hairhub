@@ -577,7 +577,7 @@ export class DefaultContextService {
   }
 
   protected resetSession = async (userId: string) => {
-    resetActiveRegistration(userId)
+    await resetActiveRegistration(userId)
     await clearIntentHistory(userId, 'default')
   }
 
