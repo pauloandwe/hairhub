@@ -3,16 +3,7 @@ import { AppointmentFields } from '../../enums/cruds/appointmentFields.enum'
 import api from '../../config/api.config'
 import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { GenericService } from '../generic/generic.service'
-import {
-  AppointmentAvailabilityContextUpdates,
-  AppointmentAvailabilityResolution,
-  AppointmentRecord,
-  CreateConflictRecoveryResult,
-  IAppointmentCreationPayload,
-  IAppointmentValidationDraft,
-  StartAppointmentArgs,
-  UpsertAppointmentArgs,
-} from './appointment.types'
+import { AppointmentAvailabilityContextUpdates, AppointmentAvailabilityResolution, AppointmentRecord, CreateConflictRecoveryResult, IAppointmentCreationPayload, IAppointmentValidationDraft, StartAppointmentArgs, UpsertAppointmentArgs } from './appointment.types'
 import { MissingRule } from '../drafts/draft-flow.utils'
 import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone, getBusinessTimezoneForPhone, getUserContextSync } from '../../env.config'
@@ -945,15 +936,8 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }))
   }
 
-  private mapAvailabilityResolutionToCreateConflictRecovery(
-    resolution: Exclude<AppointmentAvailabilityResolution, { status: 'ok' }>,
-  ): Extract<CreateConflictRecoveryResult, { handled: true }> {
-    const nextAction =
-      resolution.status === 'reset-time'
-        ? 'pick_time'
-        : resolution.status === 'reset-date'
-          ? 'pick_date'
-          : 'pick_professional'
+  private mapAvailabilityResolutionToCreateConflictRecovery(resolution: Exclude<AppointmentAvailabilityResolution, { status: 'ok' }>): Extract<CreateConflictRecoveryResult, { handled: true }> {
+    const nextAction = resolution.status === 'reset-time' ? 'pick_time' : resolution.status === 'reset-date' ? 'pick_date' : 'pick_professional'
 
     return {
       handled: true,
@@ -1033,13 +1017,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
   }
 
-  private async buildProfessionalRecoveryForCreateConflict(
-    phone: string,
-    draft: IAppointmentValidationDraft,
-    serviceId: number,
-    date: string,
-    currentProfessionalId?: number,
-  ): Promise<CreateConflictRecoveryResult | null> {
+  private async buildProfessionalRecoveryForCreateConflict(phone: string, draft: IAppointmentValidationDraft, serviceId: number, date: string, currentProfessionalId?: number): Promise<CreateConflictRecoveryResult | null> {
     const time = draft.appointmentTime ?? null
     if (!time) {
       return null
@@ -1060,9 +1038,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     const compatibleProfessionalIds = compatibleProfessionals.map((professional) => String(professional.id))
     const serviceName = draft.service?.name ? ` para ${draft.service.name}` : ''
-    const message = draft.professional?.name
-      ? `${time} segue disponivel${serviceName}, mas nao com ${draft.professional.name}. Vou te mostrar quem consegue te atender nesse horario.`
-      : `${time} segue disponivel${serviceName}. Vou te mostrar quem consegue te atender nesse horario.`
+    const message = draft.professional?.name ? `${time} segue disponivel${serviceName}, mas nao com ${draft.professional.name}. Vou te mostrar quem consegue te atender nesse horario.` : `${time} segue disponivel${serviceName}. Vou te mostrar quem consegue te atender nesse horario.`
 
     return {
       handled: true,
@@ -1096,12 +1072,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     return `Nao achei outros horarios${professionalText}${serviceText} nessa data. Vou te mostrar outras datas.`
   }
 
-  private logCreateConflictRecovery(
-    phone: string,
-    draft: IAppointmentValidationDraft,
-    errorMessage: string | null,
-    recovery: Extract<CreateConflictRecoveryResult, { handled: true }>,
-  ): void {
+  private logCreateConflictRecovery(phone: string, draft: IAppointmentValidationDraft, errorMessage: string | null, recovery: Extract<CreateConflictRecoveryResult, { handled: true }>): void {
     console.info('[AppointmentService] Recovered create conflict after backend rejection.', {
       phone,
       errorMessage,

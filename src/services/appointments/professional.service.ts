@@ -60,14 +60,7 @@ export class ProfessionalService {
     }
   }
 
-  async getAvailableSlots(args: {
-    phone: string
-    professionalId?: string | number | null
-    date?: string | null
-    serviceId?: string | number | null
-    excludeAppointmentId?: string | number | null
-    stepMinutes?: number
-  }): Promise<string[]> {
+  async getAvailableSlots(args: { phone: string; professionalId?: string | number | null; date?: string | null; serviceId?: string | number | null; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<string[]> {
     const { phone, professionalId, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
@@ -268,13 +261,7 @@ export class ProfessionalService {
     return converted.length ? converted : null
   }
 
-  async getAvailableSlotsAggregated(args: {
-    phone: string
-    date: string
-    serviceId?: string | number
-    excludeAppointmentId?: string | number | null
-    stepMinutes?: number
-  }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
+  async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
     const { phone, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''

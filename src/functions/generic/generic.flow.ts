@@ -111,12 +111,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const newSessionId = !isEditMode && hasCompletedDraft ? randomUUID() : currentSessionId
 
     if (hasCompletedDraft) {
-      await this.resetCompletedDraftForNewSession(
-        phone,
-        (context?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>,
-        rawUpdates as Partial<TUpsertArgs>,
-        newSessionId,
-      )
+      await this.resetCompletedDraftForNewSession(phone, (context?.activeRegistration ?? {}) as ActiveRegistrationState<TDraft>, rawUpdates as Partial<TUpsertArgs>, newSessionId)
     }
     const accessDenied = await this.ensureFlowAccess(phone, context)
     if (accessDenied) return accessDenied
@@ -270,11 +265,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     const hasCompletedDraft = currentRegistration?.status === 'completed'
 
     if (!isEditMode && hasCompletedDraft) {
-      await this.resetCompletedDraftForNewSession(
-        phone,
-        currentRegistration,
-        value !== undefined ? ({ [field]: value } as Partial<TUpsertArgs>) : undefined,
-      )
+      await this.resetCompletedDraftForNewSession(phone, currentRegistration, value !== undefined ? ({ [field]: value } as Partial<TUpsertArgs>) : undefined)
     } else {
       await setUserContext(phone, {
         activeRegistration: {
@@ -1077,12 +1068,7 @@ export abstract class GenericCrudFlow<TDraft extends RegistrationDraftBase, TCre
     console.error(`[GenericCrudFlow:${this.options.flowType}] Erro ao excluir registro ${recordId ?? 'desconhecido'}.`, error)
   }
 
-  private async resetCompletedDraftForNewSession(
-    phone: string,
-    currentRegistration: ActiveRegistrationState<TDraft>,
-    updates?: Partial<TUpsertArgs>,
-    sessionId?: string,
-  ): Promise<void> {
+  private async resetCompletedDraftForNewSession(phone: string, currentRegistration: ActiveRegistrationState<TDraft>, updates?: Partial<TUpsertArgs>, sessionId?: string): Promise<void> {
     await this.options.service.clearDraft(phone)
     const newSessionId = sessionId ?? randomUUID()
 

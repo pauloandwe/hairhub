@@ -237,10 +237,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     })
   }
 
-  private async presentCreateConflictRecovery(
-    phone: string,
-    recovery: Extract<CreateConflictRecoveryResult, { handled: true }>,
-  ): Promise<FlowResponse<IAppointmentValidationDraft>> {
+  private async presentCreateConflictRecovery(phone: string, recovery: Extract<CreateConflictRecoveryResult, { handled: true }>): Promise<FlowResponse<IAppointmentValidationDraft>> {
     if (recovery.contextUpdates) {
       await setUserContext(phone, recovery.contextUpdates)
     }
