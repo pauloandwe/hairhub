@@ -262,12 +262,7 @@ export class DefaultContextService {
     }
   }
 
-  private async buildToolDrivenResponse(
-    userId: string,
-    incomingMessage: string,
-    toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
-    toolResponse: { tool_call_id: string; role: 'tool'; content: string },
-  ): Promise<AIResponseResult> {
+  private async buildToolDrivenResponse(userId: string, incomingMessage: string, toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall, toolResponse: { tool_call_id: string; role: 'tool'; content: string }): Promise<AIResponseResult> {
     const intentHistory = await getIntentHistory(userId, 'default')
     let parsedToolResponse: any = null
     try {
@@ -343,13 +338,7 @@ export class DefaultContextService {
     await sendWhatsAppMessage(userId, responseText)
   }
 
-  private async storePendingAppointmentDateClarification(
-    userId: string,
-    functionName: 'getAvailableTimeSlots' | 'startAppointmentRegistration',
-    argsSnapshot: Record<string, unknown>,
-    originalMessage: string,
-    partialInterpretation: PendingAppointmentDateClarification['partialInterpretation'],
-  ) {
+  private async storePendingAppointmentDateClarification(userId: string, functionName: 'getAvailableTimeSlots' | 'startAppointmentRegistration', argsSnapshot: Record<string, unknown>, originalMessage: string, partialInterpretation: PendingAppointmentDateClarification['partialInterpretation']) {
     await setUserContext(userId, {
       pendingAppointmentDateClarification: {
         functionName,
@@ -394,18 +383,9 @@ export class DefaultContextService {
     })
 
     if (normalized.resolution?.requiresClarification || !normalized.resolution?.normalizedDate) {
-      await this.storePendingAppointmentDateClarification(
-        userId,
-        pending.functionName,
-        pending.argsSnapshot,
-        pending.originalMessage,
-        normalized.interpretation ?? pending.partialInterpretation,
-      )
+      await this.storePendingAppointmentDateClarification(userId, pending.functionName, pending.argsSnapshot, pending.originalMessage, normalized.interpretation ?? pending.partialInterpretation)
 
-      await sendWhatsAppMessage(
-        userId,
-        normalized.resolution?.clarificationMessage || 'Nao consegui entender essa data. Me fala com mais detalhe, por favor.',
-      )
+      await sendWhatsAppMessage(userId, normalized.resolution?.clarificationMessage || 'Nao consegui entender essa data. Me fala com mais detalhe, por favor.')
       return true
     }
 
@@ -424,11 +404,7 @@ export class DefaultContextService {
     )
 
     const combinedMessage = `${pending.originalMessage}\nComplemento do cliente: ${incomingMessage}`
-    const syntheticToolCall = this.buildSyntheticToolCall(
-      pending.functionName,
-      normalized.args,
-      'pending_date_clarification_tool',
-    )
+    const syntheticToolCall = this.buildSyntheticToolCall(pending.functionName, normalized.args, 'pending_date_clarification_tool')
     const toolResponse = await this.invokePreparedToolCall(syntheticToolCall, userId, normalized.args)
     const llmResponse = await this.buildToolDrivenResponse(userId, combinedMessage, syntheticToolCall, toolResponse)
     await this.finalizeHandledResponse(userId, incomingMessage, llmResponse)
@@ -470,13 +446,7 @@ export class DefaultContextService {
 
       if (normalized.resolution?.requiresClarification) {
         if (DATE_NORMALIZED_FUNCTIONS.has(functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration') && typeof incomingMessage === 'string' && incomingMessage.trim()) {
-          await this.storePendingAppointmentDateClarification(
-            phone,
-            functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration',
-            rawArgs,
-            incomingMessage.trim(),
-            normalized.interpretation,
-          )
+          await this.storePendingAppointmentDateClarification(phone, functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration', rawArgs, incomingMessage.trim(), normalized.interpretation)
 
           aiLogger.info(
             {
@@ -544,11 +514,7 @@ export class DefaultContextService {
         await setUserContext(phone, { pendingAppointmentDateClarification: null })
       }
 
-      return await this.invokePreparedToolCall(
-        toolCall as OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
-        phone,
-        normalized.args,
-      )
+      return await this.invokePreparedToolCall(toolCall as OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall, phone, normalized.args)
     } catch (error) {
       console.error(`Erro ao parsear argumentos ou executar a função ${functionName}:`, error)
       return {

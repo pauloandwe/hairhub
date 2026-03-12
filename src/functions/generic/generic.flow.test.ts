@@ -58,11 +58,11 @@ class InMemoryFlowService {
     const nextDraft = this.cloneDraft(this.draft)
 
     if (Object.prototype.hasOwnProperty.call(updates, 'service')) {
-      nextDraft.service = updates.service === undefined ? nextDraft.service : (updates.service ?? null)
+      nextDraft.service = updates.service === undefined ? nextDraft.service : updates.service ?? null
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'appointmentTime')) {
-      nextDraft.appointmentTime = updates.appointmentTime === undefined ? nextDraft.appointmentTime : (updates.appointmentTime ?? null)
+      nextDraft.appointmentTime = updates.appointmentTime === undefined ? nextDraft.appointmentTime : updates.appointmentTime ?? null
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
@@ -178,13 +178,7 @@ async function createFlowHarness() {
 
     protected async sendEditDeleteOptionsAfterError(_phone: string, _draft: TestDraft, _summary: string, _recordId: string, _errorMessage: string): Promise<void> {}
 
-    protected async sendEditCancelOptionsAfterCreationError(
-      _phone: string,
-      _draft: TestDraft,
-      _summary: string,
-      _errorMessage: string,
-      _recordId: string | null,
-    ): Promise<void> {}
+    protected async sendEditCancelOptionsAfterCreationError(_phone: string, _draft: TestDraft, _summary: string, _errorMessage: string, _recordId: string | null): Promise<void> {}
 
     protected async buildFreshDraftForRestartedCompletedSession(_phone: string, updates?: Partial<TestUpsertArgs>): Promise<TestDraft | null> {
       return {

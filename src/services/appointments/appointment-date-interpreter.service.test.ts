@@ -32,10 +32,7 @@ function createOpenAIMock(argumentsPayload: Record<string, unknown>) {
   } as any
 }
 
-function createOpenAIMockWithCapture(
-  argumentsPayload: Record<string, unknown>,
-  onCreate: (params: Record<string, any>) => void,
-) {
+function createOpenAIMockWithCapture(argumentsPayload: Record<string, unknown>, onCreate: (params: Record<string, any>) => void) {
   return {
     chat: {
       completions: {
