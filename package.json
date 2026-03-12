@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test ./dist/api/meta.api.test.js ./dist/functions/appointments/appointment-queries.functions.test.js ./dist/services/defaultContext.test.js ./dist/services/appointments/appointment-date-interpreter.service.test.js ./dist/services/appointments/appointment-tool-args.test.js ./dist/utils/appointment-date-resolution.test.js",
+    "test": "npm run build && node --test ./dist/api/meta.api.test.js ./dist/functions/appointments/appointment-queries.functions.test.js ./dist/services/context/contextService.test.js ./dist/services/defaultContext.test.js ./dist/services/appointments/appointment-date-interpreter.service.test.js ./dist/services/appointments/appointment-tool-args.test.js ./dist/utils/appointment-date-resolution.test.js",
     "start": "node dist/index.js",
     "dev": "clear && nodemon src/index.ts",
     "dev:meta": "nodemon src/index.ts",

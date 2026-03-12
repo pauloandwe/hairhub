@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { env } from '../../env.config'
+import type { PendingAppointmentDateClarification } from '../../env.config'
 import { OpenAITool } from '../../types/openai-types'
 import { AppointmentDateInterpretation, APPOINTMENT_DATE_INTERPRETATION_KINDS, DEFAULT_APPOINTMENT_DATE_LOCALE, normalizeAppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
 import { aiLogger } from '../../utils/pino'
@@ -14,6 +15,7 @@ export interface InterpretRequestedAppointmentDateParams {
     appointmentDate?: unknown
     date?: unknown
   }
+  pendingClarification?: PendingAppointmentDateClarification | null
 }
 
 export interface InterpretRequestedAppointmentDateResult {
@@ -127,6 +129,13 @@ export class AppointmentDateInterpreterService {
                   appointmentDate: normalizeString(params.currentArgs?.appointmentDate),
                   date: normalizeString(params.currentArgs?.date),
                 },
+                pendingClarification: params.pendingClarification
+                  ? {
+                      functionName: params.pendingClarification.functionName,
+                      originalMessage: normalizeString(params.pendingClarification.originalMessage),
+                      partialInterpretation: params.pendingClarification.partialInterpretation,
+                    }
+                  : null,
               },
               null,
               2,
@@ -155,6 +164,7 @@ export class AppointmentDateInterpreterService {
           locale,
           messageText: params.messageText,
           currentArgs: params.currentArgs,
+          pendingClarification: params.pendingClarification,
           code: error?.code ?? error?.error?.code ?? null,
           message: error?.message ?? error?.error?.message ?? 'Unknown error',
         },

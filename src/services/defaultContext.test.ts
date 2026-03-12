@@ -16,6 +16,7 @@ applyRequiredEnv()
 test('DefaultContextService injects the normalized appointment date before calling a tool', async () => {
   const { DefaultContextService } = await import('./defaultContext')
   const { appointmentDateInterpreterService } = await import('./appointments/appointment-date-interpreter.service')
+  const { getUserContextSync, setUserContext } = await import('../env.config')
 
   const phone = '5544999999999'
   const instance = DefaultContextService.getInstance() as any
@@ -23,6 +24,13 @@ test('DefaultContextService injects the normalized appointment date before calli
   const originalGetFunctionToCall = instance.getFunctionToCall
 
   let receivedArgs: any = null
+
+  await setUserContext(phone, {
+    activeRegistration: {},
+    clientName: 'Paulo',
+    businessTimezone: 'America/Sao_Paulo',
+    pendingAppointmentDateClarification: null,
+  } as any)
 
   appointmentDateInterpreterService.interpretRequestedAppointmentDate = async () => ({
     interpretation: {
@@ -65,5 +73,60 @@ test('DefaultContextService injects the normalized appointment date before calli
   } finally {
     appointmentDateInterpreterService.interpretRequestedAppointmentDate = originalInterpreter
     instance.getFunctionToCall = originalGetFunctionToCall
+  }
+})
+
+test('DefaultContextService stores pending date clarification when the tool needs more detail', async () => {
+  const { DefaultContextService } = await import('./defaultContext')
+  const { appointmentDateInterpreterService } = await import('./appointments/appointment-date-interpreter.service')
+  const { getUserContextSync, setUserContext } = await import('../env.config')
+
+  const phone = '5544888888888'
+  const instance = DefaultContextService.getInstance() as any
+  const originalInterpreter = appointmentDateInterpreterService.interpretRequestedAppointmentDate.bind(appointmentDateInterpreterService)
+
+  await setUserContext(phone, {
+    activeRegistration: {},
+    clientName: 'Paulo',
+    businessTimezone: 'America/Sao_Paulo',
+    pendingAppointmentDateClarification: null,
+  } as any)
+
+  appointmentDateInterpreterService.interpretRequestedAppointmentDate = async () => ({
+    interpretation: {
+      kind: 'needs_clarification',
+      matchedText: 'marco',
+      locale: 'pt-BR',
+    },
+    resolution: {
+      normalizedDate: null,
+      source: 'ai_interpreter',
+      matchedText: 'marco',
+      requiresClarification: true,
+      clarificationMessage: 'Me fala o mes dessa data, por favor.',
+      interpretationKind: 'needs_clarification',
+      locale: 'pt-BR',
+    },
+  })
+
+  try {
+    const response = await instance.executeToolFunction(
+      {
+        id: 'tool-clarification',
+        type: 'function',
+        function: {
+          name: 'getAvailableTimeSlots',
+          arguments: '{}',
+        },
+      } as any,
+      phone,
+      'quero ver os horarios disponiveis dia 16',
+    )
+
+    assert.equal(JSON.parse(response.content).error, 'Me fala o mes dessa data, por favor.')
+    assert.equal(getUserContextSync(phone)?.pendingAppointmentDateClarification?.functionName, 'getAvailableTimeSlots')
+    assert.equal(getUserContextSync(phone)?.pendingAppointmentDateClarification?.originalMessage, 'quero ver os horarios disponiveis dia 16')
+  } finally {
+    appointmentDateInterpreterService.interpretRequestedAppointmentDate = originalInterpreter
   }
 })

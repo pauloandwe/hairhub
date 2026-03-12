@@ -1,4 +1,5 @@
-import { RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
+import type { PendingAppointmentDateClarification } from '../../env.config'
+import { AppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
 import { appointmentDateInterpreterService, AppointmentDateInterpreterService } from './appointment-date-interpreter.service'
 
 const DATE_NORMALIZED_FUNCTIONS = new Set(['getAvailableTimeSlots', 'startAppointmentRegistration'])
@@ -10,22 +11,25 @@ export interface NormalizeAppointmentToolArgumentsParams {
   timezone?: string | null
   locale?: string | null
   now?: Date
+  pendingClarification?: PendingAppointmentDateClarification | null
   interpreter?: AppointmentDateInterpreterService
 }
 
 export interface NormalizeAppointmentToolArgumentsResult {
   args: Record<string, any>
   resolution: RequestedAppointmentDateResolution | null
+  interpretation: AppointmentDateInterpretation | null
 }
 
 export async function normalizeAppointmentToolArguments(params: NormalizeAppointmentToolArgumentsParams): Promise<NormalizeAppointmentToolArgumentsResult> {
-  const { functionName, args, incomingMessage, timezone, locale, now } = params
+  const { functionName, args, incomingMessage, timezone, locale, now, pendingClarification } = params
   const nextArgs = { ...args }
 
   if (!DATE_NORMALIZED_FUNCTIONS.has(functionName)) {
     return {
       args: nextArgs,
       resolution: null,
+      interpretation: null,
     }
   }
 
@@ -35,6 +39,7 @@ export async function normalizeAppointmentToolArguments(params: NormalizeAppoint
     locale,
     timezone,
     now,
+    pendingClarification,
     currentArgs: {
       appointmentDate: nextArgs.appointmentDate,
       date: nextArgs.date,
@@ -57,5 +62,6 @@ export async function normalizeAppointmentToolArguments(params: NormalizeAppoint
   return {
     args: nextArgs,
     resolution,
+    interpretation: interpreted.interpretation,
   }
 }

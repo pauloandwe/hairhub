@@ -3,6 +3,7 @@ import { env } from 'process'
 import { ChatMessage } from './drafts/types'
 import { appendIntentHistory, clearIntentHistory, getIntentHistory } from './intent-history.service'
 import { getAssistantContextForPhone, getBusinessIdForPhone, getBusinessNameForPhone, getBusinessPhoneForPhone, getBusinessTypeForPhone, getClientPersonalizationContextForPhone, resetActiveRegistration, getUserContextSync, setUserContext } from '../env.config'
+import type { PendingAppointmentDateClarification } from '../env.config'
 import { formatAssistantReply } from '../utils/message'
 import { sendWhatsAppMessage } from '../api/meta.api'
 
@@ -24,6 +25,9 @@ import { appointmentRescheduleFunctions } from '../functions/appointments/resche
 import { appointmentRescheduleTools } from '../tools/appointments/appointment-reschedule.tools'
 import { registerAppointmentAvailabilityResolutionHandler } from '../interactives/appointments/availabilityResolutionSelection'
 import { normalizeAppointmentToolArguments } from './appointments/appointment-tool-args'
+import { APPOINTMENT_DATE_CLARIFICATION_TTL_MS, isIsoTimestampExpired, toFutureIsoTimestamp } from './appointments/appointment-date-clarification'
+
+const DATE_NORMALIZED_FUNCTIONS = new Set(['getAvailableTimeSlots', 'startAppointmentRegistration'] as const)
 
 export class DefaultContextService {
   private static instance: DefaultContextService
@@ -178,6 +182,9 @@ export class DefaultContextService {
             * "Preciso marcar corte + barba amanhã às 15h"
             * "Agenda pra mim amanhã às 15h com o João"
           - Só use getAvailableTimeSlots quando a pessoa estiver pedindo opções de horários, e não um horário exato para possível marcação.
+          - Expressoes como "dia 16", "dia 10", "16 de marco" e "amanha" ja podem ser resolvidas internamente pelo sistema. Nesses casos, nao peca mes/ano se a referencia ja for suficiente para a proxima data valida no fuso da business.
+          - Se o usuario disser "quero ver os horarios disponiveis dia 16", chame getAvailableTimeSlots mesmo sem converter a data manualmente para ISO.
+          - Se o usuario disser "tem horario dia 16 as 15h?", chame startAppointmentRegistration com intentMode = "check_then_offer" e deixe a normalizacao da data para a camada interna.
           - Se houver ambiguidade, faça **uma única pergunta de esclarecimento**, curta e objetiva, para confirmar a intenção antes de acionar um fluxo.
           - Caso o usuário envie apenas um número ou palavra solta sem contexto → peça de forma curta que ele explique melhor o que deseja.
 
@@ -213,6 +220,221 @@ export class DefaultContextService {
     return this.contextTools
   }
 
+  private resolveRuntimeLocale(runtimeContext?: Record<string, unknown>): string {
+    return String(runtimeContext?.locale || runtimeContext?.language || 'pt-BR')
+  }
+
+  private buildSyntheticToolCall(functionName: string, args: Record<string, unknown>, id: string): OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall {
+    return {
+      id,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(args),
+      },
+    }
+  }
+
+  private async invokePreparedToolCall(toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall, phone: string, args: Record<string, unknown>) {
+    const functionToCall = this.getFunctionToCall(toolCall.function.name)
+
+    if (!functionToCall) {
+      return {
+        tool_call_id: toolCall.id,
+        role: 'tool' as const,
+        content: JSON.stringify({
+          error: `Função "${toolCall.function.name}" não encontrada.`,
+        }),
+      }
+    }
+
+    const storedFarmId = getBusinessIdForPhone(phone)
+    const result = await functionToCall({
+      ...args,
+      farmId: storedFarmId || args.farmId,
+      phone,
+    } as any)
+
+    return {
+      tool_call_id: toolCall.id,
+      role: 'tool' as const,
+      content: JSON.stringify(result),
+    }
+  }
+
+  private async buildToolDrivenResponse(
+    userId: string,
+    incomingMessage: string,
+    toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
+    toolResponse: { tool_call_id: string; role: 'tool'; content: string },
+  ): Promise<AIResponseResult> {
+    const intentHistory = await getIntentHistory(userId, 'default')
+    let parsedToolResponse: any = null
+    try {
+      parsedToolResponse = JSON.parse(toolResponse.content)
+    } catch {}
+
+    if (!parsedToolResponse?.error) {
+      await clearIntentHistory(userId, 'default')
+    }
+
+    const isSilentResponse = await this.verifySilentToolResponse(toolCall, toolResponse)
+    if (isSilentResponse) {
+      return isSilentResponse
+    }
+
+    const defaultFlowPrompt = this.buildBasePrompt(intentHistory, incomingMessage, userId)
+    const assistantToolCallMessage: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = {
+      role: 'assistant',
+      content: null,
+      tool_calls: [toolCall],
+    }
+    const finalPrompt = [...defaultFlowPrompt, assistantToolCallMessage, toolResponse]
+
+    logOpenAIPrompt('final_response', finalPrompt, {
+      userId,
+      afterToolCall: toolCall.function.name,
+      source: 'prepared_tool_call',
+    })
+
+    const finalResponse = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: finalPrompt,
+    })
+
+    logOpenAIResponse('final_response', finalResponse, { userId })
+
+    await this.resetSession(userId)
+
+    return {
+      text: finalResponse.choices[0].message.content || 'Não consegui entender, vamos tentar novamente, me diga, o que posso fazer por você hoje?',
+      suppress: false,
+    }
+  }
+
+  private async finalizeHandledResponse(userId: string, historyIncomingMessage: string, llmResponse: AIResponseResult) {
+    const farmName = getBusinessNameForPhone(userId)
+    const batchContent: ChatMessage[] = []
+    let responseText = llmResponse.text
+
+    const userContext = getUserContextSync(userId)
+    const flowType = userContext?.activeRegistration?.type
+    const flowStep = userContext?.activeRegistration?.step
+
+    if (userContext?.outreachReply) {
+      await setUserContext(userId, { outreachReply: null })
+    }
+
+    const { display, history: historyContent } = formatAssistantReply(responseText, farmName || undefined, flowType, flowStep)
+
+    responseText = display
+    batchContent.push({ role: 'user', content: historyIncomingMessage })
+
+    if (llmResponse.suppress) {
+      await this.saveHistory(userId, batchContent)
+      return
+    }
+
+    if (historyContent) {
+      batchContent.push({ role: 'assistant', content: historyContent })
+    }
+
+    await this.saveHistory(userId, batchContent)
+    await sendWhatsAppMessage(userId, responseText)
+  }
+
+  private async storePendingAppointmentDateClarification(
+    userId: string,
+    functionName: 'getAvailableTimeSlots' | 'startAppointmentRegistration',
+    argsSnapshot: Record<string, unknown>,
+    originalMessage: string,
+    partialInterpretation: PendingAppointmentDateClarification['partialInterpretation'],
+  ) {
+    await setUserContext(userId, {
+      pendingAppointmentDateClarification: {
+        functionName,
+        argsSnapshot,
+        originalMessage,
+        partialInterpretation,
+        createdAt: new Date().toISOString(),
+        expiresAt: toFutureIsoTimestamp(APPOINTMENT_DATE_CLARIFICATION_TTL_MS),
+      },
+    })
+  }
+
+  async resumePendingAppointmentDateClarification(userId: string, incomingMessage: string): Promise<boolean> {
+    const runtimeContext = getUserContextSync(userId)
+    const pending = runtimeContext?.pendingAppointmentDateClarification
+
+    if (!pending) {
+      return false
+    }
+
+    if (isIsoTimestampExpired(pending.expiresAt)) {
+      await setUserContext(userId, { pendingAppointmentDateClarification: null })
+      aiLogger.info(
+        {
+          userId,
+          functionName: pending.functionName,
+          originalMessage: pending.originalMessage,
+          expiredAt: pending.expiresAt,
+        },
+        'pending_date_clarification_expired',
+      )
+      return false
+    }
+
+    const normalized = await normalizeAppointmentToolArguments({
+      functionName: pending.functionName,
+      args: pending.argsSnapshot,
+      incomingMessage,
+      timezone: runtimeContext?.businessTimezone,
+      locale: this.resolveRuntimeLocale(runtimeContext as Record<string, unknown> | undefined),
+      pendingClarification: pending,
+    })
+
+    if (normalized.resolution?.requiresClarification || !normalized.resolution?.normalizedDate) {
+      await this.storePendingAppointmentDateClarification(
+        userId,
+        pending.functionName,
+        pending.argsSnapshot,
+        pending.originalMessage,
+        normalized.interpretation ?? pending.partialInterpretation,
+      )
+
+      await sendWhatsAppMessage(
+        userId,
+        normalized.resolution?.clarificationMessage || 'Nao consegui entender essa data. Me fala com mais detalhe, por favor.',
+      )
+      return true
+    }
+
+    await setUserContext(userId, { pendingAppointmentDateClarification: null })
+
+    aiLogger.info(
+      {
+        userId,
+        functionName: pending.functionName,
+        originalMessage: pending.originalMessage,
+        incomingMessage,
+        normalizedArgs: normalized.args,
+        appointmentDateResolution: normalized.resolution,
+      },
+      'pending_date_clarification_resolved',
+    )
+
+    const combinedMessage = `${pending.originalMessage}\nComplemento do cliente: ${incomingMessage}`
+    const syntheticToolCall = this.buildSyntheticToolCall(
+      pending.functionName,
+      normalized.args,
+      'pending_date_clarification_tool',
+    )
+    const toolResponse = await this.invokePreparedToolCall(syntheticToolCall, userId, normalized.args)
+    const llmResponse = await this.buildToolDrivenResponse(userId, combinedMessage, syntheticToolCall, toolResponse)
+    await this.finalizeHandledResponse(userId, incomingMessage, llmResponse)
+    return true
+  }
+
   protected executeToolFunction = async (toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall, phone: string, incomingMessage?: string) => {
     if (toolCall.type !== 'function') {
       return {
@@ -243,10 +465,32 @@ export class DefaultContextService {
         args: rawArgs,
         incomingMessage,
         timezone: runtimeContext?.businessTimezone,
-        locale: String((runtimeContext as Record<string, unknown> | undefined)?.locale || (runtimeContext as Record<string, unknown> | undefined)?.language || 'pt-BR'),
+        locale: this.resolveRuntimeLocale(runtimeContext as Record<string, unknown> | undefined),
       })
 
       if (normalized.resolution?.requiresClarification) {
+        if (DATE_NORMALIZED_FUNCTIONS.has(functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration') && typeof incomingMessage === 'string' && incomingMessage.trim()) {
+          await this.storePendingAppointmentDateClarification(
+            phone,
+            functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration',
+            rawArgs,
+            incomingMessage.trim(),
+            normalized.interpretation,
+          )
+
+          aiLogger.info(
+            {
+              userId: phone,
+              functionName,
+              originalArgs: rawArgs,
+              incomingMessage,
+              appointmentDateResolution: normalized.resolution,
+              interpretation: normalized.interpretation,
+            },
+            'pending_date_clarification_created',
+          )
+        }
+
         aiLogger.info(
           {
             userId: phone,
@@ -269,6 +513,20 @@ export class DefaultContextService {
       }
 
       if (normalized.resolution?.normalizedDate) {
+        if (normalized.resolution.interpretationKind === 'day_only') {
+          aiLogger.info(
+            {
+              userId: phone,
+              toolName: functionName,
+              originalArgs: rawArgs,
+              normalizedArgs: normalized.args,
+              incomingMessage,
+              appointmentDateResolution: normalized.resolution,
+            },
+            'day_only_direct_resolution',
+          )
+        }
+
         aiLogger.info(
           {
             userId: phone,
@@ -282,19 +540,15 @@ export class DefaultContextService {
         )
       }
 
-      const storedFarmId = getBusinessIdForPhone(phone)
-
-      const result = await functionToCall({
-        ...normalized.args,
-        farmId: storedFarmId || normalized.args.farmId,
-        phone,
-      } as any)
-
-      return {
-        tool_call_id: toolCall.id,
-        role: 'tool' as const,
-        content: JSON.stringify(result),
+      if (DATE_NORMALIZED_FUNCTIONS.has(functionName as 'getAvailableTimeSlots' | 'startAppointmentRegistration')) {
+        await setUserContext(phone, { pendingAppointmentDateClarification: null })
       }
+
+      return await this.invokePreparedToolCall(
+        toolCall as OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall,
+        phone,
+        normalized.args,
+      )
     } catch (error) {
       console.error(`Erro ao parsear argumentos ou executar a função ${functionName}:`, error)
       return {
@@ -403,12 +657,8 @@ export class DefaultContextService {
         try {
           const parsedToolResponse = JSON.parse(toolResponse.content)
           const responseData = parsedToolResponse?.data ?? {}
-          const displaySlots = Array.isArray(responseData.available_slots_display)
-            ? responseData.available_slots_display
-            : []
-          const rawSlots = Array.isArray(responseData.available_slots_raw)
-            ? responseData.available_slots_raw
-            : []
+          const displaySlots = Array.isArray(responseData.available_slots_display) ? responseData.available_slots_display : []
+          const rawSlots = Array.isArray(responseData.available_slots_raw) ? responseData.available_slots_raw : []
 
           contextLogger.info(
             {
@@ -477,35 +727,8 @@ export class DefaultContextService {
 
   handleFlowInitiation = async (userId: string, incomingMessage: string) => {
     try {
-      const farmName = getBusinessNameForPhone(userId)
-      const batchContent: ChatMessage[] = []
       const llmResponse = await this.getLlmResponse(userId, incomingMessage)
-      let responseText = llmResponse.text
-
-      const userContext = getUserContextSync(userId)
-      const flowType = userContext?.activeRegistration?.type
-      const flowStep = userContext?.activeRegistration?.step
-
-      if (userContext?.outreachReply) {
-        await setUserContext(userId, { outreachReply: null })
-      }
-
-      const { display, history: historyContent } = formatAssistantReply(responseText, farmName || undefined, flowType, flowStep)
-
-      responseText = display
-      batchContent.push({ role: 'user', content: incomingMessage })
-
-      if (llmResponse.suppress) {
-        await this.saveHistory(userId, batchContent)
-        return
-      }
-
-      if (historyContent) {
-        batchContent.push({ role: 'assistant', content: historyContent })
-      }
-
-      await this.saveHistory(userId, batchContent)
-      await sendWhatsAppMessage(userId, responseText)
+      await this.finalizeHandledResponse(userId, incomingMessage, llmResponse)
     } catch (error) {
       console.error('[GenericContextService] Erro ao processar mensagem:', error)
       await sendWhatsAppMessage(userId, 'Ops! Tive um problema para processar sua mensagem. Pode tentar de novo?')

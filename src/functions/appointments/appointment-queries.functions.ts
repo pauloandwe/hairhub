@@ -1,11 +1,7 @@
 import { DateFormatter } from '../../utils/date'
 import { AppointmentRescheduleAppointment, getBusinessTimezoneForPhone } from '../../env.config'
 import { customerAppointmentsService } from '../../services/appointments/customer-appointments.service'
-import {
-  professionalService,
-  PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
-  PUBLIC_SLOT_STEP_MINUTES,
-} from '../../services/appointments/professional.service'
+import { professionalService, PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
 import { serviceService } from '../../services/appointments/service.service'
 import { aiLogger } from '../../utils/pino'
 import { formatIsoDateInTimeZone } from '../../utils/timezone'
@@ -80,9 +76,7 @@ function buildDisplaySlotsForProfessional(slots: string[], professionalId: numbe
   }))
 }
 
-function buildDisplaySlotsAggregated(
-  slots: Array<{ start: string; professionals: { id: string; name: string }[] }>,
-): DisplaySlot[] {
+function buildDisplaySlotsAggregated(slots: Array<{ start: string; professionals: { id: string; name: string }[] }>): DisplaySlot[] {
   return slots.map((slot) => ({
     time: slot.start,
     professionals: slot.professionals,
@@ -165,10 +159,7 @@ export const appointmentQueryFunctions = {
           stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         })
         const availableSlotsRaw = buildDisplaySlotsForProfessional(availableSlots.rawSlots, professionalId)
-        const availableSlotsDisplay = buildDisplaySlotsForProfessional(
-          availableSlots.displaySlots,
-          professionalId,
-        )
+        const availableSlotsDisplay = buildDisplaySlotsForProfessional(availableSlots.displaySlots, professionalId)
 
         logger.info(
           {
@@ -187,8 +178,7 @@ export const appointmentQueryFunctions = {
           status: 'success',
           data: {
             date: normalizedDate,
-            display_interval_minutes:
-              availableSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+            display_interval_minutes: availableSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
             availability_precision: serviceId ? 'service_specific' : 'suggestive_without_service',
             available_slots: availableSlotsDisplay,
             available_slots_display: availableSlotsDisplay,
@@ -223,8 +213,7 @@ export const appointmentQueryFunctions = {
         status: 'success',
         data: {
           date: normalizedDate,
-          display_interval_minutes:
-            aggregatedSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+          display_interval_minutes: aggregatedSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
           availability_precision: serviceId ? 'service_specific' : 'suggestive_without_service',
           available_slots: availableSlotsDisplay,
           available_slots_display: availableSlotsDisplay,

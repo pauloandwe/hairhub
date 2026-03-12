@@ -32,6 +32,38 @@ function createOpenAIMock(argumentsPayload: Record<string, unknown>) {
   } as any
 }
 
+function createOpenAIMockWithCapture(
+  argumentsPayload: Record<string, unknown>,
+  onCreate: (params: Record<string, any>) => void,
+) {
+  return {
+    chat: {
+      completions: {
+        create: async (params: Record<string, any>) => {
+          onCreate(params)
+          return {
+            choices: [
+              {
+                message: {
+                  tool_calls: [
+                    {
+                      type: 'function',
+                      function: {
+                        name: 'interpret_requested_appointment_date',
+                        arguments: JSON.stringify(argumentsPayload),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }
+        },
+      },
+    },
+  } as any
+}
+
 test('AppointmentDateInterpreterService interprets day-only messages', async () => {
   const service = new AppointmentDateInterpreterService(
     createOpenAIMock({
@@ -134,4 +166,50 @@ test('AppointmentDateInterpreterService falls back to clarification when the mod
 
   assert.equal(result.interpretation.kind, 'needs_clarification')
   assert.equal(result.resolution.requiresClarification, true)
+})
+
+test('AppointmentDateInterpreterService sends pending clarification context to the model', async () => {
+  let capturedParams: any = null
+  const service = new AppointmentDateInterpreterService(
+    createOpenAIMockWithCapture(
+      {
+        kind: 'day_month',
+        day: 16,
+        month: 3,
+        matchedText: '16 de marco',
+        locale: 'pt-BR',
+      },
+      (params) => {
+        capturedParams = params
+      },
+    ),
+  )
+
+  const result = await service.interpretRequestedAppointmentDate({
+    messageText: 'marco',
+    locale: 'pt-BR',
+    timezone: TIMEZONE,
+    now: FIXED_NOW,
+    pendingClarification: {
+      functionName: 'getAvailableTimeSlots',
+      argsSnapshot: {},
+      originalMessage: 'quero ver os horarios dia 16',
+      partialInterpretation: {
+        kind: 'day_only',
+        day: 16,
+        matchedText: 'dia 16',
+        locale: 'pt-BR',
+      },
+      createdAt: '2026-03-12T15:00:00.000Z',
+      expiresAt: '2026-03-12T15:15:00.000Z',
+    },
+  })
+
+  assert.equal(result.interpretation.kind, 'day_month')
+  assert.equal(result.resolution.normalizedDate, '2026-03-16')
+
+  const payload = JSON.parse(String((capturedParams as any)?.messages?.[1]?.content || '{}'))
+  assert.equal(payload.pendingClarification.originalMessage, 'quero ver os horarios dia 16')
+  assert.equal(payload.pendingClarification.partialInterpretation.day, 16)
+  assert.equal(payload.pendingClarification.functionName, 'getAvailableTimeSlots')
 })

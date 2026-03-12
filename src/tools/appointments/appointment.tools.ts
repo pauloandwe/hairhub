@@ -13,6 +13,7 @@ export const appointmentTools: OpenAITool[] = [
 - Se a frase for um pedido direto para marcar, use \`book\` mesmo que ela já venha com data e horário exatos (ex.: "Quero agendar amanhã às 15h com o João", "Preciso marcar corte + barba amanhã às 15h", "Agenda pra mim amanhã às 15h").
 - Se houver dados na própria frase (ex.: data, horário, serviço, professional, nome, observações), preencha esses campos e envie junto.
 - Os campos canônicos internos são \`appointmentDate\` e \`appointmentTime\`, mas \`date\` e \`time\` continuam aceitos como alias.
+- Expressoes como \`dia 16\`, \`16 de marco\` e \`amanha\` ja sao resolvidas internamente. Nesses casos, nao precisa converter manualmente para ISO para chamar a tool.
 - Se não houver dados explícitos, chame com arguments = {} apenas.
 - NÃO faça perguntas nesta etapa; o fluxo interno cuidará da coleta dos dados.
 
@@ -24,6 +25,7 @@ QUANDO NÃO USAR:
 
 EXEMPLOS:
 - "Quero agendar um corte para amanhã" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>" })
+- "Tem horário dia 16 às 15h?" → startAppointmentRegistration({ appointmentTime: "15:00", intentMode: "check_then_offer" })
 - "Agendar corte + barba com João para 15/11/2024 às 14:00" → startAppointmentRegistration({ appointmentDate: "2024-11-15", appointmentTime: "14:00", service: "Corte + Barba", professional: "João" })
 - "Quero agendar amanhã às 15h com o João" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", professional: "João" })
 - "Preciso marcar corte + barba amanhã às 15h" → startAppointmentRegistration({ appointmentDate: "<YYYY-MM-DD de amanhã>", appointmentTime: "15:00", service: "Corte + Barba" })

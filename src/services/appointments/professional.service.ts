@@ -363,11 +363,7 @@ export class ProfessionalService {
         const name = this.normalizeString(rawName) ?? id
 
         const rawSlotsSource = Array.isArray(professionalEntry?.slots) ? professionalEntry.slots : Array.isArray(professionalData?.slots) ? professionalData.slots : []
-        const displaySlotsSource = Array.isArray(professionalEntry?.displaySlots)
-          ? professionalEntry.displaySlots
-          : Array.isArray(professionalData?.displaySlots)
-            ? professionalData.displaySlots
-            : []
+        const displaySlotsSource = Array.isArray(professionalEntry?.displaySlots) ? professionalEntry.displaySlots : Array.isArray(professionalData?.displaySlots) ? professionalData.displaySlots : []
 
         this.appendSlotEntries(rawSlotMap, rawSlotsSource, { id, name })
         this.appendSlotEntries(displaySlotMap, displaySlotsSource, { id, name })
@@ -389,9 +385,7 @@ export class ProfessionalService {
       return []
     }
 
-    return slotsSource
-      .map((slot) => this.normalizeString(slot?.start ?? slot?.startTime ?? slot))
-      .filter((slot): slot is string => Boolean(slot))
+    return slotsSource.map((slot) => this.normalizeString(slot?.start ?? slot?.startTime ?? slot)).filter((slot): slot is string => Boolean(slot))
   }
 
   private normalizePositiveInteger(value: unknown): number | null {
@@ -403,11 +397,7 @@ export class ProfessionalService {
     return Math.floor(normalized)
   }
 
-  private appendSlotEntries(
-    slotMap: Map<string, Map<string, { id: string; name: string }>>,
-    slotsSource: any[],
-    professional: { id: string; name: string },
-  ): void {
+  private appendSlotEntries(slotMap: Map<string, Map<string, { id: string; name: string }>>, slotsSource: any[], professional: { id: string; name: string }): void {
     if (!Array.isArray(slotsSource) || slotsSource.length === 0) {
       return
     }

@@ -1,6 +1,6 @@
 import { downloadMedia, sendWhatsAppMessage, sendWhatsAppMessageWithTitle } from '../../api/meta.api'
 import { FlowType } from '../../enums/generic.enum'
-import { ClientNameCaptureState, getBusinessPhoneForPhone, getUserContext, resetActiveRegistration, setUserContext } from '../../env.config'
+import { ClientNameCaptureState, getBusinessPhoneForPhone, getUserContext, getUserContextSync, resetActiveRegistration, setUserContext } from '../../env.config'
 import { handleIncomingInteractiveList } from '../../interactives/registry'
 import { ensureUserApiToken } from '../auth-token.service'
 import { clientsService } from '../clients/clients.service'
@@ -19,9 +19,12 @@ import { appointmentIntentService } from '../appointments/appointment-intent.ser
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 import { sendAppointmentAvailabilityResolutionList } from '../../interactives/appointments/availabilityResolutionSelection'
 import { registerPanelClientQuickActionHandler } from '../../interactives/clientQuickActions'
+import { aiLogger } from '../../utils/pino'
+import { isIsoTimestampExpired } from '../appointments/appointment-date-clarification'
 
 export class ContextService {
   private static instance: ContextService
+  private readonly logger = aiLogger.child({ module: 'context-service' })
   private readonly simplifiedExpenseContext = SimplifiedExpenseContextService.getInstance()
   private readonly deathContext = DeathContextService.getInstance()
   private readonly defaultContext = DefaultContextService.getInstance()
@@ -291,6 +294,30 @@ export class ContextService {
     return false
   }
 
+  private handlePendingAppointmentDateClarification = async (userId: string, incomingMessage: string): Promise<boolean> => {
+    const pending = getUserContextSync(userId)?.pendingAppointmentDateClarification
+
+    if (!pending) {
+      return false
+    }
+
+    if (isIsoTimestampExpired(pending.expiresAt)) {
+      await setUserContext(userId, { pendingAppointmentDateClarification: null })
+      this.logger.info(
+        {
+          userId,
+          functionName: pending.functionName,
+          originalMessage: pending.originalMessage,
+          expiredAt: pending.expiresAt,
+        },
+        'pending_date_clarification_expired',
+      )
+      return false
+    }
+
+    return this.defaultContext.resumePendingAppointmentDateClarification(userId, incomingMessage)
+  }
+
   handleIncomingMessage = async (messageData: any, businessPhone?: string, phoneNumberId?: string) => {
     const { from: userId } = messageData
 
@@ -367,6 +394,10 @@ export class ContextService {
 
       if (resolvedClientName === null && !runtimeContext?.awaitingClientName) {
         await this.promptInitialClientName(userId)
+        return
+      }
+
+      if (await this.handlePendingAppointmentDateClarification(userId, incomingMessage)) {
         return
       }
 

@@ -41,11 +41,13 @@ QUANDO USAR:
 - Quando o usuário quer saber "Qual melhor horário para agendar?"
 - Durante o fluxo de agendamento para mostrar opções de horários
 - Use para consultas amplas de opções.
+- Expressoes como "dia 16", "dia 10", "16 de marco" e "amanha" ja sao resolvidas internamente. Nesses casos, pode chamar a tool mesmo sem data ISO completa.
 
 QUANDO NÃO USAR:
 - Se o usuário já trouxe um horário exato pensando em marcar (ex.: "Tem amanhã às 15h com o João?"). Nesse caso, prefira startAppointmentRegistration com intentMode = "check_then_offer".
 
 EXEMPLOS:
+- "Quero ver os horarios disponiveis dia 16" → getAvailableTimeSlots({})
 - "Quais horários estão livres amanhã?" → getAvailableTimeSlots({ date: "<YYYY-MM-DD de amanhã>" })
 - "Tem horário com o João disponível?" → getAvailableTimeSlots({ professionalId: 1 })
 - "Me mostra os horários para 20/11/2024" → getAvailableTimeSlots({ date: "2024-11-20" })`,

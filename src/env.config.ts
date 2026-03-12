@@ -4,6 +4,7 @@ import { FlowStep } from './enums/generic.enum'
 import { createUserContextStore } from './services/user-context-store'
 import { EnvKeys } from './helpers/Enums'
 import type { PendingAppointmentOffer, PendingAvailabilityResolution } from './services/appointments/appointment.types'
+import type { AppointmentDateInterpretation } from './utils/appointment-date-resolution'
 
 function getEnvVar(key: string): string {
   const value = process.env[key]
@@ -143,6 +144,15 @@ export interface ActiveRegistrationPendingStep {
   }
 }
 
+export interface PendingAppointmentDateClarification {
+  functionName: 'getAvailableTimeSlots' | 'startAppointmentRegistration'
+  argsSnapshot: Record<string, any>
+  originalMessage: string
+  partialInterpretation: AppointmentDateInterpretation | null
+  createdAt: string
+  expiresAt: string
+}
+
 export interface UserRuntimeContext {
   phone: string
   workingHours: BusinessWorkingHour[]
@@ -169,6 +179,7 @@ export interface UserRuntimeContext {
   appointmentCancellation?: AppointmentCancellationState | null
   pendingAppointmentOffer?: PendingAppointmentOffer | null
   pendingAvailabilityResolution?: PendingAvailabilityResolution | null
+  pendingAppointmentDateClarification?: PendingAppointmentDateClarification | null
   outreachReply?: OutreachReplyContext | null
   activeRegistration: {
     type?: string

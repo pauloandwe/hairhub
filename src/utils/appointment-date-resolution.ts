@@ -87,7 +87,7 @@ function resolveFutureDayOnly(day: number, todayIso: string): string | null {
     const year = baseYear + Math.floor(monthIndex / 12)
     const month = (monthIndex % 12) + 1
     const candidate = buildIsoDate(year, month, day)
-    if (candidate && candidate > todayIso) {
+    if (candidate && candidate >= todayIso) {
       return candidate
     }
   }
@@ -101,7 +101,7 @@ function resolveFutureDayMonth(day: number, month: number, todayIso: string): st
 
   const currentYear = Number(match[1])
   const thisYearCandidate = buildIsoDate(currentYear, month, day)
-  if (thisYearCandidate && thisYearCandidate > todayIso) {
+  if (thisYearCandidate && thisYearCandidate >= todayIso) {
     return thisYearCandidate
   }
 

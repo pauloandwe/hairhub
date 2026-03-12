@@ -40,6 +40,23 @@ test('normalizeAppointmentDateInterpretation rolls day-only references to the ne
   assert.equal(result.normalizedDate, '2026-04-10')
 })
 
+test('normalizeAppointmentDateInterpretation keeps same-day references on the current day', () => {
+  const result = normalizeAppointmentDateInterpretation({
+    interpretation: {
+      kind: 'day_only',
+      day: 16,
+      matchedText: 'dia 16',
+      locale: 'pt-BR',
+    },
+    timezone: TIMEZONE,
+    now: new Date('2026-03-16T15:00:00.000Z'),
+    source: 'test',
+  })
+
+  assert.equal(result.requiresClarification, false)
+  assert.equal(result.normalizedDate, '2026-03-16')
+})
+
 test('normalizeAppointmentDateInterpretation resolves day/month references to the next future occurrence', () => {
   const result = normalizeAppointmentDateInterpretation({
     interpretation: {

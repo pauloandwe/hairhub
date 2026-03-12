@@ -83,3 +83,55 @@ test('normalizeAppointmentToolArguments stops execution when the interpreter req
   assert.equal(result.resolution?.requiresClarification, true)
   assert.equal(result.resolution?.normalizedDate, null)
 })
+
+test('normalizeAppointmentToolArguments forwards pending clarification context to the interpreter', async () => {
+  let receivedPending: any = null
+
+  const interpreter = {
+    interpretRequestedAppointmentDate: async (params: Record<string, unknown>) => {
+      receivedPending = params.pendingClarification
+      return {
+        interpretation: {
+          kind: 'day_month',
+          day: 16,
+          month: 3,
+          matchedText: '16 de marco',
+          locale: 'pt-BR',
+        },
+        resolution: {
+          normalizedDate: '2026-03-16',
+          source: 'ai_interpreter',
+          matchedText: '16 de marco',
+          requiresClarification: false,
+          interpretationKind: 'day_month',
+          locale: 'pt-BR',
+        },
+      }
+    },
+  } as unknown as AppointmentDateInterpreterService
+
+  const result = await normalizeAppointmentToolArguments({
+    functionName: 'getAvailableTimeSlots',
+    args: {},
+    incomingMessage: 'marco',
+    timezone: TIMEZONE,
+    now: FIXED_NOW,
+    pendingClarification: {
+      functionName: 'getAvailableTimeSlots',
+      argsSnapshot: {},
+      originalMessage: 'quero ver os horarios dia 16',
+      partialInterpretation: {
+        kind: 'day_only',
+        day: 16,
+        matchedText: 'dia 16',
+        locale: 'pt-BR',
+      },
+      createdAt: '2026-03-12T15:00:00.000Z',
+      expiresAt: '2026-03-12T15:15:00.000Z',
+    },
+    interpreter,
+  })
+
+  assert.equal(receivedPending?.originalMessage, 'quero ver os horarios dia 16')
+  assert.equal(result.args.date, '2026-03-16')
+})

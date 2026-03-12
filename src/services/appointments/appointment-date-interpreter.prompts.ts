@@ -21,6 +21,9 @@ Classificacoes permitidas:
 
 Regras:
 - Use os argumentos atuais como contexto adicional, mas a mensagem do usuario continua sendo a referencia principal.
+- Se houver \`pendingClarification\`, use esse contexto para combinar a mensagem atual com a solicitacao anterior.
+- Quando a mensagem atual for apenas um complemento, como "marco", "abril", "2027" ou "16 de marco", combine com o contexto pendente e devolva a interpretacao final.
+- Quando a mensagem original trouxer apenas um dia do mes, como "dia 16", classifique como \`day_only\`. Nao trate isso como ambiguidade real.
 - Se houver uma data em formato ISO ou DD/MM/YYYY, classifique como explicit_date e extraia dia, mes e ano.
 - Se houver data em formato DD/MM, classifique como day_month.
 - Se houver apenas o dia do mes, classifique como day_only.
