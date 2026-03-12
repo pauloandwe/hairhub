@@ -125,7 +125,9 @@ export function shouldRetryWhatsAppSend(error: any): { retry: boolean; reason: s
     return { retry: false, reason: 'response_received' }
   }
 
-  const code = String(error?.code || error?.cause?.code || '').trim().toUpperCase()
+  const code = String(error?.code || error?.cause?.code || '')
+    .trim()
+    .toUpperCase()
   if (!SAFE_RETRYABLE_CODES.has(code)) {
     return { retry: false, reason: code ? `non_retryable_code:${code}` : 'missing_retryable_code' }
   }
@@ -138,9 +140,7 @@ export function shouldRetryWhatsAppSend(error: any): { retry: boolean; reason: s
   const ended = Boolean(currentRequest?._ended ?? error?.request?._ended)
 
   if (Number.isFinite(bytesWritten as number)) {
-    return Number(bytesWritten) === 0 && !finished
-      ? { retry: true, reason: `pre_send_safe:${code}` }
-      : { retry: false, reason: `request_progressed:${code}` }
+    return Number(bytesWritten) === 0 && !finished ? { retry: true, reason: `pre_send_safe:${code}` } : { retry: false, reason: `request_progressed:${code}` }
   }
 
   if (!headerSent && !finished && !ended) {

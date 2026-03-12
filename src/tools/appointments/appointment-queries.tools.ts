@@ -32,6 +32,10 @@ EXEMPLOS:
       name: 'getAvailableTimeSlots',
       description: `Retorna os horários disponíveis para agendamento em um determinado dia.
 
+Observação sobre o retorno:
+- A resposta traz \`available_slots_display\` com os horários comerciais que devem ser mostrados ao cliente.
+- Se existir \`available_slots_raw\`, ela é apenas diagnóstica e não deve ser narrada na resposta final.
+
 QUANDO USAR:
 - Quando o usuário pergunta "Quais horários tem disponível?"
 - Quando o usuário quer saber "Qual melhor horário para agendar?"

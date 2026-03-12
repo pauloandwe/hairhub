@@ -5,6 +5,24 @@ import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
 export const PUBLIC_SLOT_STEP_MINUTES = 5
+export const PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES = 30
+
+export interface ProfessionalAvailableSlotsDetail {
+  rawSlots: string[]
+  displaySlots: string[]
+  displayIntervalMinutes: number
+}
+
+export interface AggregatedAvailableSlotEntry {
+  start: string
+  professionals: { id: string; name: string }[]
+}
+
+export interface AggregatedAvailableSlotsDetail {
+  rawSlots: AggregatedAvailableSlotEntry[]
+  displaySlots: AggregatedAvailableSlotEntry[]
+  displayIntervalMinutes: number
+}
 
 function resolveAvailableDaysLookahead(): number {
   const configured = Number(env.APPOINTMENT_AVAILABLE_DAYS_LOOKAHEAD)
@@ -66,6 +84,11 @@ export class ProfessionalService {
   }
 
   async getAvailableSlots(args: { phone: string; professionalId?: string | number | null; date?: string | null; serviceId?: string | number | null; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<string[]> {
+    const detail = await this.getAvailableSlotsDetailed(args)
+    return detail.rawSlots
+  }
+
+  async getAvailableSlotsDetailed(args: { phone: string; professionalId?: string | number | null; date?: string | null; serviceId?: string | number | null; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<ProfessionalAvailableSlotsDetail> {
     const { phone, professionalId, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
@@ -73,36 +96,34 @@ export class ProfessionalService {
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business identifiers not found for phone:', phone)
-      return []
+      return { rawSlots: [], displaySlots: [], displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES }
     }
 
     const resolvedProfessionalId = professionalId !== undefined && professionalId !== null ? String(professionalId).trim() : ''
     if (!resolvedProfessionalId) {
       console.warn('[ProfessionalService] professionalId not provided while fetching slots.', { phone })
-      return []
+      return { rawSlots: [], displaySlots: [], displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES }
     }
 
     if (!date) {
       console.warn('[ProfessionalService] date not provided while fetching slots.', { phone, professionalId: resolvedProfessionalId })
-      return []
+      return { rawSlots: [], displaySlots: [], displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES }
     }
 
-    if (serviceId === undefined || serviceId === null || String(serviceId).trim() === '') {
-      console.warn('[ProfessionalService] serviceId not provided while fetching slots.', { phone, professionalId: resolvedProfessionalId })
-      return []
-    }
-
-    const numericServiceId = Number(serviceId)
-    if (!Number.isFinite(numericServiceId)) {
+    const normalizedServiceId = serviceId !== undefined && serviceId !== null && String(serviceId).trim() !== '' ? Number(serviceId) : null
+    if (normalizedServiceId !== null && !Number.isFinite(normalizedServiceId)) {
       console.warn('[ProfessionalService] serviceId is not numeric while fetching slots.', { phone, professionalId: resolvedProfessionalId, serviceId })
-      return []
+      return { rawSlots: [], displaySlots: [], displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES }
     }
 
     try {
       const params: Record<string, any> = {
         date,
-        serviceId: numericServiceId,
         stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      }
+
+      if (normalizedServiceId !== null) {
+        params.serviceId = normalizedServiceId
       }
 
       if (excludeAppointmentId !== undefined && excludeAppointmentId !== null && String(excludeAppointmentId).trim() !== '') {
@@ -117,11 +138,14 @@ export class ProfessionalService {
       const data = unwrapApiResponse<any>(response)
       if (!data || !data.professional || !Array.isArray(data.professional.slots)) {
         console.warn('[ProfessionalService] Invalid slots structure:', response?.data)
-        return []
+        return { rawSlots: [], displaySlots: [], displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES }
       }
 
-      const slots = data.professional.slots.map((slot: any) => slot.start)
-      return slots
+      return {
+        rawSlots: this.extractTimeList(data.professional.slots),
+        displaySlots: this.extractTimeList(data.professional.displaySlots),
+        displayIntervalMinutes: this.normalizePositiveInteger(data.displayIntervalMinutes) ?? PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+      }
     } catch (error) {
       console.error('[ProfessionalService] Error fetching available slots:', error)
       throw new Error('Erro ao buscar horários disponíveis.')
@@ -267,18 +291,31 @@ export class ProfessionalService {
   }
 
   async getAvailableSlotsAggregated(args: { phone: string; date: string; serviceId?: string | number; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<{ start: string; professionals: { id: string; name: string }[] }[]> {
+    const detail = await this.getAvailableSlotsAggregatedDetailed(args)
+    return detail.rawSlots
+  }
+
+  async getAvailableSlotsAggregatedDetailed(args: { phone: string; date: string; serviceId?: string | number; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<AggregatedAvailableSlotsDetail> {
     const { phone, date, serviceId, excludeAppointmentId, stepMinutes } = args
     const businessPhone = getBusinessPhoneForPhone(phone)
     const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business phone not found for phone:', phone)
-      return []
+      return {
+        rawSlots: [],
+        displaySlots: [],
+        displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+      }
     }
 
     if (!date) {
       console.warn('[ProfessionalService] date not provided while fetching aggregated slots.', { phone })
-      return []
+      return {
+        rawSlots: [],
+        displaySlots: [],
+        displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+      }
     }
 
     try {
@@ -306,10 +343,15 @@ export class ProfessionalService {
       const data = unwrapApiResponse<any>(response)
       if (!data || !data.professionals || !Array.isArray(data.professionals)) {
         console.warn('[ProfessionalService] Invalid slots structure for aggregated:', response?.data)
-        return []
+        return {
+          rawSlots: [],
+          displaySlots: [],
+          displayIntervalMinutes: PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+        }
       }
 
-      const slotMap = new Map<string, Map<string, { id: string; name: string }>>()
+      const rawSlotMap = new Map<string, Map<string, { id: string; name: string }>>()
+      const displaySlotMap = new Map<string, Map<string, { id: string; name: string }>>()
 
       data.professionals.forEach((professionalEntry: any) => {
         const professionalData = professionalEntry?.professional ?? professionalEntry
@@ -320,37 +362,76 @@ export class ProfessionalService {
         if (!id) return
         const name = this.normalizeString(rawName) ?? id
 
-        const slotsSource = Array.isArray(professionalEntry?.slots) ? professionalEntry.slots : Array.isArray(professionalData?.slots) ? professionalData.slots : []
+        const rawSlotsSource = Array.isArray(professionalEntry?.slots) ? professionalEntry.slots : Array.isArray(professionalData?.slots) ? professionalData.slots : []
+        const displaySlotsSource = Array.isArray(professionalEntry?.displaySlots)
+          ? professionalEntry.displaySlots
+          : Array.isArray(professionalData?.displaySlots)
+            ? professionalData.displaySlots
+            : []
 
-        if (!Array.isArray(slotsSource) || slotsSource.length === 0) {
-          return
-        }
-
-        slotsSource.forEach((slot: any) => {
-          const start = this.normalizeString(slot?.start ?? slot?.startTime ?? slot)
-          if (!start) return
-
-          const professionalMap = slotMap.get(start) ?? new Map<string, { id: string; name: string }>()
-          if (!professionalMap.has(id)) {
-            professionalMap.set(id, { id, name })
-          }
-          slotMap.set(start, professionalMap)
-        })
+        this.appendSlotEntries(rawSlotMap, rawSlotsSource, { id, name })
+        this.appendSlotEntries(displaySlotMap, displaySlotsSource, { id, name })
       })
 
-      const aggregatedSlots = Array.from(slotMap.entries())
-        .map(([start, professionalsMap]) => ({
-          start,
-          professionals: Array.from(professionalsMap.values()),
-        }))
-        .filter((entry) => entry.professionals.length > 0)
-        .sort((a, b) => a.start.localeCompare(b.start))
-
-      return aggregatedSlots
+      return {
+        rawSlots: this.mapSlotEntries(rawSlotMap),
+        displaySlots: this.mapSlotEntries(displaySlotMap),
+        displayIntervalMinutes: this.normalizePositiveInteger(data.displayIntervalMinutes) ?? PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+      }
     } catch (error) {
       console.error('[ProfessionalService] Error fetching aggregated available slots:', error)
       throw new Error('Erro ao buscar horários disponíveis.')
     }
+  }
+
+  private extractTimeList(slotsSource: any): string[] {
+    if (!Array.isArray(slotsSource)) {
+      return []
+    }
+
+    return slotsSource
+      .map((slot) => this.normalizeString(slot?.start ?? slot?.startTime ?? slot))
+      .filter((slot): slot is string => Boolean(slot))
+  }
+
+  private normalizePositiveInteger(value: unknown): number | null {
+    const normalized = Number(value)
+    if (!Number.isFinite(normalized) || normalized <= 0) {
+      return null
+    }
+
+    return Math.floor(normalized)
+  }
+
+  private appendSlotEntries(
+    slotMap: Map<string, Map<string, { id: string; name: string }>>,
+    slotsSource: any[],
+    professional: { id: string; name: string },
+  ): void {
+    if (!Array.isArray(slotsSource) || slotsSource.length === 0) {
+      return
+    }
+
+    slotsSource.forEach((slot: any) => {
+      const start = this.normalizeString(slot?.start ?? slot?.startTime ?? slot)
+      if (!start) return
+
+      const professionalMap = slotMap.get(start) ?? new Map<string, { id: string; name: string }>()
+      if (!professionalMap.has(professional.id)) {
+        professionalMap.set(professional.id, professional)
+      }
+      slotMap.set(start, professionalMap)
+    })
+  }
+
+  private mapSlotEntries(slotMap: Map<string, Map<string, { id: string; name: string }>>): AggregatedAvailableSlotEntry[] {
+    return Array.from(slotMap.entries())
+      .map(([start, professionalsMap]) => ({
+        start,
+        professionals: Array.from(professionalsMap.values()),
+      }))
+      .filter((entry) => entry.professionals.length > 0)
+      .sort((a, b) => a.start.localeCompare(b.start))
   }
 }
 

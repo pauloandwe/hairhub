@@ -276,11 +276,10 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       case 'pick_date':
         await sendDateSelectionList(phone, 'Qual dia fica melhor pra voce?')
         break
-      case 'pick_professional':
-        {
-          const professionalSelection = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
-          return this.buildResponse(recovery.message, professionalSelection.interactive, recovery.draft)
-        }
+      case 'pick_professional': {
+        const professionalSelection = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
+        return this.buildResponse(recovery.message, professionalSelection.interactive, recovery.draft)
+      }
     }
 
     return this.buildResponse(recovery.message, true, recovery.draft)

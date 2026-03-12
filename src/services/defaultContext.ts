@@ -187,6 +187,11 @@ export class DefaultContextService {
           - Nunca avance em agendamentos sem que o usuário tenha iniciado o fluxo correspondente.
           - Faça apenas **uma pergunta por vez**.
 
+          **Regras para resposta com disponibilidade**
+          - Quando a tool getAvailableTimeSlots retornar \`available_slots_display\` e \`available_slots_raw\`, use apenas \`available_slots_display\` para listar opções ao cliente.
+          - Nunca liste horários operacionais da malha bruta (\`available_slots_raw\`) na resposta em linguagem natural.
+          - Se a tool indicar \`availability_precision = "suggestive_without_service"\`, deixe claro em uma frase curta que são opções iniciais e que a confirmação final depende do serviço escolhido.
+
           ${personalizationSection}
 
           ${businessAssistantSection}
@@ -394,6 +399,41 @@ export class DefaultContextService {
     }
 
     if (toolResponse.content) {
+      if (logAgentToolCall?.name === 'getAvailableTimeSlots') {
+        try {
+          const parsedToolResponse = JSON.parse(toolResponse.content)
+          const responseData = parsedToolResponse?.data ?? {}
+          const displaySlots = Array.isArray(responseData.available_slots_display)
+            ? responseData.available_slots_display
+            : []
+          const rawSlots = Array.isArray(responseData.available_slots_raw)
+            ? responseData.available_slots_raw
+            : []
+
+          contextLogger.info(
+            {
+              toolName: logAgentToolCall.name,
+              date: responseData.date,
+              displayIntervalMinutes: responseData.display_interval_minutes,
+              availabilityPrecision: responseData.availability_precision,
+              rawSlotsCount: rawSlots.length,
+              displaySlotsCount: displaySlots.length,
+              rawSlotsPreview: rawSlots.slice(0, 10),
+              displaySlotsPreview: displaySlots.slice(0, 10),
+            },
+            'Slots enviados ao modelo final para resposta ao cliente',
+          )
+        } catch (error) {
+          contextLogger.warn(
+            {
+              toolName: logAgentToolCall?.name,
+              error,
+            },
+            'Falha ao registrar payload de disponibilidade antes da resposta final',
+          )
+        }
+      }
+
       const finalPrompt = [...defaultFlowPrompt, openAiResponse, toolResponse]
 
       logOpenAIPrompt('final_response', finalPrompt, {
@@ -416,6 +456,7 @@ export class DefaultContextService {
       contextLogger.info(
         {
           responseLength: finalText.length,
+          responsePreview: finalText.substring(0, 200),
         },
         'Resposta final gerada com sucesso',
       )

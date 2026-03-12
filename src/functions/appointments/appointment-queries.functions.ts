@@ -1,7 +1,11 @@
 import { DateFormatter } from '../../utils/date'
 import { AppointmentRescheduleAppointment, getBusinessTimezoneForPhone } from '../../env.config'
 import { customerAppointmentsService } from '../../services/appointments/customer-appointments.service'
-import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
+import {
+  professionalService,
+  PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+  PUBLIC_SLOT_STEP_MINUTES,
+} from '../../services/appointments/professional.service'
 import { serviceService } from '../../services/appointments/service.service'
 import { aiLogger } from '../../utils/pino'
 import { formatIsoDateInTimeZone } from '../../utils/timezone'
@@ -50,6 +54,12 @@ const UPCOMING_SUCCESS_MESSAGE = (count: number) => (count > 0 ? `Você tem ${co
 const DEFAULT_SERVICE_NAME = 'Serviço não especificado'
 const DEFAULT_BARBER_NAME = 'Professional não especificado'
 
+interface DisplaySlot {
+  time: string
+  professionals?: { id: string; name: string }[]
+  professionalId?: number
+}
+
 function formatAppointment(apt: AppointmentRescheduleAppointment): FormattedAppointment {
   return {
     id: apt.id?.toString() || '',
@@ -61,6 +71,26 @@ function formatAppointment(apt: AppointmentRescheduleAppointment): FormattedAppo
     notes: apt.notes || '',
     duration: apt.serviceDuration || 0,
   }
+}
+
+function buildDisplaySlotsForProfessional(slots: string[], professionalId: number): DisplaySlot[] {
+  return slots.map((slot) => ({
+    time: slot,
+    professionalId,
+  }))
+}
+
+function buildDisplaySlotsAggregated(
+  slots: Array<{ start: string; professionals: { id: string; name: string }[] }>,
+): DisplaySlot[] {
+  return slots.map((slot) => ({
+    time: slot.start,
+    professionals: slot.professionals,
+  }))
+}
+
+function summarizeSlotTimes(slots: Array<{ time: string }>, limit: number = 10): string[] {
+  return slots.slice(0, limit).map((slot) => slot.time)
 }
 
 export const appointmentQueryFunctions = {
@@ -111,8 +141,8 @@ export const appointmentQueryFunctions = {
     }
   },
 
-  getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number }): Promise<any> => {
-    const { phone, date, professionalId } = args
+  getAvailableTimeSlots: async (args: { phone: string; date?: string; professionalId?: number; serviceId?: number }): Promise<any> => {
+    const { phone, date, professionalId, serviceId } = args
     const normalizedDateInput = typeof date === 'string' ? date.trim() : ''
     if (normalizedDateInput && !DateFormatter.isValidISODate(normalizedDateInput)) {
       return {
@@ -123,43 +153,82 @@ export const appointmentQueryFunctions = {
 
     const normalizedDate = normalizedDateInput || formatIsoDateInTimeZone(new Date(), getBusinessTimezoneForPhone(phone)) || new Date().toISOString().split('T')[0]
 
-    logger.info({ date: normalizedDate, professionalId }, 'Consultando horários disponíveis')
+    logger.info({ date: normalizedDate, professionalId, serviceId }, 'Consultando horários disponíveis')
 
     try {
       if (professionalId) {
-        const availableSlots = await professionalService.getAvailableSlots({
+        const availableSlots = await professionalService.getAvailableSlotsDetailed({
           phone,
           professionalId,
           date: normalizedDate,
+          serviceId,
           stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         })
+        const availableSlotsRaw = buildDisplaySlotsForProfessional(availableSlots.rawSlots, professionalId)
+        const availableSlotsDisplay = buildDisplaySlotsForProfessional(
+          availableSlots.displaySlots,
+          professionalId,
+        )
+
+        logger.info(
+          {
+            date: normalizedDate,
+            professionalId,
+            serviceId,
+            rawSlotsCount: availableSlotsRaw.length,
+            displaySlotsCount: availableSlotsDisplay.length,
+            rawSlotsPreview: summarizeSlotTimes(availableSlotsRaw),
+            displaySlotsPreview: summarizeSlotTimes(availableSlotsDisplay),
+          },
+          'Diagnóstico de disponibilidade por profissional',
+        )
 
         return {
           status: 'success',
           data: {
             date: normalizedDate,
-            available_slots: availableSlots.map((slot) => ({
-              time: slot,
-              professionalId,
-            })),
+            display_interval_minutes:
+              availableSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+            availability_precision: serviceId ? 'service_specific' : 'suggestive_without_service',
+            available_slots: availableSlotsDisplay,
+            available_slots_display: availableSlotsDisplay,
+            available_slots_raw: availableSlotsRaw,
           },
         }
       }
 
-      const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
+      const aggregatedSlots = await professionalService.getAvailableSlotsAggregatedDetailed({
         phone,
         date: normalizedDate,
+        serviceId,
         stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
+      const availableSlotsRaw = buildDisplaySlotsAggregated(aggregatedSlots.rawSlots)
+      const availableSlotsDisplay = buildDisplaySlotsAggregated(aggregatedSlots.displaySlots)
+
+      logger.info(
+        {
+          date: normalizedDate,
+          professionalId: null,
+          serviceId,
+          rawSlotsCount: availableSlotsRaw.length,
+          displaySlotsCount: availableSlotsDisplay.length,
+          rawSlotsPreview: summarizeSlotTimes(availableSlotsRaw),
+          displaySlotsPreview: summarizeSlotTimes(availableSlotsDisplay),
+        },
+        'Diagnóstico de disponibilidade agregada',
+      )
 
       return {
         status: 'success',
         data: {
           date: normalizedDate,
-          available_slots: aggregatedSlots.map((slot) => ({
-            time: slot.start,
-            professionals: slot.professionals,
-          })),
+          display_interval_minutes:
+            aggregatedSlots.displayIntervalMinutes || PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES,
+          availability_precision: serviceId ? 'service_specific' : 'suggestive_without_service',
+          available_slots: availableSlotsDisplay,
+          available_slots_display: availableSlotsDisplay,
+          available_slots_raw: availableSlotsRaw,
         },
       }
     } catch (error) {

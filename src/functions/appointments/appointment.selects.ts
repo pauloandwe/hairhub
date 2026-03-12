@@ -35,9 +35,7 @@ const editService: FieldEditor = async (phone) => {
 
 const editProfessional: FieldEditor = async (phone) => {
   const result = await sendProfessionalSelectionList(phone, 'Tem preferencia de barbeiro?')
-  return result.interactive
-    ? respond(getMenuSentCopy('barbeiros'), true)
-    : respond('Profissional definido automaticamente.', false)
+  return result.interactive ? respond(getMenuSentCopy('barbeiros'), true) : respond('Profissional definido automaticamente.', false)
 }
 
 const editNotes: FieldEditor = async (phone) => {

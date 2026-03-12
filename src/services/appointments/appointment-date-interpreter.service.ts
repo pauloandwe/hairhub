@@ -1,13 +1,7 @@
 import OpenAI from 'openai'
 import { env } from '../../env.config'
 import { OpenAITool } from '../../types/openai-types'
-import {
-  AppointmentDateInterpretation,
-  APPOINTMENT_DATE_INTERPRETATION_KINDS,
-  DEFAULT_APPOINTMENT_DATE_LOCALE,
-  normalizeAppointmentDateInterpretation,
-  RequestedAppointmentDateResolution,
-} from '../../utils/appointment-date-resolution'
+import { AppointmentDateInterpretation, APPOINTMENT_DATE_INTERPRETATION_KINDS, DEFAULT_APPOINTMENT_DATE_LOCALE, normalizeAppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
 import { aiLogger } from '../../utils/pino'
 import { getAppointmentDateInterpreterPrompt, resolveAppointmentDateInterpreterLocale } from './appointment-date-interpreter.prompts'
 
