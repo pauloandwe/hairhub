@@ -14,7 +14,7 @@ function applyRequiredEnv(): void {
 
 applyRequiredEnv()
 
-test('ProfessionalService.getAvailableDays retries once on retryable transport failures', async () => {
+test('ProfessionalService.getAvailableDays retries once on retryable transport failures without forcing a slot step', async () => {
   const apiModule = await import('../../config/api.config')
   const { ApiError } = await import('../../errors/api-error')
   const { setUserContext } = await import('../../env.config')
@@ -33,6 +33,8 @@ test('ProfessionalService.getAvailableDays retries once on retryable transport f
 
   apiModule.default.get = (async (url: string, options?: { params?: Record<string, unknown> }) => {
     attempts += 1
+
+    assert.equal(options?.params?.stepMinutes, undefined)
 
     if (attempts === 1) {
       throw new ApiError({
@@ -71,7 +73,6 @@ test('ProfessionalService.getAvailableDays retries once on retryable transport f
       phone,
       professionalId: 6,
       serviceId: 16,
-      stepMinutes: 5,
     })
 
     assert.equal(attempts, 2)

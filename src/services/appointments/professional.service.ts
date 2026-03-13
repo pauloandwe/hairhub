@@ -4,7 +4,6 @@ import api from '../../config/api.config'
 import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
 
-export const PUBLIC_SLOT_STEP_MINUTES = 5
 export const PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES = 30
 const SAFE_RETRYABLE_REQUEST_CODES = new Set(['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE'])
 
@@ -120,9 +119,11 @@ export class ProfessionalService {
     }
 
     try {
-      const params: Record<string, any> = {
-        date,
-        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      const params: Record<string, any> = { date }
+      const normalizedStepMinutes = this.normalizePositiveInteger(stepMinutes)
+
+      if (normalizedStepMinutes !== null) {
+        params.stepMinutes = normalizedStepMinutes
       }
 
       if (normalizedServiceId !== null) {
@@ -182,7 +183,11 @@ export class ProfessionalService {
     try {
       const params: Record<string, any> = {
         days: resolveAvailableDaysLookahead(),
-        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      }
+      const normalizedStepMinutes = this.normalizePositiveInteger(stepMinutes)
+
+      if (normalizedStepMinutes !== null) {
+        params.stepMinutes = normalizedStepMinutes
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -249,7 +254,11 @@ export class ProfessionalService {
     try {
       const params: Record<string, any> = {
         days: resolveAvailableDaysLookahead(),
-        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      }
+      const normalizedStepMinutes = this.normalizePositiveInteger(stepMinutes)
+
+      if (normalizedStepMinutes !== null) {
+        params.stepMinutes = normalizedStepMinutes
       }
 
       if (serviceId !== undefined && serviceId !== null) {
@@ -341,9 +350,11 @@ export class ProfessionalService {
     }
 
     try {
-      const params: Record<string, any> = {
-        date,
-        stepMinutes: stepMinutes ?? PUBLIC_SLOT_STEP_MINUTES,
+      const params: Record<string, any> = { date }
+      const normalizedStepMinutes = this.normalizePositiveInteger(stepMinutes)
+
+      if (normalizedStepMinutes !== null) {
+        params.stepMinutes = normalizedStepMinutes
       }
 
       if (serviceId !== undefined && serviceId !== null) {

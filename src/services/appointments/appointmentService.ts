@@ -9,7 +9,7 @@ import { SelectionItem, SummarySections } from '../generic/generic.types'
 import { getBusinessIdForPhone, getBusinessTimezoneForPhone, getUserContextSync } from '../../env.config'
 import { IdNameRef } from '../drafts/types'
 import { mergeIdNameRef } from '../drafts/ref.utils'
-import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from './professional.service'
+import { professionalService } from './professional.service'
 import { ApiError } from '../../errors/api-error'
 import { getAppErrorMessage } from '../../utils/error-messages'
 import { AppErrorCodes } from '../../enums/constants'
@@ -653,7 +653,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
             professionalId,
             appointmentDate: date,
             appointmentTime: draft.appointmentTime,
-            stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+            availabilityStepSource: 'backend-resolved',
             resolutionStatus: preservedSlotResolution.status,
             compatibleProfessionalIds,
           })
@@ -666,7 +666,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId,
           appointmentDate: date,
           appointmentTime: draft.appointmentTime,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availabilityStepSource: 'backend-resolved',
           resolutionStatus: 'reset-professional',
         })
         return {
@@ -688,7 +688,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         date,
         serviceId,
         excludeAppointmentId: draft.recordId,
-        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       if (!slots.length) {
@@ -698,7 +697,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId,
           appointmentDate: date,
           appointmentTime: draft.appointmentTime,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availabilityStepSource: 'backend-resolved',
           availableSlotsPreview: this.formatProfessionalSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-date',
         })
@@ -721,7 +720,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId,
           appointmentDate: date,
           appointmentTime: draft.appointmentTime,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availabilityStepSource: 'backend-resolved',
           availableSlotsPreview: this.formatProfessionalSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-time',
         })
@@ -746,7 +745,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
         date,
         serviceId,
         excludeAppointmentId: draft.recordId,
-        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       if (!slots.length) {
@@ -756,7 +754,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId: null,
           appointmentDate: date,
           appointmentTime: draft.appointmentTime,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availabilityStepSource: 'backend-resolved',
           availableSlotsPreview: this.formatAggregatedSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-date',
         })
@@ -779,7 +777,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId: null,
           appointmentDate: date,
           appointmentTime: draft.appointmentTime,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+          availabilityStepSource: 'backend-resolved',
           availableSlotsPreview: this.formatAggregatedSlotsForLog(slots).slice(0, 10),
           resolutionStatus: 'reset-time',
         })
@@ -968,14 +966,12 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
           professionalId,
           date,
           serviceId,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         })
       : (
           await professionalService.getAvailableSlotsAggregated({
             phone,
             date,
             serviceId,
-            stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
           })
         ).map((slot) => slot.start)
 
@@ -1029,7 +1025,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       phone,
       date,
       serviceId,
-      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
     })
     const exactSlot = aggregatedSlots.find((slot) => slot.start === time)
     const compatibleProfessionals = (exactSlot?.professionals ?? []).filter((professional) => Number(professional.id) !== currentProfessionalId)
@@ -1085,7 +1080,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       nextAction: recovery.nextAction,
       recoverySource: recovery.recoverySource,
       availableSlotsPreview: recovery.availableSlotsPreview ?? [],
-      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
+      availabilityStepSource: 'backend-resolved',
     })
   }
 
@@ -1099,7 +1094,6 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
       phone,
       date,
       serviceId,
-      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
     })
     const matchingSlot = aggregatedSlots.find((slot) => slot.start === time)
     if (!matchingSlot || !matchingSlot.professionals.length) {

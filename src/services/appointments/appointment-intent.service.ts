@@ -7,7 +7,7 @@ import { emptyAppointmentDraft } from '../drafts/appointment/appointment.draft'
 import { SelectionItem } from '../generic/generic.types'
 import { AvailabilityResolutionCandidate, IAppointmentValidationDraft, PendingAppointmentOffer, PendingAvailabilityResolution, StartAppointmentArgs } from './appointment.types'
 import { appointmentService } from './appointmentService'
-import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from './professional.service'
+import { professionalService } from './professional.service'
 import { serviceService } from './service.service'
 
 const OFFER_TTL_MS = 15 * 60 * 1000
@@ -642,7 +642,6 @@ class AppointmentIntentService {
         professionalId,
         date: appointmentDate,
         serviceId,
-        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
 
       return {
@@ -654,7 +653,6 @@ class AppointmentIntentService {
     const aggregatedSlots = await professionalService.getAvailableSlotsAggregated({
       phone,
       date: appointmentDate,
-      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       ...(serviceId ? { serviceId } : {}),
     })
 
@@ -684,7 +682,6 @@ class AppointmentIntentService {
       const days = await professionalService.getAvailableDays({
         phone,
         professionalId,
-        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         ...(serviceId ? { serviceId } : {}),
       })
       return days.slice(0, 3).map((day) => day.name || day.id)
@@ -692,7 +689,6 @@ class AppointmentIntentService {
 
     const days = await professionalService.getAvailableDaysAggregated({
       phone,
-      stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       ...(serviceId ? { serviceId } : {}),
     })
     return days.slice(0, 3).map((day) => day.name || day.id)

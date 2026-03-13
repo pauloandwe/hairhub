@@ -1,7 +1,7 @@
 import { DateFormatter } from '../../utils/date'
 import { AppointmentRescheduleAppointment, getBusinessTimezoneForPhone } from '../../env.config'
 import { customerAppointmentsService } from '../../services/appointments/customer-appointments.service'
-import { professionalService, PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
+import { professionalService, PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES } from '../../services/appointments/professional.service'
 import { serviceService } from '../../services/appointments/service.service'
 import { aiLogger } from '../../utils/pino'
 import { formatIsoDateInTimeZone } from '../../utils/timezone'
@@ -156,7 +156,6 @@ export const appointmentQueryFunctions = {
           professionalId,
           date: normalizedDate,
           serviceId,
-          stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
         })
         const availableSlotsRaw = buildDisplaySlotsForProfessional(availableSlots.rawSlots, professionalId)
         const availableSlotsDisplay = buildDisplaySlotsForProfessional(availableSlots.displaySlots, professionalId)
@@ -191,7 +190,6 @@ export const appointmentQueryFunctions = {
         phone,
         date: normalizedDate,
         serviceId,
-        stepMinutes: PUBLIC_SLOT_STEP_MINUTES,
       })
       const availableSlotsRaw = buildDisplaySlotsAggregated(aggregatedSlots.rawSlots)
       const availableSlotsDisplay = buildDisplaySlotsAggregated(aggregatedSlots.displaySlots)
