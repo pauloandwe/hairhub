@@ -5,7 +5,7 @@ import { getUserContext, setUserContext, getUserContextSync } from '../../env.co
 import { appointmentService } from '../../services/appointments/appointmentService'
 import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
-import { createSelectionFlow } from '../flows'
+import { createSelectionFlow, SelectionFlowAbortError } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
@@ -13,18 +13,29 @@ import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const DATE_NAMESPACE = 'DATE_GROUP'
 
+async function abortDateSelection(phone: string, message: string, context: Record<string, unknown>): Promise<never> {
+  await sendWhatsAppMessage(phone, message)
+  throw new SelectionFlowAbortError(message, context)
+}
+
 const dateSelectionFlow = createSelectionFlow<SelectionItem>({
   namespace: DATE_NAMESPACE,
   type: 'selectDate',
   fetchItems: async (phone) => {
+    await getUserContext(phone)
+
     const draft = await appointmentService.loadDraft(phone)
     const professionalId = draft.professional?.id ? Number(draft.professional.id) : null
     const serviceId = draft.service?.id ? Number(draft.service.id) : null
 
     if (!serviceId) {
       console.warn('[dateSelectionFlow] Serviço não selecionado para buscar dias disponíveis', { phone })
-      await sendWhatsAppMessage(phone, 'Antes me fala qual servico voce quer, ai eu te mostro as datas.')
-      return []
+      return abortDateSelection(phone, 'Antes me fala qual servico voce quer, ai eu te mostro as datas.', {
+        phone,
+        professionalId,
+        serviceId,
+        reason: 'missing_service',
+      })
     }
 
     try {
@@ -38,8 +49,13 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
         if (!days || days.length === 0) {
           console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado (agregado)', { phone, serviceId })
-          await sendWhatsAppMessage(phone, 'Nao achei datas disponiveis para os proximos dias agora. Tenta mais tarde?')
-          return []
+          return abortDateSelection(phone, 'Nao achei datas disponiveis para os proximos dias agora. Tenta mais tarde?', {
+            phone,
+            professionalId,
+            serviceId,
+            mode: 'aggregated',
+            reason: 'empty_days',
+          })
         }
 
         return days
@@ -54,15 +70,29 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
       if (!days || days.length === 0) {
         console.warn('[dateSelectionFlow] Nenhum dia disponível encontrado', { phone, professionalId, serviceId })
-        await sendWhatsAppMessage(phone, 'Nao achei datas livres com esse barbeiro agora. Se quiser, voce pode escolher outro.')
-        return []
+        return abortDateSelection(phone, 'Nao achei datas livres com esse barbeiro agora. Se quiser, voce pode escolher outro.', {
+          phone,
+          professionalId,
+          serviceId,
+          mode: 'professional',
+          reason: 'empty_days',
+        })
       }
 
       return days
     } catch (error) {
-      console.error('[dateSelectionFlow] Erro ao buscar dias disponíveis:', error)
-      await sendWhatsAppMessage(phone, 'Nao consegui carregar as datas agora. Tenta de novo em instantes?')
-      return []
+      console.error('[dateSelectionFlow] Erro ao buscar dias disponíveis:', {
+        phone,
+        professionalId,
+        serviceId,
+        error,
+      })
+      return abortDateSelection(phone, 'Nao consegui carregar as datas agora. Tenta de novo em instantes?', {
+        phone,
+        professionalId,
+        serviceId,
+        reason: 'availability_fetch_error',
+      })
     }
   },
   ui: {

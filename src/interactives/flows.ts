@@ -31,6 +31,18 @@ export interface SelectionFlowExtraAction {
   onSelected: (ctx: { userId: string; messageId: string }) => Promise<void>
 }
 
+export class SelectionFlowAbortError extends Error {
+  readonly handled: boolean
+  readonly context?: Record<string, unknown>
+
+  constructor(message = 'Selection flow aborted after handling the user response.', context?: Record<string, unknown>) {
+    super(message)
+    this.name = 'SelectionFlowAbortError'
+    this.handled = true
+    this.context = context
+  }
+}
+
 const MAX_WHATSAPP_LIST_ROWS = 10
 const MAX_WHATSAPP_SECTION_TITLE_LENGTH = 24
 const MAX_WHATSAPP_ROW_TITLE_LENGTH = 24
@@ -228,6 +240,14 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
         ids,
       })
     } catch (error) {
+      if (error instanceof SelectionFlowAbortError) {
+        console.info(`[SelectionFlow] Lista abortada em ${config.namespace} após resposta já tratada.`, {
+          userId,
+          context: error.context,
+        })
+        return
+      }
+
       console.error(`[SelectionFlow] Erro ao carregar lista em ${config.namespace}:`, error)
       const handled = await handleFlowError(userId, error, 'list')
       if (!handled) {

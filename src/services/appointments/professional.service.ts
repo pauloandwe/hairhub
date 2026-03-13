@@ -1,11 +1,13 @@
 import { SelectionItem } from '../generic/generic.types'
-import { getBusinessIdForPhone, getBusinessPhoneForPhone } from '../../env.config'
+import { getBusinessIdForPhone, getBusinessPhoneForPhone, getUserContext } from '../../env.config'
 import api from '../../config/api.config'
 import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
+import { systemLogger } from '../../utils/pino'
 
 export const PUBLIC_SLOT_STEP_MINUTES = 5
 export const PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES = 30
+const SAFE_RETRYABLE_REQUEST_CODES = new Set(['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE'])
 
 export interface ProfessionalAvailableSlotsDetail {
   rawSlots: string[]
@@ -31,8 +33,7 @@ function resolveAvailableDaysLookahead(): number {
 
 export class ProfessionalService {
   async getProfessionals(phone: string, serviceId?: string | number | null): Promise<SelectionItem[]> {
-    const businessId = getBusinessIdForPhone(phone)
-    const normalizedBusinessId = businessId ? String(businessId).trim() : ''
+    const { businessId: normalizedBusinessId } = await this.resolveBusinessContext(phone, 'getProfessionals')
 
     if (!normalizedBusinessId) {
       console.warn('[ProfessionalService] business identifiers not found for phone:', phone)
@@ -53,7 +54,12 @@ export class ProfessionalService {
       }
       params.onlyWithConfiguredSchedule = 'true'
 
-      const response = await api.get(url, { params })
+      const response = await this.performGetRequest(url, params, {
+        phone,
+        businessId: normalizedBusinessId,
+        serviceId,
+        operation: 'getProfessionals',
+      })
       const data = unwrapApiResponse<any[]>(response) ?? []
       if (!Array.isArray(data)) {
         console.error('[ProfessionalService] Invalid response structure:', response)
@@ -90,9 +96,7 @@ export class ProfessionalService {
 
   async getAvailableSlotsDetailed(args: { phone: string; professionalId?: string | number | null; date?: string | null; serviceId?: string | number | null; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<ProfessionalAvailableSlotsDetail> {
     const { phone, professionalId, date, serviceId, excludeAppointmentId, stepMinutes } = args
-    const businessPhone = getBusinessPhoneForPhone(phone)
-    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
-    console.log('Normalized Business Phone:', { normalizedBusinessPhone, businessPhone, phone, professionalId, date, serviceId })
+    const { businessPhone: normalizedBusinessPhone, businessId } = await this.resolveBusinessContext(phone, 'getAvailableSlots')
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business identifiers not found for phone:', phone)
@@ -134,7 +138,16 @@ export class ProfessionalService {
       }
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/professionals/${encodeURIComponent(resolvedProfessionalId)}/free-slots`
-      const response = await api.get(url, { params })
+      const response = await this.performGetRequest(url, params, {
+        phone,
+        businessId,
+        businessPhone: normalizedBusinessPhone,
+        professionalId: resolvedProfessionalId,
+        date,
+        serviceId,
+        excludeAppointmentId,
+        operation: 'getAvailableSlots',
+      })
       const data = unwrapApiResponse<any>(response)
       if (!data || !data.professional || !Array.isArray(data.professional.slots)) {
         console.warn('[ProfessionalService] Invalid slots structure:', response?.data)
@@ -154,8 +167,7 @@ export class ProfessionalService {
 
   async getAvailableDays(args: { phone: string; professionalId: string | number; serviceId?: string | number; stepMinutes?: number }): Promise<SelectionItem[]> {
     const { phone, professionalId, serviceId, stepMinutes } = args
-    const businessPhone = getBusinessPhoneForPhone(phone)
-    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+    const { businessPhone: normalizedBusinessPhone, businessId } = await this.resolveBusinessContext(phone, 'getAvailableDays')
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business phone not found for phone:', phone)
@@ -182,7 +194,14 @@ export class ProfessionalService {
       }
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/professionals/${encodeURIComponent(resolvedProfessionalId)}/available-days`
-      const response = await api.get(url, { params })
+      const response = await this.performGetRequest(url, params, {
+        phone,
+        businessId,
+        businessPhone: normalizedBusinessPhone,
+        professionalId: resolvedProfessionalId,
+        serviceId,
+        operation: 'getAvailableDays',
+      })
       const data = unwrapApiResponse<any>(response)
       if (!data) {
         console.warn('[ProfessionalService] Invalid response structure for available days:', response?.data)
@@ -221,8 +240,7 @@ export class ProfessionalService {
 
   async getAvailableDaysAggregated(args: { phone: string; serviceId?: string | number; stepMinutes?: number }): Promise<SelectionItem[]> {
     const { phone, serviceId, stepMinutes } = args
-    const businessPhone = getBusinessPhoneForPhone(phone)
-    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+    const { businessPhone: normalizedBusinessPhone, businessId } = await this.resolveBusinessContext(phone, 'getAvailableDaysAggregated')
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business phone not found for phone:', phone)
@@ -243,7 +261,13 @@ export class ProfessionalService {
       }
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/available-days-aggregated`
-      const response = await api.get(url, { params })
+      const response = await this.performGetRequest(url, params, {
+        phone,
+        businessId,
+        businessPhone: normalizedBusinessPhone,
+        serviceId,
+        operation: 'getAvailableDaysAggregated',
+      })
       const data = unwrapApiResponse<any>(response)
       if (!data) {
         console.warn('[ProfessionalService] Invalid response structure for aggregated available days:', response?.data)
@@ -297,8 +321,7 @@ export class ProfessionalService {
 
   async getAvailableSlotsAggregatedDetailed(args: { phone: string; date: string; serviceId?: string | number; excludeAppointmentId?: string | number | null; stepMinutes?: number }): Promise<AggregatedAvailableSlotsDetail> {
     const { phone, date, serviceId, excludeAppointmentId, stepMinutes } = args
-    const businessPhone = getBusinessPhoneForPhone(phone)
-    const normalizedBusinessPhone = businessPhone ? String(businessPhone).trim() : ''
+    const { businessPhone: normalizedBusinessPhone, businessId } = await this.resolveBusinessContext(phone, 'getAvailableSlotsAggregated')
 
     if (!normalizedBusinessPhone) {
       console.warn('[ProfessionalService] business phone not found for phone:', phone)
@@ -339,7 +362,15 @@ export class ProfessionalService {
       }
 
       const url = `${env.APPOINTMENTS_URL}/business/phone/${encodeURIComponent(normalizedBusinessPhone)}/free-slots`
-      const response = await api.get(url, { params })
+      const response = await this.performGetRequest(url, params, {
+        phone,
+        businessId,
+        businessPhone: normalizedBusinessPhone,
+        date,
+        serviceId,
+        excludeAppointmentId,
+        operation: 'getAvailableSlotsAggregated',
+      })
       const data = unwrapApiResponse<any>(response)
       if (!data || !data.professionals || !Array.isArray(data.professionals)) {
         console.warn('[ProfessionalService] Invalid slots structure for aggregated:', response?.data)
@@ -377,6 +408,128 @@ export class ProfessionalService {
     } catch (error) {
       console.error('[ProfessionalService] Error fetching aggregated available slots:', error)
       throw new Error('Erro ao buscar horários disponíveis.')
+    }
+  }
+
+  private async resolveBusinessContext(phone: string, operation: string): Promise<{ businessId: string; businessPhone: string; hydratedFromStore: boolean }> {
+    const inMemoryBusinessId = this.normalizeString(getBusinessIdForPhone(phone)) ?? ''
+    const inMemoryBusinessPhone = this.normalizeString(getBusinessPhoneForPhone(phone)) ?? ''
+
+    if (inMemoryBusinessId && inMemoryBusinessPhone) {
+      return {
+        businessId: inMemoryBusinessId,
+        businessPhone: inMemoryBusinessPhone,
+        hydratedFromStore: false,
+      }
+    }
+
+    const runtimeContext = await getUserContext(phone)
+    const hydratedBusinessId = this.normalizeString(runtimeContext?.businessId) ?? inMemoryBusinessId
+    const hydratedBusinessPhone = this.normalizeString(runtimeContext?.businessPhone) ?? inMemoryBusinessPhone
+
+    systemLogger.info(
+      {
+        context: 'ProfessionalService',
+        operation,
+        phone,
+        businessId: hydratedBusinessId || null,
+        businessPhone: hydratedBusinessPhone || null,
+        hydratedFromStore: true,
+      },
+      '[ProfessionalService] Rehydrated business context before availability request.',
+    )
+
+    if (!hydratedBusinessPhone) {
+      systemLogger.warn(
+        {
+          context: 'ProfessionalService',
+          operation,
+          phone,
+          businessId: hydratedBusinessId || null,
+        },
+        '[ProfessionalService] businessPhone is missing before availability request.',
+      )
+    }
+
+    return {
+      businessId: hydratedBusinessId,
+      businessPhone: hydratedBusinessPhone,
+      hydratedFromStore: true,
+    }
+  }
+
+  private async performGetRequest(url: string, params: Record<string, any>, metadata: Record<string, unknown>): Promise<any> {
+    let attempt = 0
+
+    while (true) {
+      try {
+        attempt += 1
+        systemLogger.info(
+          {
+            context: 'ProfessionalService',
+            attempt,
+            requestUrl: url,
+            requestParams: params,
+            ...metadata,
+          },
+          '[ProfessionalService] Executing appointments availability request.',
+        )
+
+        return await api.get(url, { params })
+      } catch (error) {
+        const diagnostics = this.extractRequestDiagnostics(error)
+        const shouldRetry = attempt < 2 && diagnostics.retryable
+
+        systemLogger.error(
+          {
+            context: 'ProfessionalService',
+            attempt,
+            shouldRetry,
+            requestUrl: url,
+            requestParams: params,
+            ...metadata,
+            ...diagnostics,
+          },
+          shouldRetry ? '[ProfessionalService] Availability request failed; retrying once.' : '[ProfessionalService] Availability request failed.',
+        )
+
+        if (!shouldRetry) {
+          throw error
+        }
+      }
+    }
+  }
+
+  private extractRequestDiagnostics(error: unknown): {
+    retryable: boolean
+    statusCode?: number
+    userMessage?: string
+    errorMessage?: string
+    errorCode?: string
+    responseDataPreview?: string
+  } {
+    const errorObject = error as Record<string, any> | undefined
+    const raw = errorObject?.raw as Record<string, any> | undefined
+    const responseData = raw?.response?.data ?? errorObject?.response?.data
+    const errorCode = this.normalizeString(raw?.code ?? errorObject?.code) ?? undefined
+
+    return {
+      retryable: !raw?.response && !errorObject?.response && Boolean(errorCode && SAFE_RETRYABLE_REQUEST_CODES.has(errorCode)),
+      statusCode: raw?.response?.status ?? errorObject?.statusCode ?? errorObject?.response?.status,
+      userMessage: this.normalizeString(errorObject?.userMessage) ?? this.normalizeString(errorObject?.message) ?? undefined,
+      errorMessage: this.normalizeString(errorObject?.message) ?? undefined,
+      errorCode,
+      responseDataPreview: responseData === undefined ? undefined : this.previewPayload(responseData),
+    }
+  }
+
+  private previewPayload(value: unknown, maxLength = 300): string {
+    try {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+
+      return serialized.length > maxLength ? `${serialized.slice(0, maxLength)}...` : serialized
+    } catch {
+      return '[unserializable-payload]'
     }
   }
 

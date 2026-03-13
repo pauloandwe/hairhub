@@ -4,10 +4,16 @@ import { appointmentRescheduleService } from '../../services/appointments/appoin
 import { appointmentRescheduleDraftService } from '../../services/appointments/appointment-reschedule-draft.service'
 import { professionalService, PUBLIC_SLOT_STEP_MINUTES } from '../../services/appointments/professional.service'
 import { SelectionItem } from '../../services/generic/generic.types'
+import { SelectionFlowAbortError } from '../flows'
 import { tryContinueRegistration } from '../followup'
 import { getSelectionAck } from '../../utils/conversation-copy'
 
 export const RESCHEDULE_DATE_NAMESPACE = 'RESCHEDULE_DATE_SELECTION'
+
+async function abortRescheduleDateSelection(phone: string, message: string, context: Record<string, unknown>): Promise<never> {
+  await sendWhatsAppMessage(phone, message)
+  throw new SelectionFlowAbortError(message, context)
+}
 
 const dateSelectionFlow = createSelectionFlow<SelectionItem>({
   namespace: RESCHEDULE_DATE_NAMESPACE,
@@ -16,14 +22,21 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
     const appointment = appointmentRescheduleService.getSelectedAppointment(phone)
 
     if (!appointment) {
-      await sendWhatsAppMessage(phone, 'Perdi qual agendamento voce quer remarcar. Vamos escolher de novo?')
-      return []
+      return abortRescheduleDateSelection(phone, 'Perdi qual agendamento voce quer remarcar. Vamos escolher de novo?', {
+        phone,
+        reason: 'missing_selected_appointment',
+      })
     }
 
     if (!appointment.professionalId || !appointment.serviceId) {
       console.warn('[RescheduleDateSelection] Missing professional/service for appointment:', appointment)
-      await sendWhatsAppMessage(phone, 'Nao consegui identificar os dados desse agendamento para te sugerir novas datas.')
-      return []
+      return abortRescheduleDateSelection(phone, 'Nao consegui identificar os dados desse agendamento para te sugerir novas datas.', {
+        phone,
+        appointmentId: appointment.id,
+        professionalId: appointment.professionalId,
+        serviceId: appointment.serviceId,
+        reason: 'missing_appointment_fields',
+      })
     }
 
     try {
@@ -35,14 +48,25 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
       })
 
       if (!days.length) {
-        await sendWhatsAppMessage(phone, 'Nao achei novas datas livres com esse barbeiro nos proximos dias.')
+        return abortRescheduleDateSelection(phone, 'Nao achei novas datas livres com esse barbeiro nos proximos dias.', {
+          phone,
+          appointmentId: appointment.id,
+          professionalId: appointment.professionalId,
+          serviceId: appointment.serviceId,
+          reason: 'empty_days',
+        })
       }
 
       return days
     } catch (error) {
       console.error('[RescheduleDateSelection] Error fetching available days:', error)
-      await sendWhatsAppMessage(phone, 'Nao consegui carregar as novas datas agora. Tenta de novo em instantes?')
-      return []
+      return abortRescheduleDateSelection(phone, 'Nao consegui carregar as novas datas agora. Tenta de novo em instantes?', {
+        phone,
+        appointmentId: appointment.id,
+        professionalId: appointment.professionalId,
+        serviceId: appointment.serviceId,
+        reason: 'availability_fetch_error',
+      })
     }
   },
   ui: {
