@@ -33,14 +33,7 @@ function decodePlanBookingAction(value: string): PlanBookingActionPayload | null
   try {
     const raw = Buffer.from(String(value || ''), 'base64url').toString('utf8')
     const parsed = JSON.parse(raw)
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      !Number.isFinite(Number(parsed.planId)) ||
-      !Number.isFinite(Number(parsed.serviceId)) ||
-      !Number.isFinite(Number(parsed.professionalId)) ||
-      !String(parsed.businessPhone || '').trim()
-    ) {
+    if (!parsed || typeof parsed !== 'object' || !Number.isFinite(Number(parsed.planId)) || !Number.isFinite(Number(parsed.serviceId)) || !Number.isFinite(Number(parsed.professionalId)) || !String(parsed.businessPhone || '').trim()) {
       return null
     }
 
@@ -50,10 +43,7 @@ function decodePlanBookingAction(value: string): PlanBookingActionPayload | null
       businessPhone: String(parsed.businessPhone),
       serviceId: Number(parsed.serviceId),
       serviceName: String(parsed.serviceName || '').trim() || 'servico',
-      serviceDuration:
-        parsed.serviceDuration === null || parsed.serviceDuration === undefined
-          ? null
-          : Number(parsed.serviceDuration),
+      serviceDuration: parsed.serviceDuration === null || parsed.serviceDuration === undefined ? null : Number(parsed.serviceDuration),
       professionalId: Number(parsed.professionalId),
       professionalName: String(parsed.professionalName || '').trim() || 'profissional',
     }

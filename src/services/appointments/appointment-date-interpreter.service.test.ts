@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { AppointmentDateInterpreterService } from './appointment-date-interpreter.service'
+import { buildAppointmentDateInterpreterPrompt } from './appointment-date-interpreter.prompts'
 
 const FIXED_NOW = new Date('2026-03-12T15:00:00.000Z')
 const TIMEZONE = 'America/Sao_Paulo'
@@ -125,6 +126,28 @@ test('AppointmentDateInterpreterService interprets today messages', async () => 
   assert.equal(result.resolution.normalizedDate, '2026-03-12')
 })
 
+test('AppointmentDateInterpreterService interprets weekday messages through canonical weekday numbers', async () => {
+  const service = new AppointmentDateInterpreterService(
+    createOpenAIMock({
+      kind: 'relative_weekday',
+      weekday: 1,
+      matchedText: 'segunda',
+      locale: 'pt-BR',
+    }),
+  )
+
+  const result = await service.interpretRequestedAppointmentDate({
+    messageText: 'consegue ver segunda pra mim se tem',
+    locale: 'pt-BR',
+    timezone: TIMEZONE,
+    now: new Date('2026-03-13T15:00:00.000Z'),
+  })
+
+  assert.equal(result.interpretation.kind, 'relative_weekday')
+  assert.equal(result.interpretation.weekday, 1)
+  assert.equal(result.resolution.normalizedDate, '2026-03-16')
+})
+
 test('AppointmentDateInterpreterService returns none when there is no date', async () => {
   const service = new AppointmentDateInterpreterService(
     createOpenAIMock({
@@ -209,4 +232,38 @@ test('AppointmentDateInterpreterService sends pending clarification context to t
   assert.equal(payload.pendingClarification.originalMessage, 'quero ver os horarios dia 16')
   assert.equal(payload.pendingClarification.partialInterpretation.day, 16)
   assert.equal(payload.pendingClarification.functionName, 'getAvailableTimeSlots')
+  assert.equal(payload.todayIso, '2026-03-12')
+  assert.equal(payload.timezone, TIMEZONE)
+})
+
+test('AppointmentDateInterpreterService rejects relative weekday payloads without a canonical weekday number', async () => {
+  const service = new AppointmentDateInterpreterService(
+    createOpenAIMock({
+      kind: 'relative_weekday',
+      matchedText: 'monday',
+      locale: 'en-US',
+    }),
+  )
+
+  const result = await service.interpretRequestedAppointmentDate({
+    messageText: 'monday',
+    locale: 'en-US',
+    timezone: TIMEZONE,
+    now: FIXED_NOW,
+  })
+
+  assert.equal(result.interpretation.kind, 'needs_clarification')
+  assert.equal(result.resolution.requiresClarification, true)
+})
+
+test('AppointmentDateInterpreterService prompt stays locale-agnostic and free of Portuguese weekday lists', () => {
+  const prompt = buildAppointmentDateInterpreterPrompt()
+
+  assert.doesNotMatch(prompt, /\bsegunda\b/i)
+  assert.doesNotMatch(prompt, /\bterca\b/i)
+  assert.doesNotMatch(prompt, /\bquarta\b/i)
+  assert.doesNotMatch(prompt, /\bquinta\b/i)
+  assert.doesNotMatch(prompt, /\bsexta\b/i)
+  assert.doesNotMatch(prompt, /\bsabado\b/i)
+  assert.doesNotMatch(prompt, /\bdomingo\b/i)
 })

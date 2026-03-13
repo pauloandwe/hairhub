@@ -2,12 +2,23 @@ import { getZonedParts, resolveTimeZone } from './timezone'
 
 export const DEFAULT_APPOINTMENT_DATE_LOCALE = 'pt-BR'
 
-export const APPOINTMENT_DATE_INTERPRETATION_KINDS = ['explicit_date', 'day_month', 'day_only', 'relative_today', 'relative_tomorrow', 'none', 'invalid', 'needs_clarification'] as const
+export const APPOINTMENT_DATE_INTERPRETATION_KINDS = [
+  'explicit_date',
+  'day_month',
+  'day_only',
+  'relative_today',
+  'relative_tomorrow',
+  'relative_weekday',
+  'none',
+  'invalid',
+  'needs_clarification',
+] as const
 
 export type AppointmentDateInterpretationKind = (typeof APPOINTMENT_DATE_INTERPRETATION_KINDS)[number]
 
 export interface AppointmentDateInterpretation {
   kind: AppointmentDateInterpretationKind
+  weekday?: number | null
   day?: number | null
   month?: number | null
   year?: number | null
@@ -70,9 +81,44 @@ function addDaysToIsoDate(isoDate: string, days: number): string | null {
   return `${base.getUTCFullYear()}-${pad(base.getUTCMonth() + 1)}-${pad(base.getUTCDate())}`
 }
 
-function getTodayIsoInTimeZone(now: Date, timezone?: string | null): string {
+export function getTodayIsoInTimeZone(now: Date, timezone?: string | null): string {
   const parts = getZonedParts(now, resolveTimeZone(timezone))
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`
+}
+
+function getIsoWeekdayFromIsoDate(isoDate: string): number | null {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const candidate = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0))
+  if (Number.isNaN(candidate.getTime())) return null
+
+  const weekday = candidate.getUTCDay()
+  return weekday === 0 ? 7 : weekday
+}
+
+export function resolveNextIsoWeekday(
+  weekday: number,
+  todayIso: string,
+  inclusiveToday = true,
+): string | null {
+  if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) {
+    return null
+  }
+
+  const currentWeekday = getIsoWeekdayFromIsoDate(todayIso)
+  if (!currentWeekday) return null
+
+  let diff = weekday - currentWeekday
+  if (diff < 0) {
+    diff += 7
+  }
+
+  if (!inclusiveToday && diff === 0) {
+    diff = 7
+  }
+
+  return addDaysToIsoDate(todayIso, diff)
 }
 
 function resolveFutureDayOnly(day: number, todayIso: string): string | null {
@@ -162,6 +208,20 @@ export function normalizeAppointmentDateInterpretation(params: NormalizeAppointm
       }
     case 'relative_tomorrow': {
       const normalizedDate = addDaysToIsoDate(todayIso, 1)
+      return normalizedDate
+        ? {
+            ...base,
+            normalizedDate,
+          }
+        : {
+            ...base,
+            requiresClarification: true,
+            clarificationMessage: buildClarificationMessage(interpretation.matchedText),
+          }
+    }
+    case 'relative_weekday': {
+      const weekday = interpretation.weekday
+      const normalizedDate = typeof weekday === 'number' ? resolveNextIsoWeekday(weekday, todayIso, true) : null
       return normalizedDate
         ? {
             ...base,

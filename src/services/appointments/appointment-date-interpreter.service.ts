@@ -2,9 +2,16 @@ import OpenAI from 'openai'
 import { env } from '../../env.config'
 import type { PendingAppointmentDateClarification } from '../../env.config'
 import { OpenAITool } from '../../types/openai-types'
-import { AppointmentDateInterpretation, APPOINTMENT_DATE_INTERPRETATION_KINDS, DEFAULT_APPOINTMENT_DATE_LOCALE, normalizeAppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
+import {
+  AppointmentDateInterpretation,
+  APPOINTMENT_DATE_INTERPRETATION_KINDS,
+  DEFAULT_APPOINTMENT_DATE_LOCALE,
+  getTodayIsoInTimeZone,
+  normalizeAppointmentDateInterpretation,
+  RequestedAppointmentDateResolution,
+} from '../../utils/appointment-date-resolution'
 import { aiLogger } from '../../utils/pino'
-import { getAppointmentDateInterpreterPrompt, resolveAppointmentDateInterpreterLocale } from './appointment-date-interpreter.prompts'
+import { buildAppointmentDateInterpreterPrompt, resolveAppointmentDateInterpreterLocale } from './appointment-date-interpreter.prompts'
 
 export interface InterpretRequestedAppointmentDateParams {
   messageText?: string | null
@@ -97,6 +104,10 @@ export class AppointmentDateInterpreterService {
                 type: 'string',
                 enum: [...APPOINTMENT_DATE_INTERPRETATION_KINDS],
               },
+              weekday: {
+                type: 'integer',
+                description: 'ISO weekday number where 1=Monday and 7=Sunday.',
+              },
               day: { type: 'integer' },
               month: { type: 'integer' },
               year: { type: 'integer' },
@@ -112,18 +123,21 @@ export class AppointmentDateInterpreterService {
     ]
 
     try {
+      const todayIso = getTodayIsoInTimeZone(params.now ?? new Date(), params.timezone)
       const response = await this.openai.chat.completions.create({
         model: 'gpt-5-mini',
         messages: [
           {
             role: 'system',
-            content: getAppointmentDateInterpreterPrompt(locale),
+            content: buildAppointmentDateInterpreterPrompt(),
           },
           {
             role: 'user',
             content: JSON.stringify(
               {
                 locale,
+                timezone: params.timezone ?? null,
+                todayIso,
                 messageText: normalizeString(params.messageText),
                 currentArgs: {
                   appointmentDate: normalizeString(params.currentArgs?.appointmentDate),
@@ -182,6 +196,7 @@ export class AppointmentDateInterpreterService {
 
     const interpretation: AppointmentDateInterpretation = {
       kind: kind as AppointmentDateInterpretation['kind'],
+      weekday: normalizeInteger(payload.weekday),
       day: normalizeInteger(payload.day),
       month: normalizeInteger(payload.month),
       year: normalizeInteger(payload.year),
@@ -199,6 +214,13 @@ export class AppointmentDateInterpreterService {
     }
 
     if (interpretation.kind === 'day_only' && !interpretation.day) {
+      return null
+    }
+
+    if (
+      interpretation.kind === 'relative_weekday' &&
+      (!interpretation.weekday || interpretation.weekday < 1 || interpretation.weekday > 7)
+    ) {
       return null
     }
 

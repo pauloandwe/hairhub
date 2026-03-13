@@ -121,6 +121,57 @@ test('normalizeAppointmentDateInterpretation understands relative today and tomo
   assert.equal(tomorrow.normalizedDate, '2026-03-13')
 })
 
+test('normalizeAppointmentDateInterpretation resolves relative weekdays to the closest future occurrence', () => {
+  const result = normalizeAppointmentDateInterpretation({
+    interpretation: {
+      kind: 'relative_weekday',
+      weekday: 1,
+      matchedText: 'next monday',
+      locale: 'en-US',
+    },
+    timezone: TIMEZONE,
+    now: new Date('2026-03-13T15:00:00.000Z'),
+    source: 'test',
+  })
+
+  assert.equal(result.requiresClarification, false)
+  assert.equal(result.normalizedDate, '2026-03-16')
+})
+
+test('normalizeAppointmentDateInterpretation keeps same-day relative weekdays on the current day', () => {
+  const result = normalizeAppointmentDateInterpretation({
+    interpretation: {
+      kind: 'relative_weekday',
+      weekday: 5,
+      matchedText: 'friday',
+      locale: 'en-US',
+    },
+    timezone: TIMEZONE,
+    now: new Date('2026-03-13T15:00:00.000Z'),
+    source: 'test',
+  })
+
+  assert.equal(result.requiresClarification, false)
+  assert.equal(result.normalizedDate, '2026-03-13')
+})
+
+test('normalizeAppointmentDateInterpretation keeps current monday for monday references', () => {
+  const result = normalizeAppointmentDateInterpretation({
+    interpretation: {
+      kind: 'relative_weekday',
+      weekday: 1,
+      matchedText: 'monday',
+      locale: 'en-US',
+    },
+    timezone: TIMEZONE,
+    now: new Date('2026-03-16T15:00:00.000Z'),
+    source: 'test',
+  })
+
+  assert.equal(result.requiresClarification, false)
+  assert.equal(result.normalizedDate, '2026-03-16')
+})
+
 test('normalizeAppointmentDateInterpretation preserves explicit dates', () => {
   const result = normalizeAppointmentDateInterpretation({
     interpretation: {

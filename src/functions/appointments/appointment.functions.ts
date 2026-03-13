@@ -82,20 +82,15 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     }
 
     const requestedServiceId = updates.service?.id ? String(updates.service.id) : null
-    const requestedServiceName =
-      typeof updates.service?.name === 'string' ? updates.service.name.trim().toLowerCase() : null
+    const requestedServiceName = typeof updates.service?.name === 'string' ? updates.service.name.trim().toLowerCase() : null
     const requestedProfessionalId = updates.professional?.id ? String(updates.professional.id) : null
-    const requestedProfessionalName =
-      typeof updates.professional?.name === 'string'
-        ? updates.professional.name.trim().toLowerCase()
-        : null
+    const requestedProfessionalName = typeof updates.professional?.name === 'string' ? updates.professional.name.trim().toLowerCase() : null
 
     if (
       (requestedServiceId && requestedServiceId !== String(planBooking.serviceId)) ||
       (requestedServiceName && requestedServiceName !== planBooking.serviceName.trim().toLowerCase()) ||
-      (requestedProfessionalId && requestedProfessionalId !== String(planBooking.professionalId))
-      || (requestedProfessionalName &&
-        requestedProfessionalName !== planBooking.professionalName.trim().toLowerCase())
+      (requestedProfessionalId && requestedProfessionalId !== String(planBooking.professionalId)) ||
+      (requestedProfessionalName && requestedProfessionalName !== planBooking.professionalName.trim().toLowerCase())
     ) {
       return null
     }

@@ -1,48 +1,50 @@
 import { DEFAULT_APPOINTMENT_DATE_LOCALE } from '../../utils/appointment-date-resolution'
 
-const PT_BR_SYSTEM_PROMPT = `
-Voce interpreta apenas o significado de uma data em mensagens de agendamento.
+const APPOINTMENT_DATE_INTERPRETER_SYSTEM_PROMPT = `
+You interpret only the date meaning inside appointment-related messages.
 
-Objetivo:
-- Extrair o sentido da data mencionada pelo usuario ou pelos argumentos ja preenchidos.
-- Nao normalize para a proxima data futura.
-- Nao converta para ISO.
-- Nao invente valores.
+Goal:
+- Read the user's message and any pending clarification context.
+- Infer the intended date meaning in the user's own language.
+- Return only canonical structured fields.
+- Never translate the meaning into localized weekday names.
+- Never invent a concrete calendar date.
+- Never convert to ISO yourself.
 
-Classificacoes permitidas:
-- explicit_date: quando houver dia, mes e ano explicitamente definidos.
-- day_month: quando houver apenas dia e mes.
-- day_only: quando houver apenas dia do mes.
-- relative_today: quando significar hoje.
-- relative_tomorrow: quando significar amanha.
-- none: quando nao houver data.
-- invalid: quando a data declarada for claramente impossivel.
-- needs_clarification: quando houver ambiguidade real.
+Allowed kinds:
+- explicit_date: full date with day, month, and year.
+- day_month: day and month only.
+- day_only: day of month only.
+- relative_today: means today.
+- relative_tomorrow: means tomorrow.
+- relative_weekday: a weekday reference like next Monday or Friday.
+- none: no date was provided.
+- invalid: the provided date is clearly impossible.
+- needs_clarification: genuine ambiguity remains.
 
-Regras:
-- Use os argumentos atuais como contexto adicional, mas a mensagem do usuario continua sendo a referencia principal.
-- Se houver \`pendingClarification\`, use esse contexto para combinar a mensagem atual com a solicitacao anterior.
-- Quando a mensagem atual for apenas um complemento, como "marco", "abril", "2027" ou "16 de marco", combine com o contexto pendente e devolva a interpretacao final.
-- Quando a mensagem original trouxer apenas um dia do mes, como "dia 16", classifique como \`day_only\`. Nao trate isso como ambiguidade real.
-- Se houver uma data em formato ISO ou DD/MM/YYYY, classifique como explicit_date e extraia dia, mes e ano.
-- Se houver data em formato DD/MM, classifique como day_month.
-- Se houver apenas o dia do mes, classifique como day_only.
-- Se nao tiver certeza, use needs_clarification.
-- Retorne apenas a chamada da funcao.
+Canonical output rules:
+- For relative_weekday, return weekday as an ISO weekday number where 1=Monday and 7=Sunday.
+- For day_only, return only day.
+- For day_month, return day and month.
+- For explicit_date, return day, month, and year.
+- matchedText should contain the original date expression when possible.
+- locale should reflect the interpreted locale if known.
+
+Reasoning rules:
+- Use messageText as the primary source of truth.
+- Use currentArgs only as supporting context.
+- If pendingClarification exists, combine the current message with that previous context.
+- If the current message is only a complement, merge it with the pending context and return the final meaning.
+- If the user gives a weekday reference, do not mark it ambiguous only because it lacks a numeric date.
+- If more than one plausible date meaning remains, use needs_clarification.
+- Return only the function call.
 `.trim()
-
-export const appointmentDateInterpreterPrompts: Record<string, string> = {
-  'pt-BR': PT_BR_SYSTEM_PROMPT,
-}
 
 export function resolveAppointmentDateInterpreterLocale(locale?: string | null): string {
   const trimmed = String(locale || '').trim()
-  if (trimmed && appointmentDateInterpreterPrompts[trimmed]) {
-    return trimmed
-  }
-  return DEFAULT_APPOINTMENT_DATE_LOCALE
+  return trimmed || DEFAULT_APPOINTMENT_DATE_LOCALE
 }
 
-export function getAppointmentDateInterpreterPrompt(locale?: string | null): string {
-  return appointmentDateInterpreterPrompts[resolveAppointmentDateInterpreterLocale(locale)]
+export function buildAppointmentDateInterpreterPrompt(): string {
+  return APPOINTMENT_DATE_INTERPRETER_SYSTEM_PROMPT
 }

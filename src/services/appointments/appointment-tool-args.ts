@@ -21,6 +21,43 @@ export interface NormalizeAppointmentToolArgumentsResult {
   interpretation: AppointmentDateInterpretation | null
 }
 
+export interface NormalizeAppointmentDateInputParams {
+  messageText?: string | null
+  currentDateValue?: unknown
+  timezone?: string | null
+  locale?: string | null
+  now?: Date
+  pendingClarification?: PendingAppointmentDateClarification | null
+  interpreter?: AppointmentDateInterpreterService
+}
+
+export interface NormalizeAppointmentDateInputResult {
+  resolution: RequestedAppointmentDateResolution
+  interpretation: AppointmentDateInterpretation
+}
+
+export async function normalizeAppointmentDateInput(
+  params: NormalizeAppointmentDateInputParams,
+): Promise<NormalizeAppointmentDateInputResult> {
+  const interpreter = params.interpreter || appointmentDateInterpreterService
+  const interpreted = await interpreter.interpretRequestedAppointmentDate({
+    messageText: params.messageText,
+    locale: params.locale,
+    timezone: params.timezone,
+    now: params.now,
+    pendingClarification: params.pendingClarification,
+    currentArgs: {
+      appointmentDate: params.currentDateValue,
+      date: params.currentDateValue,
+    },
+  })
+
+  return {
+    resolution: interpreted.resolution,
+    interpretation: interpreted.interpretation,
+  }
+}
+
 export async function normalizeAppointmentToolArguments(params: NormalizeAppointmentToolArgumentsParams): Promise<NormalizeAppointmentToolArgumentsResult> {
   const { functionName, args, incomingMessage, timezone, locale, now, pendingClarification } = params
   const nextArgs = { ...args }
@@ -33,19 +70,15 @@ export async function normalizeAppointmentToolArguments(params: NormalizeAppoint
     }
   }
 
-  const interpreter = params.interpreter || appointmentDateInterpreterService
-  const interpreted = await interpreter.interpretRequestedAppointmentDate({
+  const interpreted = await normalizeAppointmentDateInput({
     messageText: incomingMessage,
-    locale,
+    currentDateValue: nextArgs.appointmentDate ?? nextArgs.date,
     timezone,
+    locale,
     now,
     pendingClarification,
-    currentArgs: {
-      appointmentDate: nextArgs.appointmentDate,
-      date: nextArgs.date,
-    },
+    interpreter: params.interpreter,
   })
-
   const resolution = interpreted.resolution
 
   if (resolution.normalizedDate) {
@@ -61,7 +94,7 @@ export async function normalizeAppointmentToolArguments(params: NormalizeAppoint
 
   return {
     args: nextArgs,
-    resolution,
+    resolution: interpreted.resolution,
     interpretation: interpreted.interpretation,
   }
 }

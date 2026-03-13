@@ -37,12 +37,12 @@ QUANDO USAR:
 
 CAMPOS DISPONÍVEIS:
 - appointmentId: ID do agendamento a remarcar
-- newDate: Nova data no formato YYYY-MM-DD
+- newDate: Nova data; expressoes naturais como "segunda" e "proxima segunda" sao aceitas e resolvidas internamente
 - newTime: Novo horário no formato HH:mm
 
 EXEMPLOS:
 - "Quer remarcar o agendamento das 14h" → changeAppointmentRescheduleField({field: 'appointmentId', value: appointmentId})
-- "Prefiro próxima segunda" → changeAppointmentRescheduleField({field: 'newDate', value: '2024-11-04'})
+- "Prefiro próxima segunda" → changeAppointmentRescheduleField({field: 'newDate', value: 'proxima segunda'})
 - "Que tal 15:30?" → changeAppointmentRescheduleField({field: 'newTime', value: '15:30'})`,
       parameters: {
         type: 'object',

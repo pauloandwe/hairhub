@@ -76,6 +76,70 @@ test('DefaultContextService injects the normalized appointment date before calli
   }
 })
 
+test('DefaultContextService resolves weekday requests without storing a clarification', async () => {
+  const { DefaultContextService } = await import('./defaultContext')
+  const { appointmentDateInterpreterService } = await import('./appointments/appointment-date-interpreter.service')
+  const { getUserContextSync, setUserContext } = await import('../env.config')
+
+  const phone = '5544999991111'
+  const instance = DefaultContextService.getInstance() as any
+  const originalInterpreter = appointmentDateInterpreterService.interpretRequestedAppointmentDate.bind(appointmentDateInterpreterService)
+  const originalGetFunctionToCall = instance.getFunctionToCall
+
+  let receivedArgs: any = null
+
+  await setUserContext(phone, {
+    activeRegistration: {},
+    clientName: 'Paulo',
+    businessTimezone: 'America/Sao_Paulo',
+    pendingAppointmentDateClarification: null,
+  } as any)
+
+  appointmentDateInterpreterService.interpretRequestedAppointmentDate = async () => ({
+    interpretation: {
+      kind: 'relative_weekday',
+      weekday: 1,
+      matchedText: 'segunda',
+      locale: 'pt-BR',
+    },
+    resolution: {
+      normalizedDate: '2026-03-16',
+      source: 'ai_interpreter',
+      matchedText: 'segunda',
+      requiresClarification: false,
+      interpretationKind: 'relative_weekday',
+      locale: 'pt-BR',
+    },
+  })
+
+  instance.getFunctionToCall = () => async (args: Record<string, unknown>) => {
+    receivedArgs = args
+    return { status: 'success' }
+  }
+
+  try {
+    const response = await instance.executeToolFunction(
+      {
+        id: 'tool-weekday',
+        type: 'function',
+        function: {
+          name: 'getAvailableTimeSlots',
+          arguments: '{}',
+        },
+      } as any,
+      phone,
+      'consegue ver segunda pra mim se tem',
+    )
+
+    assert.equal(JSON.parse(response.content).status, 'success')
+    assert.equal(receivedArgs?.date, '2026-03-16')
+    assert.equal(getUserContextSync(phone)?.pendingAppointmentDateClarification, null)
+  } finally {
+    appointmentDateInterpreterService.interpretRequestedAppointmentDate = originalInterpreter
+    instance.getFunctionToCall = originalGetFunctionToCall
+  }
+})
+
 test('DefaultContextService stores pending date clarification when the tool needs more detail', async () => {
   const { DefaultContextService } = await import('./defaultContext')
   const { appointmentDateInterpreterService } = await import('./appointments/appointment-date-interpreter.service')
