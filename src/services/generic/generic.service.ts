@@ -210,7 +210,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
       throw new Error(`Could not determine farmId for phone: ${phone}`)
     }
 
-    const apiPayload = this.transformToApiPayload(draft, { farmId: Number(farmId) })
+    const apiPayload = (this.transformToApiPayload as any)(draft, { farmId: Number(farmId), phone })
 
     const normalizedEndpoint = this.normalizeEndpoint(endpoint)
     const url = `${this.servicePrefix}${normalizedEndpoint}`
@@ -450,7 +450,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
     if (itsMissingRequiredFields.length > 0) {
       return null
     }
-    return this.transformToApiPayload(draft, { farmId })
+    return (this.transformToApiPayload as any)(draft, { farmId, phone })
   }
 
   handleServiceError = (err: unknown): string => {
@@ -471,7 +471,7 @@ export abstract class GenericService<TDraft, TCreationPayload, TRecord extends I
       throw new Error(`Could not determine farmId for phone: ${phone}`)
     }
 
-    const apiPayload = this.transformToApiPayload(draft, { farmId: Number(farmId) })
+    const apiPayload = (this.transformToApiPayload as any)(draft, { farmId: Number(farmId), phone })
     const normalizedEndpoint = this.ensureEndpointIncludesRecord(endpoint, recordId)
     const url = `${this.servicePrefix}${normalizedEndpoint}`
 

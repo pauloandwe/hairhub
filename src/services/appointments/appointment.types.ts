@@ -30,6 +30,7 @@ export interface IAppointmentCreationPayload {
   businessId: number
   serviceId: number
   professionalId?: number | null
+  clientPlanId?: number
   startDate: string
   endDate: string
   source: string

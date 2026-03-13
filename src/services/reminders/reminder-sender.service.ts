@@ -2,23 +2,25 @@ import axios from 'axios'
 import { whatsappLogger } from '../../utils/pino'
 import { env } from '../../env.config'
 import { ConversationEventsClient } from '../conversations/conversation-events.client'
-import { sendWhatsAppMessage } from '../../api/meta.api'
+import { sendWhatsAppInteractiveButtons, sendWhatsAppMessage } from '../../api/meta.api'
+import { buildPlanBookingButton, PlanBookingActionPayload, registerPendingPlanBookingInteraction } from '../../interactives/planBookingAction'
 
 export interface SendReminderPayload {
   businessPhone: string
   clientPhone: string
   message: string
-  appointmentId: number
+  appointmentId?: number
   type: string
   businessId?: string | number
   source?: 'REMINDER' | 'OUTREACH' | 'HUMAN_PANEL' | 'BOT' | 'SYSTEM'
   metadata?: Record<string, any>
+  planBookingAction?: PlanBookingActionPayload
 }
 
 export interface ReminderSendResponse {
   success: boolean
   messageId?: string
-  appointmentId: number
+  appointmentId?: number
   clientPhone: string
   type: string
   error?: string
@@ -46,34 +48,38 @@ export class ReminderSenderService {
           `Tentando enviar lembrete (${type}) - Tentativa ${attempt}/${MAX_RETRIES}`,
         )
 
-        const messageId = await this.sendMessageViaMetaAPI(clientPhone, message, businessPhone)
+        const messageId = await this.sendMessageViaMetaAPI(payload)
 
-        try {
-          await ConversationEventsClient.emitOutboundMessage({
-            clientPhone,
-            text: message,
-            source: payload.source || this.mapTypeToSource(type),
-            businessId: payload.businessId,
-            businessPhone,
-            providerMessageId: messageId,
-            providerStatus: 'SENT',
-            metadata: {
-              appointmentId,
-              reminderType: type,
-              ...(payload.metadata || {}),
-            },
-          })
-        } catch (emitError: any) {
-          whatsappLogger.warn(
-            {
-              appointmentId,
+        const emittedByInteractiveButton = type === 'PLAN_REMINDER' && Boolean(payload.planBookingAction)
+
+        if (!emittedByInteractiveButton) {
+          try {
+            await ConversationEventsClient.emitOutboundMessage({
               clientPhone,
-              type,
-              messageId,
-              error: emitError?.message,
-            },
-            'Falha ao emitir evento outbound de conversa para lembrete/outreach',
-          )
+              text: message,
+              source: payload.source || this.mapTypeToSource(type),
+              businessId: payload.businessId,
+              businessPhone,
+              providerMessageId: messageId,
+              providerStatus: 'SENT',
+              metadata: {
+                appointmentId,
+                reminderType: type,
+                ...(payload.metadata || {}),
+              },
+            })
+          } catch (emitError: any) {
+            whatsappLogger.warn(
+              {
+                appointmentId,
+                clientPhone,
+                type,
+                messageId,
+                error: emitError?.message,
+              },
+              'Falha ao emitir evento outbound de conversa para lembrete/outreach',
+            )
+          }
         }
 
         whatsappLogger.info(
@@ -146,9 +152,32 @@ export class ReminderSenderService {
     return 'BOT'
   }
 
-  private static async sendMessageViaMetaAPI(to: string, text: string, businessPhone: string): Promise<string> {
+  private static async sendMessageViaMetaAPI(payload: SendReminderPayload): Promise<string> {
+    const { clientPhone, message, businessPhone, type, businessId, source, metadata, planBookingAction } = payload
+
+    if (type === 'PLAN_REMINDER' && planBookingAction) {
+      const button = buildPlanBookingButton(planBookingAction)
+      registerPendingPlanBookingInteraction(clientPhone, planBookingAction)
+
+      return sendWhatsAppInteractiveButtons({
+        to: clientPhone,
+        body: message,
+        buttons: [button],
+        options: {
+          businessPhone,
+          businessId,
+          source: source || this.mapTypeToSource(type),
+          metadata: {
+            reminderType: type,
+            planBookingAction,
+            ...(metadata || {}),
+          },
+        },
+      })
+    }
+
     try {
-      return await sendWhatsAppMessage(to, text, {
+      return await sendWhatsAppMessage(clientPhone, message, {
         businessPhone,
         source: 'REMINDER',
         suppressConversationEvent: true,

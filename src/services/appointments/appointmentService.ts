@@ -529,6 +529,7 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
     }
 
     this.enrichPayloadWithClientInfo(finalPayload, draft, context)
+    this.enrichPayloadWithPlanInfo(finalPayload, context)
 
     return finalPayload
   }
@@ -558,6 +559,17 @@ export class AppointmentService extends GenericService<IAppointmentValidationDra
 
     if (process.env.NODE_ENV === 'development') {
       console.log('[AppointmentService] Payload para API de Agendamentos', payload)
+    }
+  }
+
+  private enrichPayloadWithPlanInfo(payload: IAppointmentCreationPayload, context: AppointmentPayloadContext): void {
+    if (!context.phone) {
+      return
+    }
+
+    const clientPlanId = Number(getUserContextSync(context.phone)?.activeRegistration?.planBooking?.clientPlanId)
+    if (Number.isFinite(clientPlanId) && clientPlanId > 0) {
+      payload.clientPlanId = clientPlanId
     }
   }
 

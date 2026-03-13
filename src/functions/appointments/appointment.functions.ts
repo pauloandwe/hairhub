@@ -13,6 +13,7 @@ import { appointmentCancellationFunctions } from './cancellation/appointment-can
 import { AppointmentCreateConflictNextAction, AppointmentRecord, CreateConflictRecoveryResult, IAppointmentCreationPayload, IAppointmentValidationDraft, PendingAppointmentOffer, StartAppointmentArgs, UpsertAppointmentArgs } from '../../services/appointments/appointment.types'
 import { DraftPreparationContext, FlowResponse, GenericCrudFlow } from '../generic/generic.flow'
 import { AppointmentEditField, AppointmentMissingField, appointmentFieldEditors, missingFieldHandlers } from './appointment.selects'
+import { getActivePlanBooking } from '../../interactives/planBookingAction'
 import { createHumanFlowMessages } from '../../utils/conversation-copy'
 import { getUserContextSync, setUserContext } from '../../env.config'
 import { DateFormatter } from '../../utils/date'
@@ -62,6 +63,71 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     return digits.length ? digits : null
   }
 
+  private getPlanBookingLockedMessage(): string {
+    return 'Esse botao agenda o plano com o servico e o profissional definidos no plano. Se quiser algo diferente, me chame para fazer um agendamento normal.'
+  }
+
+  private isPlanBookingLockedField(field: AppointmentEditField | keyof UpsertAppointmentArgs): boolean {
+    return field === 'service' || field === 'professional'
+  }
+
+  private async sendPlanBookingLockedMessage(phone: string): Promise<void> {
+    await sendWhatsAppMessage(phone, this.getPlanBookingLockedMessage())
+  }
+
+  private normalizePlanBookingStartArgs(phone: string, updates: UpsertAppointmentArgs): UpsertAppointmentArgs | null {
+    const planBooking = getActivePlanBooking(phone)
+    if (!planBooking) {
+      return updates
+    }
+
+    const requestedServiceId = updates.service?.id ? String(updates.service.id) : null
+    const requestedServiceName =
+      typeof updates.service?.name === 'string' ? updates.service.name.trim().toLowerCase() : null
+    const requestedProfessionalId = updates.professional?.id ? String(updates.professional.id) : null
+    const requestedProfessionalName =
+      typeof updates.professional?.name === 'string'
+        ? updates.professional.name.trim().toLowerCase()
+        : null
+
+    if (
+      (requestedServiceId && requestedServiceId !== String(planBooking.serviceId)) ||
+      (requestedServiceName && requestedServiceName !== planBooking.serviceName.trim().toLowerCase()) ||
+      (requestedProfessionalId && requestedProfessionalId !== String(planBooking.professionalId))
+      || (requestedProfessionalName &&
+        requestedProfessionalName !== planBooking.professionalName.trim().toLowerCase())
+    ) {
+      return null
+    }
+
+    return {
+      ...updates,
+      service: {
+        id: String(planBooking.serviceId),
+        name: planBooking.serviceName,
+        duration: planBooking.serviceDuration ?? undefined,
+      },
+      professional: {
+        id: String(planBooking.professionalId),
+        name: planBooking.professionalName,
+      },
+    }
+  }
+
+  private async clearPlanBookingState(phone: string): Promise<void> {
+    const currentRegistration = getUserContextSync(phone)?.activeRegistration ?? {}
+    if (!currentRegistration.planBooking) {
+      return
+    }
+
+    await setUserContext(phone, {
+      activeRegistration: {
+        ...currentRegistration,
+        planBooking: undefined,
+      },
+    })
+  }
+
   startAppointmentRegistration = async (args: { phone: string } & StartAppointmentArgs) => {
     const { phone, date, time, intentMode = 'book', ...rawUpdates } = args
     const updates = { ...rawUpdates } as unknown as UpsertAppointmentArgs
@@ -94,15 +160,24 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       updates.clientName = runtimeContext.clientName
     }
 
+    const normalizedPlanBookingUpdates = this.normalizePlanBookingStartArgs(phone, updates)
+    if (!normalizedPlanBookingUpdates) {
+      const message = this.getPlanBookingLockedMessage()
+      await this.sendPlanBookingLockedMessage(phone)
+      return {
+        error: message,
+      }
+    }
+
     if (intentMode === 'check_then_offer') {
-      return this.handleCheckThenOffer(phone, updates)
+      return this.handleCheckThenOffer(phone, normalizedPlanBookingUpdates)
     }
 
     await appointmentIntentService.clearTransientState(phone)
 
     return super.startRegistration({
       phone,
-      ...updates,
+      ...normalizedPlanBookingUpdates,
     })
   }
 
@@ -112,6 +187,11 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
     if (!normalizedField) {
       await this.sendInvalidFieldMessage({ phone, field: String(args.field) })
       return this.buildResponse(this.options.messages.invalidField, false)
+    }
+
+    if (getActivePlanBooking(phone) && this.isPlanBookingLockedField(normalizedField)) {
+      await this.sendPlanBookingLockedMessage(phone)
+      return this.buildResponse(this.getPlanBookingLockedMessage(), false)
     }
 
     const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
@@ -147,6 +227,11 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
       return this.buildChangeResponse(this.options.messages.invalidField, false)
     }
 
+    if (getActivePlanBooking(args.phone) && this.isPlanBookingLockedField(normalizedField)) {
+      await this.sendPlanBookingLockedMessage(args.phone)
+      return this.buildChangeResponse(this.getPlanBookingLockedMessage(), false)
+    }
+
     const normalizedValue = normalizedField === 'clientPhone' && args.value !== undefined ? this.sanitizePhone(args.value) : args.value
     return super.editRecordField({
       phone: args.phone,
@@ -162,6 +247,11 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
 
   applyAppointmentRecordUpdates = async (args: { phone: string; updates: Partial<UpsertAppointmentArgs> | Record<string, any>; successMessage?: string; logContext?: string }) => {
     const sanitizedUpdates = this.filterEditableUpdates(args.updates)
+    if (getActivePlanBooking(args.phone) && (Object.prototype.hasOwnProperty.call(sanitizedUpdates, 'service') || Object.prototype.hasOwnProperty.call(sanitizedUpdates, 'professional'))) {
+      await this.sendPlanBookingLockedMessage(args.phone)
+      return this.buildResponse(this.getPlanBookingLockedMessage(), false)
+    }
+
     if (Object.prototype.hasOwnProperty.call(sanitizedUpdates, 'clientPhone')) {
       sanitizedUpdates.clientPhone = this.sanitizePhone(sanitizedUpdates.clientPhone ?? null)
     }
@@ -358,6 +448,7 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
 
   protected override async afterCreateSuccess(phone: string, draft: IAppointmentValidationDraft, _summary: string): Promise<void> {
     if (!draft.recordId) {
+      await this.clearPlanBookingState(phone)
       return
     }
 
@@ -371,7 +462,13 @@ class AppointmentFlowService extends GenericCrudFlow<IAppointmentValidationDraft
         recordId: draft.recordId,
         error,
       })
+    } finally {
+      await this.clearPlanBookingState(phone)
     }
+  }
+
+  protected override async onCancel(phone: string): Promise<void> {
+    await this.clearPlanBookingState(phone)
   }
 
   protected override async afterEnterEditMode(phone: string, recordId: string, draft: IAppointmentValidationDraft | null): Promise<void> {

@@ -19,6 +19,7 @@ import { appointmentIntentService } from '../appointments/appointment-intent.ser
 import { appointmentFunctions } from '../../functions/appointments/appointment.functions'
 import { sendAppointmentAvailabilityResolutionList } from '../../interactives/appointments/availabilityResolutionSelection'
 import { registerPanelClientQuickActionHandler } from '../../interactives/clientQuickActions'
+import { registerPlanBookingActionHandler } from '../../interactives/planBookingAction'
 import { aiLogger } from '../../utils/pino'
 import { isIsoTimestampExpired } from '../appointments/appointment-date-clarification'
 
@@ -47,6 +48,7 @@ export class ContextService {
 
   private constructor() {
     registerPanelClientQuickActionHandler()
+    registerPlanBookingActionHandler()
   }
 
   static getInstance(): ContextService {
