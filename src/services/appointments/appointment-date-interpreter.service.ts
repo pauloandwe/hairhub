@@ -2,14 +2,7 @@ import OpenAI from 'openai'
 import { env } from '../../env.config'
 import type { PendingAppointmentDateClarification } from '../../env.config'
 import { OpenAITool } from '../../types/openai-types'
-import {
-  AppointmentDateInterpretation,
-  APPOINTMENT_DATE_INTERPRETATION_KINDS,
-  DEFAULT_APPOINTMENT_DATE_LOCALE,
-  getTodayIsoInTimeZone,
-  normalizeAppointmentDateInterpretation,
-  RequestedAppointmentDateResolution,
-} from '../../utils/appointment-date-resolution'
+import { AppointmentDateInterpretation, APPOINTMENT_DATE_INTERPRETATION_KINDS, DEFAULT_APPOINTMENT_DATE_LOCALE, getTodayIsoInTimeZone, normalizeAppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
 import { aiLogger } from '../../utils/pino'
 import { buildAppointmentDateInterpreterPrompt, resolveAppointmentDateInterpreterLocale } from './appointment-date-interpreter.prompts'
 
@@ -217,10 +210,7 @@ export class AppointmentDateInterpreterService {
       return null
     }
 
-    if (
-      interpretation.kind === 'relative_weekday' &&
-      (!interpretation.weekday || interpretation.weekday < 1 || interpretation.weekday > 7)
-    ) {
+    if (interpretation.kind === 'relative_weekday' && (!interpretation.weekday || interpretation.weekday < 1 || interpretation.weekday > 7)) {
       return null
     }
 

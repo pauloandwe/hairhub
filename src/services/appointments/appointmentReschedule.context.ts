@@ -61,10 +61,7 @@ export class AppointmentRescheduleContextService extends GenericContextService<R
     return this.contextTools
   }
 
-  protected override executeToolFunction = async (
-    toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
-    phone: string,
-  ) => {
+  protected override executeToolFunction = async (toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall, phone: string) => {
     try {
       if (toolCall.type !== 'function') {
         return {
@@ -88,12 +85,7 @@ export class AppointmentRescheduleContextService extends GenericContextService<R
         }
       }
 
-      if (
-        (functionName === 'changeAppointmentRescheduleField' || functionName === 'editAppointmentRescheduleField') &&
-        typeof rawArgs.field === 'string' &&
-        rawArgs.field === 'newDate' &&
-        rawArgs.value !== undefined
-      ) {
+      if ((functionName === 'changeAppointmentRescheduleField' || functionName === 'editAppointmentRescheduleField') && typeof rawArgs.field === 'string' && rawArgs.field === 'newDate' && rawArgs.value !== undefined) {
         const runtimeContext = getUserContextSync(phone)
         const normalized = await normalizeAppointmentDateInput({
           messageText: typeof rawArgs.value === 'string' ? rawArgs.value : String(rawArgs.value),

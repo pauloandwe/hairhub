@@ -2,17 +2,7 @@ import { getZonedParts, resolveTimeZone } from './timezone'
 
 export const DEFAULT_APPOINTMENT_DATE_LOCALE = 'pt-BR'
 
-export const APPOINTMENT_DATE_INTERPRETATION_KINDS = [
-  'explicit_date',
-  'day_month',
-  'day_only',
-  'relative_today',
-  'relative_tomorrow',
-  'relative_weekday',
-  'none',
-  'invalid',
-  'needs_clarification',
-] as const
+export const APPOINTMENT_DATE_INTERPRETATION_KINDS = ['explicit_date', 'day_month', 'day_only', 'relative_today', 'relative_tomorrow', 'relative_weekday', 'none', 'invalid', 'needs_clarification'] as const
 
 export type AppointmentDateInterpretationKind = (typeof APPOINTMENT_DATE_INTERPRETATION_KINDS)[number]
 
@@ -97,11 +87,7 @@ function getIsoWeekdayFromIsoDate(isoDate: string): number | null {
   return weekday === 0 ? 7 : weekday
 }
 
-export function resolveNextIsoWeekday(
-  weekday: number,
-  todayIso: string,
-  inclusiveToday = true,
-): string | null {
+export function resolveNextIsoWeekday(weekday: number, todayIso: string, inclusiveToday = true): string | null {
   if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) {
     return null
   }

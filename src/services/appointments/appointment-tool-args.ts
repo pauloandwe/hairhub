@@ -36,9 +36,7 @@ export interface NormalizeAppointmentDateInputResult {
   interpretation: AppointmentDateInterpretation
 }
 
-export async function normalizeAppointmentDateInput(
-  params: NormalizeAppointmentDateInputParams,
-): Promise<NormalizeAppointmentDateInputResult> {
+export async function normalizeAppointmentDateInput(params: NormalizeAppointmentDateInputParams): Promise<NormalizeAppointmentDateInputResult> {
   const interpreter = params.interpreter || appointmentDateInterpreterService
   const interpreted = await interpreter.interpretRequestedAppointmentDate({
     messageText: params.messageText,
