@@ -241,10 +241,6 @@ export function createSelectionFlow<T extends { id: string; name?: string; descr
       })
     } catch (error) {
       if (error instanceof SelectionFlowAbortError) {
-        console.info(`[SelectionFlow] Lista abortada em ${config.namespace} após resposta já tratada.`, {
-          userId,
-          context: error.context,
-        })
         return
       }
 

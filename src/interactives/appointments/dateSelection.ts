@@ -81,12 +81,7 @@ const dateSelectionFlow = createSelectionFlow<SelectionItem>({
 
       return days
     } catch (error) {
-      console.error('[dateSelectionFlow] Erro ao buscar dias disponíveis:', {
-        phone,
-        professionalId,
-        serviceId,
-        error,
-      })
+      console.error('[dateSelectionFlow] Erro ao buscar dias disponíveis:', error)
       return abortDateSelection(phone, 'Nao consegui carregar as datas agora. Tenta de novo em instantes?', {
         phone,
         professionalId,

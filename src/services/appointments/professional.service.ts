@@ -3,7 +3,6 @@ import { getBusinessIdForPhone, getBusinessPhoneForPhone, getUserContext } from 
 import api from '../../config/api.config'
 import { env } from '../../env.config'
 import { unwrapApiResponse } from '../../utils/http'
-import { systemLogger } from '../../utils/pino'
 
 export const PUBLIC_SLOT_STEP_MINUTES = 5
 export const PUBLIC_SLOT_DISPLAY_INTERVAL_MINUTES = 30
@@ -411,7 +410,7 @@ export class ProfessionalService {
     }
   }
 
-  private async resolveBusinessContext(phone: string, operation: string): Promise<{ businessId: string; businessPhone: string; hydratedFromStore: boolean }> {
+  private async resolveBusinessContext(phone: string, _operation: string): Promise<{ businessId: string; businessPhone: string; hydratedFromStore: boolean }> {
     const inMemoryBusinessId = this.normalizeString(getBusinessIdForPhone(phone)) ?? ''
     const inMemoryBusinessPhone = this.normalizeString(getBusinessPhoneForPhone(phone)) ?? ''
 
@@ -427,30 +426,6 @@ export class ProfessionalService {
     const hydratedBusinessId = this.normalizeString(runtimeContext?.businessId) ?? inMemoryBusinessId
     const hydratedBusinessPhone = this.normalizeString(runtimeContext?.businessPhone) ?? inMemoryBusinessPhone
 
-    systemLogger.info(
-      {
-        context: 'ProfessionalService',
-        operation,
-        phone,
-        businessId: hydratedBusinessId || null,
-        businessPhone: hydratedBusinessPhone || null,
-        hydratedFromStore: true,
-      },
-      '[ProfessionalService] Rehydrated business context before availability request.',
-    )
-
-    if (!hydratedBusinessPhone) {
-      systemLogger.warn(
-        {
-          context: 'ProfessionalService',
-          operation,
-          phone,
-          businessId: hydratedBusinessId || null,
-        },
-        '[ProfessionalService] businessPhone is missing before availability request.',
-      )
-    }
-
     return {
       businessId: hydratedBusinessId,
       businessPhone: hydratedBusinessPhone,
@@ -458,40 +433,15 @@ export class ProfessionalService {
     }
   }
 
-  private async performGetRequest(url: string, params: Record<string, any>, metadata: Record<string, unknown>): Promise<any> {
+  private async performGetRequest(url: string, params: Record<string, any>, _metadata: Record<string, unknown>): Promise<any> {
     let attempt = 0
 
     while (true) {
       try {
         attempt += 1
-        systemLogger.info(
-          {
-            context: 'ProfessionalService',
-            attempt,
-            requestUrl: url,
-            requestParams: params,
-            ...metadata,
-          },
-          '[ProfessionalService] Executing appointments availability request.',
-        )
-
         return await api.get(url, { params })
       } catch (error) {
-        const diagnostics = this.extractRequestDiagnostics(error)
-        const shouldRetry = attempt < 2 && diagnostics.retryable
-
-        systemLogger.error(
-          {
-            context: 'ProfessionalService',
-            attempt,
-            shouldRetry,
-            requestUrl: url,
-            requestParams: params,
-            ...metadata,
-            ...diagnostics,
-          },
-          shouldRetry ? '[ProfessionalService] Availability request failed; retrying once.' : '[ProfessionalService] Availability request failed.',
-        )
+        const shouldRetry = attempt < 2 && this.isRetryableTransportError(error)
 
         if (!shouldRetry) {
           throw error
@@ -500,37 +450,12 @@ export class ProfessionalService {
     }
   }
 
-  private extractRequestDiagnostics(error: unknown): {
-    retryable: boolean
-    statusCode?: number
-    userMessage?: string
-    errorMessage?: string
-    errorCode?: string
-    responseDataPreview?: string
-  } {
+  private isRetryableTransportError(error: unknown): boolean {
     const errorObject = error as Record<string, any> | undefined
     const raw = errorObject?.raw as Record<string, any> | undefined
-    const responseData = raw?.response?.data ?? errorObject?.response?.data
     const errorCode = this.normalizeString(raw?.code ?? errorObject?.code) ?? undefined
 
-    return {
-      retryable: !raw?.response && !errorObject?.response && Boolean(errorCode && SAFE_RETRYABLE_REQUEST_CODES.has(errorCode)),
-      statusCode: raw?.response?.status ?? errorObject?.statusCode ?? errorObject?.response?.status,
-      userMessage: this.normalizeString(errorObject?.userMessage) ?? this.normalizeString(errorObject?.message) ?? undefined,
-      errorMessage: this.normalizeString(errorObject?.message) ?? undefined,
-      errorCode,
-      responseDataPreview: responseData === undefined ? undefined : this.previewPayload(responseData),
-    }
-  }
-
-  private previewPayload(value: unknown, maxLength = 300): string {
-    try {
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value)
-
-      return serialized.length > maxLength ? `${serialized.slice(0, maxLength)}...` : serialized
-    } catch {
-      return '[unserializable-payload]'
-    }
+    return !raw?.response && !errorObject?.response && Boolean(errorCode && SAFE_RETRYABLE_REQUEST_CODES.has(errorCode))
   }
 
   private extractTimeList(slotsSource: any): string[] {
