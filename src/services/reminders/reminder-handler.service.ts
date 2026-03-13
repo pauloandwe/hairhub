@@ -44,7 +44,7 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
   try {
     const payload: SendReminderPayload = req.body
 
-    if (!payload.clientPhone || !payload.message || !payload.type) {
+    if (!payload.businessPhone || !payload.clientPhone || !payload.message || !payload.type) {
       whatsappLogger.warn(
         {
           payload,
@@ -53,7 +53,7 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
       )
       return res.status(400).json({
         error: 'Invalid payload',
-        message: 'clientPhone, message e type são obrigatórios',
+        message: 'businessPhone, clientPhone, message e type são obrigatórios',
       })
     }
 
@@ -66,7 +66,7 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
       'Recebido pedido para enviar lembrete',
     )
 
-    const shouldSend = await ReminderPreferencesService.shouldSendReminder(payload.clientPhone)
+    const shouldSend = await ReminderPreferencesService.shouldSendReminder(payload.businessPhone, payload.clientPhone)
 
     if (!shouldSend) {
       whatsappLogger.info(
@@ -113,20 +113,20 @@ router.post('/api/reminders/send', async (req: Request, res: Response) => {
 
 router.post('/api/reminders/opt-out', async (req: Request, res: Response) => {
   try {
-    const { clientPhone } = req.body
+    const { businessPhone, clientPhone } = req.body
 
-    if (!clientPhone) {
+    if (!businessPhone || !clientPhone) {
       return res.status(400).json({
         error: 'Invalid payload',
-        message: 'clientPhone é obrigatório',
+        message: 'businessPhone e clientPhone são obrigatórios',
       })
     }
 
-    await ReminderPreferencesService.optOut(clientPhone)
+    await ReminderPreferencesService.optOut(businessPhone, clientPhone)
 
     res.status(200).json({
       success: true,
-      message: `Cliente ${clientPhone} optou por não receber lembretes`,
+      message: `Cliente ${clientPhone} optou por não receber lembretes do business ${businessPhone}`,
     })
   } catch (error: any) {
     whatsappLogger.error(
@@ -145,20 +145,20 @@ router.post('/api/reminders/opt-out', async (req: Request, res: Response) => {
 
 router.post('/api/reminders/opt-in', async (req: Request, res: Response) => {
   try {
-    const { clientPhone } = req.body
+    const { businessPhone, clientPhone } = req.body
 
-    if (!clientPhone) {
+    if (!businessPhone || !clientPhone) {
       return res.status(400).json({
         error: 'Invalid payload',
-        message: 'clientPhone é obrigatório',
+        message: 'businessPhone e clientPhone são obrigatórios',
       })
     }
 
-    await ReminderPreferencesService.optIn(clientPhone)
+    await ReminderPreferencesService.optIn(businessPhone, clientPhone)
 
     res.status(200).json({
       success: true,
-      message: `Cliente ${clientPhone} voltou a receber lembretes`,
+      message: `Cliente ${clientPhone} voltou a receber lembretes do business ${businessPhone}`,
     })
   } catch (error: any) {
     whatsappLogger.error(

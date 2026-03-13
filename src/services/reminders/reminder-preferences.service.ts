@@ -3,6 +3,7 @@ import { whatsappLogger } from '../../utils/pino'
 import { env } from '../../env.config'
 
 export interface ClientPreference {
+  businessPhone: string
   clientPhone: string
   remindersEnabled: boolean
   optOutDate?: Date
@@ -14,13 +15,14 @@ export class ReminderPreferencesService {
   private static preferencesCache: Map<string, ClientPreference> = new Map()
   private static readonly CACHE_TTL = 1000 * 60 * 60
 
-  static async shouldSendReminder(clientPhone: string): Promise<boolean> {
+  static async shouldSendReminder(businessPhone: string, clientPhone: string): Promise<boolean> {
     try {
-      const preferences = await this.getClientPreferences(clientPhone)
+      const preferences = await this.getClientPreferences(businessPhone, clientPhone)
       return preferences.remindersEnabled !== false
     } catch (error) {
       whatsappLogger.warn(
         {
+          businessPhone,
           clientPhone,
           error: (error as any)?.message,
         },
@@ -31,30 +33,35 @@ export class ReminderPreferencesService {
     }
   }
 
-  private static async getClientPreferences(clientPhone: string): Promise<ClientPreference> {
-    const cached = this.preferencesCache.get(clientPhone)
+  private static async getClientPreferences(businessPhone: string, clientPhone: string): Promise<ClientPreference> {
+    const cacheKey = this.buildCacheKey(businessPhone, clientPhone)
+    const cached = this.preferencesCache.get(cacheKey)
     if (cached) {
       return cached
     }
 
     try {
-      const response = await axios.get(`${BACKEND_URL}/client-preferences/phone/${clientPhone}`, {
+      const response = await axios.get(`${BACKEND_URL}/client-preferences/business/${encodeURIComponent(businessPhone)}/phone/${encodeURIComponent(clientPhone)}`, {
+        headers: this.buildHeaders(),
         timeout: 5000,
       })
 
       const preferences = {
+        businessPhone,
         clientPhone,
         remindersEnabled: response.data?.remindersEnabled !== false,
         optOutDate: response.data?.optOutDate,
       }
 
-      this.preferencesCache.set(clientPhone, preferences)
-      setTimeout(() => this.preferencesCache.delete(clientPhone), this.CACHE_TTL)
+      this.preferencesCache.set(cacheKey, preferences)
+      const cacheExpirationTimer = setTimeout(() => this.preferencesCache.delete(cacheKey), this.CACHE_TTL)
+      cacheExpirationTimer.unref?.()
 
       return preferences
     } catch (error: any) {
       whatsappLogger.warn(
         {
+          businessPhone,
           clientPhone,
           statusCode: error?.response?.status,
           error: error?.message,
@@ -65,19 +72,22 @@ export class ReminderPreferencesService {
     }
   }
 
-  static async optOut(clientPhone: string): Promise<void> {
+  static async optOut(businessPhone: string, clientPhone: string): Promise<void> {
     try {
       await axios.put(
         `${BACKEND_URL}/client-preferences/opt-out`,
         {
+          businessPhone,
           clientPhone,
         },
         {
+          headers: this.buildHeaders(),
           timeout: 5000,
         },
       )
 
-      this.preferencesCache.set(clientPhone, {
+      this.preferencesCache.set(this.buildCacheKey(businessPhone, clientPhone), {
+        businessPhone,
         clientPhone,
         remindersEnabled: false,
         optOutDate: new Date(),
@@ -85,6 +95,7 @@ export class ReminderPreferencesService {
 
       whatsappLogger.info(
         {
+          businessPhone,
           clientPhone,
         },
         'Cliente optou por sair dos lembretes',
@@ -92,6 +103,7 @@ export class ReminderPreferencesService {
     } catch (error: any) {
       whatsappLogger.error(
         {
+          businessPhone,
           clientPhone,
           error: error?.message,
         },
@@ -101,25 +113,29 @@ export class ReminderPreferencesService {
     }
   }
 
-  static async optIn(clientPhone: string): Promise<void> {
+  static async optIn(businessPhone: string, clientPhone: string): Promise<void> {
     try {
       await axios.put(
         `${BACKEND_URL}/client-preferences/opt-in`,
         {
+          businessPhone,
           clientPhone,
         },
         {
+          headers: this.buildHeaders(),
           timeout: 5000,
         },
       )
 
-      this.preferencesCache.set(clientPhone, {
+      this.preferencesCache.set(this.buildCacheKey(businessPhone, clientPhone), {
+        businessPhone,
         clientPhone,
         remindersEnabled: true,
       })
 
       whatsappLogger.info(
         {
+          businessPhone,
           clientPhone,
         },
         'Cliente voltou a receber lembretes',
@@ -127,6 +143,7 @@ export class ReminderPreferencesService {
     } catch (error: any) {
       whatsappLogger.error(
         {
+          businessPhone,
           clientPhone,
           error: error?.message,
         },
@@ -139,5 +156,22 @@ export class ReminderPreferencesService {
   static clearCache(): void {
     this.preferencesCache.clear()
     whatsappLogger.info('Cache de preferências de lembretes limpo')
+  }
+
+  private static buildCacheKey(businessPhone: string, clientPhone: string): string {
+    return `${businessPhone}::${clientPhone}`
+  }
+
+  private static buildHeaders(): Record<string, string> {
+    const token = String(env.WHATSAPP_WEBHOOK_SECRET || '').trim()
+    if (!token) {
+      return {}
+    }
+
+    const authHeader = `Bearer ${token}`
+    return {
+      Authorization: authHeader,
+      'X-Reminder-Token': authHeader,
+    }
   }
 }
