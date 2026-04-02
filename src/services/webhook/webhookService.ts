@@ -5,6 +5,8 @@ import { markMessageAsRead } from '../../api/meta.api'
 import { ConversationEventsClient } from '../conversations/conversation-events.client'
 import { ConversationRuntimeClient } from '../conversations/conversation-runtime.client'
 import { setUserContext } from '../../env.config'
+import { createRequestLatencyTracker } from '../../utils/request-latency'
+import { whatsappLogger } from '../../utils/pino'
 
 export class WebhookService {
   private static instance: WebhookService
@@ -39,42 +41,56 @@ export class WebhookService {
     const statusEvents = Array.isArray(changeValue?.statuses) ? changeValue.statuses : []
     const businessPhone = changeValue?.metadata?.display_phone_number
     const phoneNumberId = changeValue?.metadata?.phone_number_id
+    const requestId = String(messageData?.id || `status-${Date.now()}`)
+    const trace = createRequestLatencyTracker(whatsappLogger, {
+      requestId,
+      clientPhone: messageData?.from ? String(messageData.from) : undefined,
+      businessPhone: businessPhone || undefined,
+    })
 
     for (const statusEvent of statusEvents) {
-      try {
+      trace.runDetached('emit_status_event', async () => {
         await ConversationEventsClient.emitStatusFromWebhook({
           statusData: statusEvent,
           businessPhone,
           rawPayload: statusEvent,
         })
-      } catch (statusError) {
-        console.error('[WebhookService] Erro ao persistir status de mensagem:', statusError)
-      }
+      })
     }
 
     if (!messageData?.id || !messageData?.from) return
 
     try {
-      await setUserContext(String(messageData.from), {
-        businessPhone: businessPhone || undefined,
-        phoneNumberId: phoneNumberId || undefined,
+      const userId = String(messageData.from)
+
+      await trace.run('persist_minimal_context', async () => {
+        await setUserContext(userId, {
+          businessPhone: businessPhone || undefined,
+          phoneNumberId: phoneNumberId || undefined,
+        })
       })
 
-      await ConversationEventsClient.emitInboundFromWebhook({
-        messageData,
-        businessPhone,
-        rawPayload: messageData,
+      trace.runDetached('emit_inbound_event', async () => {
+        await ConversationEventsClient.emitInboundFromWebhook({
+          messageData,
+          businessPhone,
+          rawPayload: messageData,
+        })
       })
 
-      const aiMode = await ConversationRuntimeClient.getAiMode({
-        clientPhone: String(messageData.from),
-        businessPhone,
-      })
+      const aiMode = await trace.run('get_ai_mode', async () =>
+        ConversationRuntimeClient.getAiMode({
+          clientPhone: userId,
+          businessPhone,
+        }),
+      )
 
-      await markMessageAsRead(messageData.id, {
-        businessPhone,
-        phoneNumberId,
-        contextPhone: String(messageData.from),
+      trace.runDetached('mark_message_as_read', async () => {
+        await markMessageAsRead(messageData.id, {
+          businessPhone,
+          phoneNumberId,
+          contextPhone: userId,
+        })
       })
 
       if (aiMode.shouldBlockBotReply) {
@@ -83,12 +99,20 @@ export class WebhookService {
           businessPhone,
           conversationId: aiMode.conversationId,
         })
+        trace.finish({
+          result: 'blocked_manual_mode',
+          conversationId: aiMode.conversationId,
+        })
         return
       }
 
-      await this.contextService.handleIncomingMessage(messageData, businessPhone, phoneNumberId)
+      await trace.run('handle_incoming_message', async () => {
+        await this.contextService.handleIncomingMessage(messageData, businessPhone, phoneNumberId)
+      })
+      trace.finish({ result: 'processed' })
     } catch (error) {
       console.error('[WebhookService] Erro inesperado ao processar webhook:', error)
+      trace.finish({ result: 'error' })
       try {
         const userId = messageData?.from
         if (userId) {

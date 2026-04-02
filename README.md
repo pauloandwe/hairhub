@@ -48,6 +48,11 @@ Crie um arquivo `.env` na raiz do projeto:
 ```env
 # OpenAI
 OPENAI_API_KEY=sk-...
+OPENAI_AGENT_ROUTER_MODEL=gpt-4.1-mini
+OPENAI_AGENT_FLOW_MODEL=gpt-4.1-mini
+OPENAI_AGENT_RESPONSE_MODEL=gpt-4.1-nano
+OPENAI_NLG_MODEL=gpt-4.1-mini
+OPENAI_INVOICE_OCR_MODEL=gpt-4o
 
 # WhatsApp Business (Meta)
 META_VERIFY_TOKEN=seu_token_verify

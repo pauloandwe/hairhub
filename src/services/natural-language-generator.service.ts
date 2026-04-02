@@ -3,6 +3,7 @@ import { env } from 'process'
 import { buildNaturalLanguagePrompt } from '../utils/systemPrompts'
 import { getUserNameForPhone, getBusinessNameForPhone, getClientPersonalizationContextForPhone } from '../env.config'
 import { aiLogger } from '../utils/pino'
+import { openAIModelConfig } from '../config/openai-model.config'
 
 export interface GenerateNaturalTextOptions {
   context: string
@@ -78,7 +79,7 @@ export class NaturalLanguageGeneratorService {
       logger.info('Gerando texto em linguagem natural')
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: openAIModelConfig.OPENAI_NLG_MODEL,
         messages: [
           {
             role: 'system',

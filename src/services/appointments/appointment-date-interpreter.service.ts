@@ -5,6 +5,7 @@ import { OpenAITool } from '../../types/openai-types'
 import { AppointmentDateInterpretation, APPOINTMENT_DATE_INTERPRETATION_KINDS, DEFAULT_APPOINTMENT_DATE_LOCALE, getTodayIsoInTimeZone, normalizeAppointmentDateInterpretation, RequestedAppointmentDateResolution } from '../../utils/appointment-date-resolution'
 import { aiLogger } from '../../utils/pino'
 import { buildAppointmentDateInterpreterPrompt, resolveAppointmentDateInterpreterLocale } from './appointment-date-interpreter.prompts'
+import { openAIModelConfig } from '../../config/openai-model.config'
 
 export interface InterpretRequestedAppointmentDateParams {
   messageText?: string | null
@@ -118,7 +119,7 @@ export class AppointmentDateInterpreterService {
     try {
       const todayIso = getTodayIsoInTimeZone(params.now ?? new Date(), params.timezone)
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
         messages: [
           {
             role: 'system',

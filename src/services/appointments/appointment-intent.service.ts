@@ -9,6 +9,7 @@ import { AvailabilityResolutionCandidate, IAppointmentValidationDraft, PendingAp
 import { appointmentService } from './appointmentService'
 import { professionalService } from './professional.service'
 import { serviceService } from './service.service'
+import { openAIModelConfig } from '../../config/openai-model.config'
 
 const OFFER_TTL_MS = 15 * 60 * 1000
 const TIME_SLOT_REGEX = /^\d{2}:\d{2}$/
@@ -836,7 +837,7 @@ class AppointmentIntentService {
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
         messages: [
           {
             role: 'system',
@@ -909,7 +910,7 @@ Regras:
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
         messages: [
           {
             role: 'system',

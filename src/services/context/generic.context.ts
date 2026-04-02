@@ -22,6 +22,9 @@ import OpenAI from 'openai'
 import { FlowStep, FlowType, FlowTypeTranslation } from '../../enums/generic.enum'
 import { AIResponseResult, OpenAITool } from '../../types/openai-types'
 import { sendCancelFlowButton, sendReplayListGateButtons } from '../../interactives/genericConfirmation'
+import { createRequestLatencyTracker } from '../../utils/request-latency'
+import { aiLogger } from '../../utils/pino'
+import { openAIModelConfig } from '../../config/openai-model.config'
 
 type FieldFlowSnapshot<TDraft> = {
   draft: TDraft
@@ -446,6 +449,13 @@ export abstract class GenericContextService<TDraft> {
     const { activeRegistration } = userContext
     const businessName = getBusinessNameForPhone(userId)
     const snapshot = await this.captureFieldFlowSnapshot(userId)
+    const trace = createRequestLatencyTracker(aiLogger, {
+      module: 'generic-context',
+      flowType: this.flowType,
+      requestId: String(getUserContextSync(userId)?.lastRequestId || `${userId}-${Date.now()}`),
+      userId,
+      mode: 'editing',
+    })
 
     try {
       const editFunctionName = flowConfig?.editFunction
@@ -465,12 +475,19 @@ export abstract class GenericContextService<TDraft> {
       console.log(`editFieldPrompt`, incomingMessage, editFieldPrompt)
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
 
-      const openAiAgent = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        messages: editFieldPrompt,
-        tools: await this.getToolsForEditField(),
-        tool_choice: 'required',
-      })
+      const openAiAgent = await trace.run(
+        'openai_edit_field',
+        async () =>
+          this.openai.chat.completions.create({
+            model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+            messages: editFieldPrompt,
+            tools: await this.getToolsForEditField(),
+            tool_choice: 'required',
+          }),
+        {
+          model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+        },
+      )
 
       const openAiResponse = openAiAgent.choices[0].message
       const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
@@ -480,7 +497,13 @@ export abstract class GenericContextService<TDraft> {
       }
 
       beginOutboundCapture(userId)
-      const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
+      const toolResponse = await trace.run(
+        'execute_tool',
+        async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
+        {
+          toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+        },
+      )
       return await this.finalizeFieldFlowAttempt({
         userId,
         snapshot,
@@ -499,6 +522,13 @@ export abstract class GenericContextService<TDraft> {
   protected handleCreationFieldFlow = async (args: { userId: string; incomingMessage: string; flowConfig: FlowConfig; awaitingField: string; userContext: UserRuntimeContext }): Promise<AIResponseResult> => {
     const { userId, incomingMessage, flowConfig, awaitingField, userContext } = args
     const snapshot = await this.captureFieldFlowSnapshot(userId)
+    const trace = createRequestLatencyTracker(aiLogger, {
+      module: 'generic-context',
+      flowType: this.flowType,
+      requestId: String(getUserContextSync(userId)?.lastRequestId || `${userId}-${Date.now()}`),
+      userId,
+      mode: 'creating',
+    })
 
     try {
       const defaultFlowPrompt = await this.buildBasePrompt({}, [], incomingMessage, undefined, userId, awaitingField, true)
@@ -507,12 +537,19 @@ export abstract class GenericContextService<TDraft> {
       console.log(`defaultFlowPrompt awaitingField`, awaitingField, defaultFlowPrompt)
       console.log(`\n\n\n\n\n\n\n\n\n\n\n\n\n\n`)
 
-      const openAiAgent = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        messages: defaultFlowPrompt,
-        tools: await this.getToolsForField(),
-        tool_choice: 'required',
-      })
+      const openAiAgent = await trace.run(
+        'openai_collect_field',
+        async () =>
+          this.openai.chat.completions.create({
+            model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+            messages: defaultFlowPrompt,
+            tools: await this.getToolsForField(),
+            tool_choice: 'required',
+          }),
+        {
+          model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+        },
+      )
 
       const openAiResponse = openAiAgent.choices[0].message
       const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
@@ -522,7 +559,13 @@ export abstract class GenericContextService<TDraft> {
       }
 
       beginOutboundCapture(userId)
-      const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
+      const toolResponse = await trace.run(
+        'execute_tool',
+        async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
+        {
+          toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+        },
+      )
       return await this.finalizeFieldFlowAttempt({
         userId,
         snapshot,
@@ -555,6 +598,13 @@ export abstract class GenericContextService<TDraft> {
 
   protected getLlmResponse = async (args: { history: ChatMessage[]; incomingMessage: string; userId: string; businessName?: string }): Promise<AIResponseResult> => {
     const { history, incomingMessage, userId, businessName } = args
+    const trace = createRequestLatencyTracker(aiLogger, {
+      module: 'generic-context',
+      flowType: this.flowType,
+      requestId: String(getUserContextSync(userId)?.lastRequestId || `${userId}-${Date.now()}`),
+      userId,
+      mode: 'default',
+    })
 
     const userContext = getUserContextSync(userId)
     const awaitingField = userContext?.activeRegistration?.awaitingInputForField
@@ -598,12 +648,19 @@ export abstract class GenericContextService<TDraft> {
     console.log('[OpenAI] Prompt base:\n', defaultFlowPrompt)
     console.log('\n\n')
 
-    const openAiAgent = await this.openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: defaultFlowPrompt,
-      tools: await this.getTools(),
-      tool_choice: 'required',
-    })
+    const openAiAgent = await trace.run(
+      'openai_flow_response',
+      async () =>
+        this.openai.chat.completions.create({
+          model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+          messages: defaultFlowPrompt,
+          tools: await this.getTools(),
+          tool_choice: 'required',
+        }),
+      {
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
+      },
+    )
     const openAiResponse = openAiAgent.choices[0].message
     const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
 
@@ -629,7 +686,13 @@ export abstract class GenericContextService<TDraft> {
       }
     }
 
-    const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId)
+    const toolResponse = await trace.run(
+      'execute_tool',
+      async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
+      {
+        toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+      },
+    )
 
     try {
       const parsedToolResponse = JSON.parse(toolResponse.content)

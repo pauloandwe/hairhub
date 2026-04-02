@@ -7,8 +7,6 @@ import type { PendingAppointmentDateClarification } from '../env.config'
 import { formatAssistantReply } from '../utils/message'
 import { sendWhatsAppMessage } from '../api/meta.api'
 
-import { unsupportedRegistrationTools } from '../tools/utils/unsupportedRegistration.tools'
-import { unsupportedQueryTools } from '../tools/utils/unsupportedQuery.tools'
 import { AIResponseResult, OpenAITool } from '../types/openai-types'
 import { SILENT_FUNCTIONS } from './openai.config'
 
@@ -17,46 +15,36 @@ import { unsupportedRegistrationFunctions } from '../functions/utils/unsupported
 import { aiLogger, logOpenAIPrompt, logOpenAIResponse, logToolExecution } from '../utils/pino'
 import { appointmentFunctions } from '../functions/appointments/appointment.functions'
 import { appointmentCancellationFunctions } from '../functions/appointments/cancellation/appointment-cancellation.functions'
-import { appointmentTools } from '../tools/appointments/appointment.tools'
-import { appointmentCancellationTools } from '../tools/appointments/appointment-cancellation.tools'
-import { appointmentQueryTools } from '../tools/appointments/appointment-queries.tools'
 import { appointmentQueryFunctions } from '../functions/appointments/appointment-queries.functions'
 import { appointmentRescheduleFunctions } from '../functions/appointments/reschedule/appointment-reschedule.functions'
-import { appointmentRescheduleTools } from '../tools/appointments/appointment-reschedule.tools'
 import { registerAppointmentAvailabilityResolutionHandler } from '../interactives/appointments/availabilityResolutionSelection'
 import { normalizeAppointmentToolArguments } from './appointments/appointment-tool-args'
 import { APPOINTMENT_DATE_CLARIFICATION_TTL_MS, isIsoTimestampExpired, toFutureIsoTimestamp } from './appointments/appointment-date-clarification'
+import { unsupportedQueryFunctions } from '../functions/utils/unsupportedQuery.functions'
+import { createRequestLatencyTracker } from '../utils/request-latency'
+import { defaultContextRouterTools } from '../tools/default-context-router.tools'
+import { openAIModelConfig } from '../config/openai-model.config'
 
 const DATE_NORMALIZED_FUNCTIONS = new Set(['getAvailableTimeSlots', 'startAppointmentRegistration'] as const)
 
 export class DefaultContextService {
   private static instance: DefaultContextService
-  private contextTools = [
-    ...this.pickStartTools([...appointmentTools] as OpenAITool[]),
-    ...this.pickStartTools([...appointmentCancellationTools] as OpenAITool[]),
-    ...this.pickStartTools([...appointmentRescheduleTools] as OpenAITool[]),
-    ...(appointmentQueryTools as OpenAITool[]),
-    ...unsupportedRegistrationTools,
-    ...unsupportedQueryTools,
-  ]
+  private contextTools = [...defaultContextRouterTools]
   private serviceFunctions = {
     ...unsupportedRegistrationFunctions,
+    ...unsupportedQueryFunctions,
     ...appointmentQueryFunctions,
     startAppointmentRegistration: appointmentFunctions.startAppointmentRegistration,
     startAppointmentCancellation: appointmentCancellationFunctions.startAppointmentCancellation,
     startAppointmentReschedule: appointmentRescheduleFunctions.startAppointmentReschedule,
+    replyDirectly: async (args: { text?: string; reason?: string }) => ({
+      text: typeof args.text === 'string' && args.text.trim() ? args.text.trim() : 'Como posso te ajudar com seu agendamento?',
+      reason: args.reason || null,
+    }),
   }
 
   private constructor() {
     registerAppointmentAvailabilityResolutionHandler()
-  }
-
-  isFunctionTool(tool: OpenAITool): tool is OpenAI.ChatCompletionFunctionTool {
-    return tool.type === 'function'
-  }
-
-  pickStartTools(tools: OpenAITool[]): OpenAITool[] {
-    return tools.filter((t): t is OpenAI.ChatCompletionFunctionTool => this.isFunctionTool(t) && t.function.name.startsWith('start'))
   }
 
   static getInstance(): DefaultContextService {
@@ -263,6 +251,12 @@ export class DefaultContextService {
   }
 
   private async buildToolDrivenResponse(userId: string, incomingMessage: string, toolCall: OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall, toolResponse: { tool_call_id: string; role: 'tool'; content: string }): Promise<AIResponseResult> {
+    const trace = createRequestLatencyTracker(aiLogger, {
+      module: 'default-context',
+      requestId: String(getUserContextSync(userId)?.lastRequestId || `${userId}-${Date.now()}`),
+      userId,
+      source: 'prepared_tool_call',
+    })
     const intentHistory = await getIntentHistory(userId, 'default')
     let parsedToolResponse: any = null
     try {
@@ -292,14 +286,22 @@ export class DefaultContextService {
       source: 'prepared_tool_call',
     })
 
-    const finalResponse = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: finalPrompt,
-    })
+    const finalResponse = await trace.run(
+      'openai_final_response',
+      async () =>
+        this.openai.chat.completions.create({
+          model: openAIModelConfig.OPENAI_AGENT_RESPONSE_MODEL,
+          messages: finalPrompt,
+        }),
+      {
+        model: openAIModelConfig.OPENAI_AGENT_RESPONSE_MODEL,
+      },
+    )
 
     logOpenAIResponse('final_response', finalResponse, { userId })
 
     await this.resetSession(userId)
+    trace.finish({ result: 'tool_driven_response' })
 
     return {
       text: finalResponse.choices[0].message.content || 'Não consegui entender, vamos tentar novamente, me diga, o que posso fazer por você hoje?',
@@ -550,17 +552,29 @@ export class DefaultContextService {
   protected getLlmResponse = async (userId: string, incomingMessage: string): Promise<AIResponseResult> => {
     const requestId = userId
     const contextLogger = aiLogger.child({ userId, requestId })
+    const trace = createRequestLatencyTracker(aiLogger, {
+      module: 'default-context',
+      requestId: String(getUserContextSync(userId)?.lastRequestId || requestId),
+      userId,
+    })
     const intentHistory = await getIntentHistory(userId, 'default')
     const defaultFlowPrompt = this.buildBasePrompt(intentHistory, incomingMessage, userId)
     logOpenAIPrompt('default_context', defaultFlowPrompt, { userId })
-    console.log('\n\n\n\n', defaultFlowPrompt, '\n\n\n\n', await this.getTools())
+    const routerTools = await this.getTools()
     contextLogger.info('Iniciando chamada à OpenAI')
-    const openAiAgent = await this.openai.chat.completions.create({
-      model: 'gpt-5-mini',
-      messages: defaultFlowPrompt,
-      tools: await this.getTools(),
-      tool_choice: 'auto',
-    })
+    const openAiAgent = await trace.run(
+      'openai_default_context',
+      async () =>
+        this.openai.chat.completions.create({
+          model: openAIModelConfig.OPENAI_AGENT_ROUTER_MODEL,
+          messages: defaultFlowPrompt,
+          tools: routerTools,
+          tool_choice: 'required',
+        }),
+      {
+        model: openAIModelConfig.OPENAI_AGENT_ROUTER_MODEL,
+      },
+    )
     const openAiResponse = openAiAgent.choices[0].message
     const agentHasFoundFunctionCall = openAiResponse?.tool_calls?.[0]
     const logAgentToolCall = agentHasFoundFunctionCall?.type === 'function' ? agentHasFoundFunctionCall.function : undefined
@@ -577,6 +591,7 @@ export class DefaultContextService {
         },
         'Nenhuma tool call encontrada, retornando resposta direta',
       )
+      trace.finish({ result: 'missing_router_tool_call' })
       return {
         text: openAiResponse.content || 'Não consegui entender, vamos tentar novamente, me diga, o que posso fazer por você hoje?',
         suppress: false,
@@ -590,7 +605,13 @@ export class DefaultContextService {
       },
       'Executando tool call',
     )
-    const toolResponse = await this.executeToolFunction(agentHasFoundFunctionCall, userId, incomingMessage)
+    const toolResponse = await trace.run(
+      'execute_tool',
+      async () => this.executeToolFunction(agentHasFoundFunctionCall, userId, incomingMessage),
+      {
+        toolName: logAgentToolCall?.name,
+      },
+    )
     logToolExecution(logAgentToolCall?.name ?? '', toolResponse, { userId })
 
     try {
@@ -606,6 +627,7 @@ export class DefaultContextService {
     const isSilentResponse = await this.verifySilentToolResponse(agentHasFoundFunctionCall as OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall, toolResponse)
     if (isSilentResponse) {
       contextLogger.info({ toolName: logAgentToolCall?.name }, 'Tool retornou resposta silenciosa')
+      trace.finish({ result: 'silent_tool_response' })
       return isSilentResponse
     }
 
@@ -658,10 +680,17 @@ export class DefaultContextService {
       })
 
       contextLogger.info('Gerando resposta final com contexto da tool')
-      const finalResponse = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: finalPrompt,
-      })
+      const finalResponse = await trace.run(
+        'openai_final_response',
+        async () =>
+          this.openai.chat.completions.create({
+            model: openAIModelConfig.OPENAI_AGENT_RESPONSE_MODEL,
+            messages: finalPrompt,
+          }),
+        {
+          model: openAIModelConfig.OPENAI_AGENT_RESPONSE_MODEL,
+        },
+      )
 
       logOpenAIResponse('final_response', finalResponse, { userId })
 
@@ -676,6 +705,7 @@ export class DefaultContextService {
         },
         'Resposta final gerada com sucesso',
       )
+      trace.finish({ result: 'tool_response_generated' })
 
       return {
         text: finalText,
@@ -685,6 +715,7 @@ export class DefaultContextService {
 
     await this.resetSession(userId)
     contextLogger.info('Usando resposta fallback')
+    trace.finish({ result: 'fallback_response' })
     return {
       text: openAiResponse.content || 'Não consegui entender, vamos tentar novamente, me diga, o que posso fazer por você hoje?',
       suppress: false,

@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { env } from '../../env.config'
+import { openAIModelConfig } from '../../config/openai-model.config'
 
 const CLIENT_NAME_WAIT_WINDOW_MS = 15_000
 
@@ -51,8 +52,7 @@ export class ClientNameCaptureService {
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-5-mini',
-        // gpt-5-mini só aceita a configuração padrão de temperature neste endpoint.
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
         messages: [
           {
             role: 'system',
@@ -84,7 +84,7 @@ export class ClientNameCaptureService {
       return candidate && candidate.length > 0 ? candidate : null
     } catch (error: any) {
       console.error('[ClientNameCaptureService] Error extracting client name with AI:', {
-        model: 'gpt-5-mini',
+        model: openAIModelConfig.OPENAI_AGENT_FLOW_MODEL,
         code: error?.code ?? error?.error?.code ?? null,
         param: error?.param ?? error?.error?.param ?? null,
         message: error?.message ?? error?.error?.message ?? 'Unknown error',
