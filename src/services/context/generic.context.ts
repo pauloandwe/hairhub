@@ -497,13 +497,9 @@ export abstract class GenericContextService<TDraft> {
       }
 
       beginOutboundCapture(userId)
-      const toolResponse = await trace.run(
-        'execute_tool',
-        async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
-        {
-          toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
-        },
-      )
+      const toolResponse = await trace.run('execute_tool', async () => this.executeToolFunction(agentHasFoundFunctionCall, userId), {
+        toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+      })
       return await this.finalizeFieldFlowAttempt({
         userId,
         snapshot,
@@ -559,13 +555,9 @@ export abstract class GenericContextService<TDraft> {
       }
 
       beginOutboundCapture(userId)
-      const toolResponse = await trace.run(
-        'execute_tool',
-        async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
-        {
-          toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
-        },
-      )
+      const toolResponse = await trace.run('execute_tool', async () => this.executeToolFunction(agentHasFoundFunctionCall, userId), {
+        toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+      })
       return await this.finalizeFieldFlowAttempt({
         userId,
         snapshot,
@@ -686,13 +678,9 @@ export abstract class GenericContextService<TDraft> {
       }
     }
 
-    const toolResponse = await trace.run(
-      'execute_tool',
-      async () => this.executeToolFunction(agentHasFoundFunctionCall, userId),
-      {
-        toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
-      },
-    )
+    const toolResponse = await trace.run('execute_tool', async () => this.executeToolFunction(agentHasFoundFunctionCall, userId), {
+      toolName: agentHasFoundFunctionCall.type === 'function' ? agentHasFoundFunctionCall.function.name : undefined,
+    })
 
     try {
       const parsedToolResponse = JSON.parse(toolResponse.content)

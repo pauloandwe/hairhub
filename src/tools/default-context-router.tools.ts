@@ -5,8 +5,7 @@ export const defaultContextRouterTools: OpenAITool[] = [
     type: 'function',
     function: {
       name: 'startAppointmentRegistration',
-      description:
-        'Use para pedidos de marcar/agendar horário. Use intentMode="check_then_offer" apenas quando o cliente perguntar por um horário exato antes de decidir marcar.',
+      description: 'Use para pedidos de marcar/agendar horário. Use intentMode="check_then_offer" apenas quando o cliente perguntar por um horário exato antes de decidir marcar.',
       parameters: {
         type: 'object',
         properties: {

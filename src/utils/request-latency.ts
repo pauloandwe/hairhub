@@ -8,10 +8,7 @@ export class RequestLatencyTracker {
   private readonly startedAt = Date.now()
   private readonly traceLogger: LoggerLike
 
-  constructor(
-    loggerInstance: LoggerLike,
-    private readonly metadata: Record<string, unknown>,
-  ) {
+  constructor(loggerInstance: LoggerLike, private readonly metadata: Record<string, unknown>) {
     this.traceLogger = loggerInstance.child({
       ...metadata,
     })

@@ -605,13 +605,9 @@ export class DefaultContextService {
       },
       'Executando tool call',
     )
-    const toolResponse = await trace.run(
-      'execute_tool',
-      async () => this.executeToolFunction(agentHasFoundFunctionCall, userId, incomingMessage),
-      {
-        toolName: logAgentToolCall?.name,
-      },
-    )
+    const toolResponse = await trace.run('execute_tool', async () => this.executeToolFunction(agentHasFoundFunctionCall, userId, incomingMessage), {
+      toolName: logAgentToolCall?.name,
+    })
     logToolExecution(logAgentToolCall?.name ?? '', toolResponse, { userId })
 
     try {
